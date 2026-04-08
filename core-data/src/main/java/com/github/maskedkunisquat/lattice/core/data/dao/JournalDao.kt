@@ -29,4 +29,7 @@ interface JournalDao {
 
     @Query("SELECT * FROM journal_entries ORDER BY timestamp ASC")
     suspend fun getAllEntries(): List<JournalEntry>
+
+    @Query("UPDATE journal_entries SET reframedContent = :content WHERE id = :entryId")
+    suspend fun updateReframedContent(entryId: String, content: String)
 }

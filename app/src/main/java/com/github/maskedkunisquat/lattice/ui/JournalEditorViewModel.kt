@@ -49,6 +49,8 @@ class JournalEditorViewModel(
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
     private var reframeJob: Job? = null
+    /** ID of the most recently saved entry — set after [save] succeeds. */
+    private var savedEntryId: UUID? = null
 
     /**
      * Called on every keystroke. Intercepts the [REFRAME_COMMAND] token anywhere in
@@ -70,11 +72,12 @@ class JournalEditorViewModel(
 
     fun save() {
         val state = _uiState.value
+        val newId = UUID.randomUUID()
         viewModelScope.launch {
             try {
                 journalRepository.saveEntry(
                     JournalEntry(
-                        id = UUID.randomUUID(),
+                        id = newId,
                         timestamp = System.currentTimeMillis(),
                         content = state.text,
                         valence = state.valence,
@@ -83,6 +86,7 @@ class JournalEditorViewModel(
                         embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
                     )
                 )
+                savedEntryId = newId
                 _uiState.update { it.copy(saved = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message ?: "Failed to save entry") }
@@ -92,6 +96,21 @@ class JournalEditorViewModel(
 
     fun resetSaved() {
         _uiState.update { EditorUiState() }
+    }
+
+    /**
+     * Persists the accepted reframe to the already-saved entry and clears the result card.
+     * Should only be called when [EditorUiState.reframeResult] is non-null and the entry
+     * has been saved (i.e. [savedEntryId] is set). No new [TransitEvent] is logged here —
+     * one was already written by the pipeline at generation time.
+     */
+    fun applyReframe() {
+        val entryId = savedEntryId ?: return
+        val reframe = _uiState.value.reframeResult ?: return
+        viewModelScope.launch {
+            journalRepository.updateReframedContent(entryId.toString(), reframe)
+            _uiState.update { it.copy(reframeResult = null) }
+        }
     }
 
     /** Clears a displayed reframe result without discarding the journal text. */
