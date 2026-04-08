@@ -6,7 +6,6 @@ import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import java.util.UUID
 
 /**
@@ -45,8 +44,7 @@ class PeopleRepository(
 
     suspend fun savePerson(person: Person, phoneNumbers: List<PhoneNumber>) {
         personDao.insertPerson(person)
-        // Simple sync strategy: delete old and insert new, or update.
-        // For now, we'll just insert/replace.
+        phoneNumberDao.deleteByPersonId(person.id)
         phoneNumbers.forEach { phoneNumberDao.insertPhoneNumber(it) }
     }
 
@@ -55,9 +53,6 @@ class PeopleRepository(
      * This is a placeholder for the evolution algorithm.
      */
     suspend fun updateVibeScore(personId: UUID, delta: Float) {
-        personDao.getPersonById(personId).first()?.let { person ->
-            val newScore = (person.vibeScore + delta).coerceIn(-1f, 1f)
-            personDao.updatePerson(person.copy(vibeScore = newScore))
-        }
+        personDao.incrementVibeScore(personId, delta)
     }
 }

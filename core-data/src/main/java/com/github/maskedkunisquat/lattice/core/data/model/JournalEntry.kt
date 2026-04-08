@@ -32,6 +32,7 @@ data class JournalEntry(
         if (arousal != other.arousal) return false
         if (moodLabel != other.moodLabel) return false
         if (!embedding.contentEquals(other.embedding)) return false
+        if (cognitiveDistortions != other.cognitiveDistortions) return false
 
         return true
     }
@@ -44,6 +45,7 @@ data class JournalEntry(
         result = 31 * result + arousal.hashCode()
         result = 31 * result + moodLabel.hashCode()
         result = 31 * result + embedding.contentHashCode()
+        result = 31 * result + cognitiveDistortions.hashCode()
         return result
     }
 }

@@ -49,12 +49,14 @@ class JournalRepository(
         val calculatedLabel = CircumplexMapper.getLabel(entry.valence, entry.arousal).name
         
         val maskedContent = PiiShield.mask(entry.content, people)
-        
+        val distortions = CbtLogic.detectDistortions(maskedContent)
+
         val entryToSave = entry.copy(
             content = maskedContent,
-            moodLabel = calculatedLabel
+            moodLabel = calculatedLabel,
+            cognitiveDistortions = distortions
         )
-        
+
         journalDao.insertEntry(entryToSave)
 
         // Vibe Evolution: Update vibe scores for mentioned persons
@@ -65,13 +67,9 @@ class JournalRepository(
             .distinct()
             .map { UUID.fromString(it) }
 
+        val delta = entry.valence * 0.1f
         mentions.forEach { personId ->
-            personDao.getPersonById(personId).first()?.let { person ->
-                // Apply a portion of the valence to the vibeScore
-                val delta = entry.valence * 0.1f
-                val newScore = (person.vibeScore + delta).coerceIn(-1f, 1f)
-                personDao.updatePerson(person.copy(vibeScore = newScore))
-            }
+            personDao.incrementVibeScore(personId, delta)
         }
     }
 

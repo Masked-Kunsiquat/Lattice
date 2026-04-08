@@ -20,7 +20,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
         JournalEntry::class,
         Mention::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
