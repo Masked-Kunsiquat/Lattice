@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -234,8 +235,17 @@ class ReframingLoop(
             return DiagnosisResult(distortions = emptyList(), reasoning = raw)
         }
 
-        val distortions = csv.split(",").mapNotNull { CognitiveDistortion.fromLabel(it) }
-        return DiagnosisResult(distortions = distortions, reasoning = raw)
+        val recognized = mutableListOf<CognitiveDistortion>()
+        val unrecognized = mutableListOf<String>()
+        for (label in csv.split(",")) {
+            val distortion = CognitiveDistortion.fromLabel(label)
+            if (distortion != null) recognized.add(distortion)
+            else unrecognized.add(label.trim())
+        }
+        if (unrecognized.isNotEmpty()) {
+            Log.d(TAG, "parseDotOutput: unrecognized labels $unrecognized in csv=\"$csv\"")
+        }
+        return DiagnosisResult(distortions = recognized, reasoning = raw)
     }
 
     // ── Token stream collector ───────────────────────────────────────────────
@@ -299,6 +309,7 @@ class ReframingLoop(
     )
 
     companion object {
+        private const val TAG = "ReframingLoop"
         // Both regexes tolerate optional spaces around `=` and an optional leading `-`.
         private val V_REGEX = Regex("""v\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
         private val A_REGEX = Regex("""a\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)

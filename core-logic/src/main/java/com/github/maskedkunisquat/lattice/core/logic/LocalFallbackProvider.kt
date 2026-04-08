@@ -65,6 +65,7 @@ class LocalFallbackProvider(
     private var headDim    = HEAD_DIM_DEFAULT
 
     @Volatile private var initAttempted = false
+    private val initLock = Any()
 
     /**
      * Copies the model shards from assets to internal storage (if needed) then
@@ -74,16 +75,19 @@ class LocalFallbackProvider(
      */
     fun initialize() {
         if (initAttempted) return
-        initAttempted = true
-        try {
-            loadArchConfig()
-            copyAssetsToFilesDir()
-            val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
-            session = createSession(modelPath)
-            logSessionInfo()
-            tokenizer.initialize()
-        } catch (e: Exception) {
-            Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
+        synchronized(initLock) {
+            if (initAttempted) return
+            initAttempted = true
+            try {
+                loadArchConfig()
+                copyAssetsToFilesDir()
+                val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
+                session = createSession(modelPath)
+                logSessionInfo()
+                tokenizer.initialize()
+            } catch (e: Exception) {
+                Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
+            }
         }
     }
 
@@ -308,7 +312,15 @@ class LocalFallbackProvider(
     private fun flushUtf8(buffer: ByteArrayOutputStream): String {
         if (buffer.size() == 0) return ""
         val bytes = buffer.toByteArray()
-        // Find the last byte that begins a multi-byte continuation sequence
+        // Scan backwards to find the last complete UTF-8 sequence boundary.
+        // The loop intentionally uses `continue` to skip each continuation byte
+        // (10xxxxxx) and `break` once a lead byte (11xxxxxx) or ASCII byte is
+        // reached. At that point expectedContinuations determines whether the
+        // trailing multi-byte sequence is complete; if not, validLen is left at
+        // the lead-byte index so those bytes stay buffered. This is not an
+        // unconditional jump — the control flow is required to handle the
+        // two distinct cases (continuation byte vs. lead/ASCII byte) within a
+        // single backwards pass over `bytes`.
         var validLen = bytes.size
         while (validLen > 0) {
             val b = bytes[validLen - 1].toInt() and 0xFF

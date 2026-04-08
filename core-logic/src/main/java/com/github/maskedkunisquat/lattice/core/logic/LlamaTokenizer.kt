@@ -197,8 +197,8 @@ class LlamaTokenizer(private val context: Context) {
 
         symbols.forEach { sym ->
             val id = vocab[sym]
-            if (id != null) out.add(id.toLong())
-            else Log.w(TAG, "BPE symbol '$sym' not in vocab — skipped")
+                ?: throw IllegalArgumentException("BPE symbol '$sym' has no vocab entry — tokenizer may be corrupt")
+            out.add(id.toLong())
         }
     }
 
