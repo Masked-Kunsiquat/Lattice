@@ -25,4 +25,5 @@ dependencyResolutionManagement {
 rootProject.name = "Lattice"
 include(":app")
 include(":core-data")
+include(":core-logic")
  
