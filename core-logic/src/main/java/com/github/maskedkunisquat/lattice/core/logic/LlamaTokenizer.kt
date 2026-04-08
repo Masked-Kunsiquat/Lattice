@@ -36,6 +36,7 @@ class LlamaTokenizer(private val context: Context) {
     private val specialTokens = LinkedHashMap<String, Int>()
 
     @Volatile private var initialized = false
+    private val initLock = Any()
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -45,28 +46,45 @@ class LlamaTokenizer(private val context: Context) {
      */
     fun initialize() {
         if (initialized) return
-        try {
-            context.assets.open(ASSET_NAME).bufferedReader().use { reader ->
-                parseTokenizerJson(JsonReader(reader))
+        synchronized(initLock) {
+            if (initialized) return
+            try {
+                context.assets.open(ASSET_NAME).bufferedReader().use { reader ->
+                    parseTokenizerJson(JsonReader(reader))
+                }
+                initialized = true
+                Log.d(TAG, "Tokenizer ready — vocab=${vocab.size}, merges=${mergeRanks.size}, specials=${specialTokens.size}")
+            } catch (e: Exception) {
+                vocab.clear()
+                mergeRanks.clear()
+                specialTokens.clear()
+                idToToken.clear()
+                initialized = false
+                throw e
             }
-            initialized = true
-            Log.d(TAG, "Tokenizer ready — vocab=${vocab.size}, merges=${mergeRanks.size}, specials=${specialTokens.size}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Tokenizer init failed", e)
         }
     }
 
     /**
      * Encodes [text] to a sequence of token ids.
      *
-     * Special chat-template tokens (e.g. `<|begin_of_text|>`) embedded in [text]
-     * are resolved directly to their ids; the surrounding normal text is BPE-encoded.
+     * When [allowSpecialTokens] is true, special chat-template tokens
+     * (e.g. `<|begin_of_text|>`) embedded in [text] are resolved directly to their
+     * ids; the surrounding normal text is BPE-encoded. Pass true only from trusted
+     * scaffold paths (e.g. [LocalFallbackProvider.process]) where the prompt is
+     * system-constructed. Leave false (the default) for any user-supplied text to
+     * prevent untrusted input from injecting control token ids.
      */
-    fun encode(text: String): LongArray {
+    fun encode(text: String, allowSpecialTokens: Boolean = false): LongArray {
         check(initialized) { "LlamaTokenizer.initialize() must be called first." }
         val ids = mutableListOf<Long>()
-        var remaining = text
 
+        if (!allowSpecialTokens) {
+            encodeNormal(text, ids)
+            return ids.toLongArray()
+        }
+
+        var remaining = text
         while (remaining.isNotEmpty()) {
             // Find the earliest special token in remaining
             var bestIdx = Int.MAX_VALUE

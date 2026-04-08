@@ -166,7 +166,7 @@ class JournalEditorViewModel(
     companion object {
         /** Command token typed by the user to trigger the reframing pipeline. */
         const val REFRAME_COMMAND = "!reframe"
-        private const val REFRAME_PROVIDER  = "local_llama_3b"
+        private const val REFRAME_PROVIDER  = "llama3_onnx_local"
         private const val REFRAME_OPERATION = "reframe"
 
         fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {

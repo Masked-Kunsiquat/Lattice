@@ -32,12 +32,10 @@ class ReframingLoopTest {
         val results: List<LlmResult> = tokens.map { LlmResult.Token(it) } + LlmResult.Complete
         val provider = FakeProvider("fake_local", results)
         val orchestrator = LlmOrchestrator(
-            nanoProvider = FakeProvider("nano", emptyList<LlmResult>().also { }).let {
-                object : LlmProvider {
-                    override val id = "nano"
-                    override suspend fun isAvailable() = false
-                    override fun process(prompt: String): Flow<LlmResult> = flowOf()
-                }
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),

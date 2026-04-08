@@ -107,7 +107,7 @@ class LocalFallbackProvider(
         }
 
         try {
-            val promptTokens = tokenizer.encode(prompt)
+            val promptTokens = tokenizer.encode(prompt, allowSpecialTokens = true)
             if (promptTokens.isEmpty()) {
                 emit(LlmResult.Complete)
                 return@flow
