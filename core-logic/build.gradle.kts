@@ -22,6 +22,9 @@ android {
         }
     }
     testOptions {
+        // Log.w (and other Android stubs) throw RuntimeException by default on the desktop JVM.
+        // returnDefaultValues silences them so unit tests can exercise EmbeddingProvider's
+        // zero-vector fallback path without a full Android environment.
         unitTests.isReturnDefaultValues = true
     }
     compileOptions {

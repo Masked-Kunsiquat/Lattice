@@ -32,10 +32,14 @@ import java.util.UUID
  * [LlmResult.Error] before any data leaves the device.
  *
  * @param cloudEnabled Gates cloud routing. False by default — users must explicitly opt in.
- * @param piiDetector Returns true if the prompt contains unmasked PII. When true, cloud
- *   dispatch is blocked and [LlmResult.Error] is emitted. Defaults to no-op (always false).
+ * @param piiDetector Required when [cloudEnabled] is true. Returns true if the prompt contains
+ *   unmasked PII; when true, cloud dispatch is blocked and [LlmResult.Error] is emitted before
+ *   data leaves the device. Pass `{ false }` to explicitly opt out of PII checking (only safe
+ *   when the caller guarantees all prompts are already masked via [PiiShield]).
  *   Implementations should not throw — if the detector throws, the orchestrator treats the
  *   prompt as containing PII (fail-safe: block the request rather than risk leaking data).
+ *   Null is only valid when [cloudEnabled] is false; constructing with `cloudEnabled=true` and
+ *   `piiDetector=null` will throw [IllegalArgumentException].
  */
 class LlmOrchestrator(
     private val nanoProvider: LlmProvider,
@@ -43,8 +47,14 @@ class LlmOrchestrator(
     private val cloudProvider: LlmProvider,
     private val transitEventDao: TransitEventDao,
     val cloudEnabled: Boolean = false,
-    private val piiDetector: (String) -> Boolean = { false }
+    private val piiDetector: ((String) -> Boolean)? = null
 ) {
+    init {
+        require(!cloudEnabled || piiDetector != null) {
+            "piiDetector must be provided when cloudEnabled=true. " +
+            "Pass { false } to explicitly opt out of PII checking only if prompts are pre-masked."
+        }
+    }
     private val _privacyState = MutableStateFlow<PrivacyLevel>(PrivacyLevel.LocalOnly)
 
     /** Observed by the UI to render the blue / amber privacy border. */
@@ -61,7 +71,7 @@ class LlmOrchestrator(
         operationType: String = "reframe"
     ): Flow<LlmResult> = flow {
         val provider = selectProvider()
-        val piiDetected = provider === cloudProvider && runCatching { piiDetector(prompt) }.getOrDefault(true)
+        val piiDetected = provider === cloudProvider && runCatching { piiDetector?.invoke(prompt) ?: false }.getOrDefault(true)
         if (piiDetected) {
             emit(
                 LlmResult.Error(
