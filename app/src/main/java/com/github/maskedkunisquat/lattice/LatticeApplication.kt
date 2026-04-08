@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.NanoProvider
+import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 
 class LatticeApplication : Application() {
 
@@ -28,6 +29,8 @@ class LatticeApplication : Application() {
             embeddingProvider = embeddingProvider,
         )
     }
+
+    val reframingLoop by lazy { ReframingLoop(llmOrchestrator) }
 
     val llmOrchestrator by lazy {
         LlmOrchestrator(
