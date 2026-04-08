@@ -16,7 +16,7 @@ import java.util.UUID
  *
  * ## Routing priority (local-first)
  * 1. [nanoProvider]          — Gemini Nano via AICore (API 35+, on-device)
- * 2. [localFallbackProvider] — Llama3-8B via ONNX (on-device, all API levels)
+ * 2. [localFallbackProvider] — Llama-3.2-3B via ONNX (on-device, all API levels)
  * 3. [cloudProvider]         — Remote API (**only** when [cloudEnabled] = true)
  *
  * ## Sovereignty Gate
