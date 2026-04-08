@@ -4,6 +4,7 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,18 +24,23 @@ open class EmbeddingProvider(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     private var ortSession: OrtSession? = null
+    private var tokenizer: WordPieceTokenizer? = null
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
 
     /**
-     * Loads the ONNX model from assets. Safe to call on any thread; failures are swallowed
-     * so the app still launches when the model placeholder is not yet a real file.
+     * Loads the ONNX model and WordPiece vocabulary from assets.
+     * Safe to call on any thread; failures are logged and the provider falls back to
+     * zero-vectors so the app remains functional if assets are missing.
      */
     fun initialize(context: Context) {
         try {
+            val vocabLines = context.assets.open(VOCAB_ASSET).bufferedReader().readLines()
+            tokenizer = WordPieceTokenizer(vocabLines)
             val modelBytes = context.assets.open(MODEL_ASSET).readBytes()
             ortSession = env.createSession(modelBytes, OrtSession.SessionOptions())
-        } catch (_: Exception) {
-            // Model not yet available — generateEmbedding will return zero-vectors.
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to initialize embedding model: ${e.message}")
+            // Model or vocab not yet available — generateEmbedding will return zero-vectors.
         }
     }
 
@@ -48,36 +54,30 @@ open class EmbeddingProvider(
      */
     open suspend fun generateEmbedding(text: String): FloatArray = withContext(dispatcher) {
         val session = ortSession ?: return@withContext FloatArray(EMBEDDING_DIM)
-        runInference(session, text)
+        val tok = tokenizer ?: return@withContext FloatArray(EMBEDDING_DIM)
+        runInference(session, tok, text)
     }
 
     /**
-     * Runs tokenization and ONNX inference.
+     * Tokenizes [text] with [tokenizer] and runs ONNX inference.
      *
-     * TODO: Replace the stub tokenizer with a real WordPiece / BPE implementation
-     *       (e.g., bundle the vocab.txt from HuggingFace and implement tokenization here,
-     *       or use a Kotlin tokenizer library). The model expects:
-     *         - input_ids       : LongBuffer [1 × seq_len]
-     *         - attention_mask  : LongBuffer [1 × seq_len]
-     *       and produces a float tensor [1 × seq_len × 384] that must be mean-pooled.
+     * Input tensors: input_ids [1 × seq_len], attention_mask [1 × seq_len]
+     * Output tensor: [1 × seq_len × 384] — mean-pooled to [384].
      */
-    private fun runInference(session: OrtSession, text: String): FloatArray {
-        // Stub: deterministic zero-vector until tokenizer is wired up.
-        // Replace this body once vocab.txt is bundled alongside the ONNX model.
-        val seqLen = 1L
-        val inputIds = LongBuffer.wrap(LongArray(seqLen.toInt()) { 0L })
-        val attentionMask = LongBuffer.wrap(LongArray(seqLen.toInt()) { 1L })
-
+    private fun runInference(session: OrtSession, tokenizer: WordPieceTokenizer, text: String): FloatArray {
+        val (inputIdsArr, attentionMaskArr) = tokenizer.encode(text)
+        val seqLen = inputIdsArr.size.toLong()
         val shape = longArrayOf(1L, seqLen)
-        val inputIdsTensor = OnnxTensor.createTensor(env, inputIds, shape)
-        val attentionMaskTensor = OnnxTensor.createTensor(env, attentionMask, shape)
 
-        val inputs = mapOf("input_ids" to inputIdsTensor, "attention_mask" to attentionMaskTensor)
-        session.run(inputs).use { result ->
-            // Mean-pool over sequence dimension → [1 × EMBEDDING_DIM]
-            @Suppress("UNCHECKED_CAST")
-            val raw = (result[0].value as Array<Array<FloatArray>>)[0]
-            return meanPool(raw)
+        return OnnxTensor.createTensor(env, LongBuffer.wrap(inputIdsArr), shape).use { inputIdsTensor ->
+            OnnxTensor.createTensor(env, LongBuffer.wrap(attentionMaskArr), shape).use { attentionMaskTensor ->
+                val inputs = mapOf("input_ids" to inputIdsTensor, "attention_mask" to attentionMaskTensor)
+                session.run(inputs).use { result ->
+                    @Suppress("UNCHECKED_CAST")
+                    val raw = (result[0].value as Array<Array<FloatArray>>)[0]
+                    meanPool(raw)
+                }
+            }
         }
     }
 
@@ -94,5 +94,7 @@ open class EmbeddingProvider(
     companion object {
         const val EMBEDDING_DIM = 384
         private const val MODEL_ASSET = "snowflake-arctic-embed-xs.onnx"
+        private const val VOCAB_ASSET = "vocab.txt"
+        private const val TAG = "EmbeddingProvider"
     }
 }

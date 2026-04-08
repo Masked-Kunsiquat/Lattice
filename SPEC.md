@@ -123,8 +123,8 @@ The 2D valence/arousal space maps to mood labels as follows:
           EXCITED        |        TENSE
       (high +v, high +a) | (high -v, high +a)
                          |
-PLEASANT (-1) ───────────┼─────────────── UNPLEASANT (+1)
-    VALENCE              |                   VALENCE
+UNPLEASANT (-1) ──────────┼─────────────── PLEASANT (+1)
+     VALENCE              |                  VALENCE
                          |
           SERENE         |        FATIGUED
        (high +v, low -a) | (high -v, low -a)

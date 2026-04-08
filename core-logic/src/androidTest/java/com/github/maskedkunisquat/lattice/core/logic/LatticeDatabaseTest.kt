@@ -66,7 +66,7 @@ class LatticeDatabaseTest {
         val retrievedEntry = retrievedEntries[0]
 
         assertArrayEquals(
-            "FloatArray embedding must survive Room type converter with bit-perfect precision",
+            "FloatArray embedding must be preserved within tolerance after string serialization",
             expectedEmbedding,
             retrievedEntry.embedding,
             1e-6f
