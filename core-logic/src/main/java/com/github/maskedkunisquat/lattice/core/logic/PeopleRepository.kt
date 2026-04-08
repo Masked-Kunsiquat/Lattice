@@ -49,7 +49,7 @@ class PeopleRepository(
         database.withTransaction {
             personDao.insertPerson(person)
             phoneNumberDao.deleteByPersonId(person.id)
-            phoneNumbers.forEach { phoneNumberDao.insertPhoneNumber(it) }
+            phoneNumberDao.insertPhoneNumbers(phoneNumbers)
         }
     }
 

@@ -15,6 +15,9 @@ interface PhoneNumberDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPhoneNumber(phoneNumber: PhoneNumber)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPhoneNumbers(phoneNumbers: List<PhoneNumber>)
+
     @Update
     suspend fun updatePhoneNumber(phoneNumber: PhoneNumber)
 
