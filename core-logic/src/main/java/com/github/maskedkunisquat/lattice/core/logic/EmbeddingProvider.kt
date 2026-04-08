@@ -19,7 +19,7 @@ import java.nio.LongBuffer
  * @param dispatcher Dispatcher for inference work — defaults to [Dispatchers.Default] so
  *                   inference never blocks the main thread. Inject a test dispatcher in tests.
  */
-class EmbeddingProvider(
+open class EmbeddingProvider(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     private var ortSession: OrtSession? = null
@@ -46,7 +46,7 @@ class EmbeddingProvider(
      *
      * Suspends and resumes on [dispatcher] (default: [Dispatchers.Default]).
      */
-    suspend fun generateEmbedding(text: String): FloatArray = withContext(dispatcher) {
+    open suspend fun generateEmbedding(text: String): FloatArray = withContext(dispatcher) {
         val session = ortSession ?: return@withContext FloatArray(EMBEDDING_DIM)
         runInference(session, text)
     }
