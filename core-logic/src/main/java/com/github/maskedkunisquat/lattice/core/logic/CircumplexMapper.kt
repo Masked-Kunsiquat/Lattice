@@ -14,18 +14,21 @@ object CircumplexMapper {
      * @param arousal ranges from -1.0 to 1.0 (low to high)
      */
     fun getLabel(valence: Float, arousal: Float): MoodLabel {
+        val v = valence.coerceIn(-1.0f, 1.0f)
+        val a = arousal.coerceIn(-1.0f, 1.0f)
+        
         return when {
-            valence >= 0 && arousal >= 0 -> {
-                if (arousal > valence) MoodLabel.EXCITED else MoodLabel.ALIVE
+            v >= 0 && a >= 0 -> {
+                if (a > v) MoodLabel.EXCITED else MoodLabel.ALIVE
             }
-            valence >= 0 && arousal < 0 -> {
-                if (abs(arousal) > valence) MoodLabel.CALM else MoodLabel.SERENE
+            v >= 0 && a < 0 -> {
+                if (abs(a) > v) MoodLabel.CALM else MoodLabel.SERENE
             }
-            valence < 0 && arousal < 0 -> {
-                if (abs(arousal) > abs(valence)) MoodLabel.FATIGUED else MoodLabel.DEPRESSED
+            v < 0 && a < 0 -> {
+                if (abs(a) > abs(v)) MoodLabel.FATIGUED else MoodLabel.DEPRESSED
             }
-            valence < 0 && arousal >= 0 -> {
-                if (arousal > abs(valence)) MoodLabel.TENSE else MoodLabel.ANGRY
+            v < 0 && a >= 0 -> {
+                if (a > abs(v)) MoodLabel.TENSE else MoodLabel.ANGRY
             }
             else -> MoodLabel.ALIVE // Fallback
         }
