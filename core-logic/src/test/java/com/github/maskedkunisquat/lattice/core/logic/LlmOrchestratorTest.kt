@@ -87,7 +87,8 @@ class LlmOrchestratorTest {
         val nano = FakeProvider("gemini_nano", false)
         val local = FakeProvider("qwen_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
-        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true)
+        // piiDetector = { false }: prompts in this test are pre-masked; PII checking intentionally skipped.
+        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true, piiDetector = { false })
 
         orch.process("masked prompt").toList()
 
@@ -103,7 +104,8 @@ class LlmOrchestratorTest {
         val nano = FakeProvider("gemini_nano", false)
         val local = FakeProvider("qwen_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
-        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true)
+        // piiDetector = { false }: prompts in this test are pre-masked; PII checking intentionally skipped.
+        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true, piiDetector = { false })
 
         orch.process("masked prompt", operationType = "reframe").toList()
 
