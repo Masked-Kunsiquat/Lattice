@@ -32,6 +32,7 @@ import java.nio.LongBuffer
  *   tokenizer.json             — Llama-3 BPE vocabulary and merge rules
  *   tokenizer_config.json      — tokenizer metadata
  *   generation_config.json     — default generation parameters
+ *   config.json                — model architecture (vocab_size, num_key_value_heads, head_dim)
  *
  * ## Inference loop
  * Uses a KV-cached autoregressive decode loop:
@@ -57,6 +58,12 @@ class LocalFallbackProvider(
     private val env = OrtEnvironment.getEnvironment()
     private val tokenizer = LlamaTokenizer(context)
 
+    // Architecture constants — populated from config.json during initialize(),
+    // falling back to compile-time defaults if the asset is missing or malformed.
+    private var vocabSize  = VOCAB_SIZE_DEFAULT
+    private var numKvHeads = NUM_KV_HEADS_DEFAULT
+    private var headDim    = HEAD_DIM_DEFAULT
+
     @Volatile private var initAttempted = false
 
     /**
@@ -69,6 +76,7 @@ class LocalFallbackProvider(
         if (initAttempted) return
         initAttempted = true
         try {
+            loadArchConfig()
             copyAssetsToFilesDir()
             val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
             session = createSession(modelPath)
@@ -139,7 +147,7 @@ class LocalFallbackProvider(
             kvCache = result.presentKv
             pastLen = promptTokens.size
 
-            var nextTokenId = greedySample(result.logits, (pastLen - 1) * VOCAB_SIZE)
+            var nextTokenId = greedySample(result.logits, (pastLen - 1) * vocabSize)
             result.logits = FloatArray(0) // release memory
 
             // Streaming byte buffer for UTF-8 reconstruction
@@ -230,7 +238,7 @@ class LocalFallbackProvider(
             for (i in 0 until numLayers) {
                 val (kd, vd) = kvCache[i]
                 val kvPastLen = if (kd.isEmpty()) 0L else pastLen.toLong()
-                val kvShape = longArrayOf(1, NUM_KV_HEADS, kvPastLen, HEAD_DIM)
+                val kvShape = longArrayOf(1, numKvHeads, kvPastLen, headDim)
                 inputs["past_key_values.$i.key"] = OnnxTensor.createTensor(
                     env, FloatBuffer.wrap(kd), kvShape
                 )
@@ -247,8 +255,8 @@ class LocalFallbackProvider(
                 logitsTensor.floatBuffer.get(allLogits)
                 // Only keep the last position's logits ([1, seqLen, vocab] → [vocab])
                 val lastPosLogits = allLogits.copyOfRange(
-                    (seqLen - 1) * VOCAB_SIZE,
-                    seqLen * VOCAB_SIZE
+                    (seqLen - 1) * vocabSize,
+                    seqLen * vocabSize
                 )
 
                 // Extract present KV cache for the next step
@@ -279,7 +287,7 @@ class LocalFallbackProvider(
     private fun greedySample(logits: FloatArray, offset: Int): Int {
         var maxVal = Float.NEGATIVE_INFINITY
         var maxIdx = 0
-        for (i in 0 until VOCAB_SIZE) {
+        for (i in 0 until vocabSize) {
             val v = logits[offset + i]
             if (v > maxVal) {
                 maxVal = v
@@ -337,6 +345,20 @@ class LocalFallbackProvider(
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
+    private fun loadArchConfig() {
+        try {
+            context.assets.open(CONFIG_ASSET).bufferedReader().use { reader ->
+                val json = org.json.JSONObject(reader.readText())
+                vocabSize  = json.optInt("vocab_size",           VOCAB_SIZE_DEFAULT)
+                numKvHeads = json.optLong("num_key_value_heads", NUM_KV_HEADS_DEFAULT)
+                headDim    = json.optLong("head_dim",            HEAD_DIM_DEFAULT)
+                Log.d(TAG, "Arch config loaded: vocab=$vocabSize, kvHeads=$numKvHeads, headDim=$headDim")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "config.json missing or malformed — using hardcoded arch defaults", e)
+        }
+    }
+
     private fun copyAssetsToFilesDir() {
         for (asset in ASSET_FILES) {
             val dest = File(context.filesDir, asset)
@@ -367,7 +389,8 @@ class LocalFallbackProvider(
 
     companion object {
         private const val TAG = "LocalFallbackProvider"
-        private const val MODEL_ASSET = "model_q4.onnx"
+        private const val MODEL_ASSET  = "model_q4.onnx"
+        private const val CONFIG_ASSET = "config.json"
 
         // Only model shards are copied to filesDir — ORT requires real filesystem paths
         // for external-data models. Tokenizer files are read directly from assets.
@@ -377,10 +400,12 @@ class LocalFallbackProvider(
             "model_q4.onnx_data_1",
         )
 
-        // ── Llama-3.2-3B architecture constants (from config.json) ────────────
-        private const val VOCAB_SIZE    = 128_256
-        private const val NUM_KV_HEADS  = 8L
-        private const val HEAD_DIM      = 128L
+        // ── Llama-3.2-3B architecture defaults ───────────────────────────────
+        // Runtime values are parsed from app/src/main/assets/config.json; these
+        // constants are used only as fallbacks if that asset is missing or malformed.
+        private const val VOCAB_SIZE_DEFAULT    = 128_256
+        private const val NUM_KV_HEADS_DEFAULT  = 8L
+        private const val HEAD_DIM_DEFAULT      = 128L
         private const val MAX_NEW_TOKENS = 512
     }
 }
