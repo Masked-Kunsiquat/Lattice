@@ -25,7 +25,7 @@ open class EmbeddingProvider(
 ) {
     private var ortSession: OrtSession? = null
     private var tokenizer: WordPieceTokenizer? = null
-    private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
+    private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
 
     /**
      * Loads the ONNX model and WordPiece vocabulary from assets.
@@ -56,14 +56,8 @@ open class EmbeddingProvider(
     val isInitialized: Boolean get() = ortSession != null && tokenizer != null
 
     open suspend fun generateEmbedding(text: String): FloatArray = withContext(dispatcher) {
-        val session = ortSession ?: run {
-            Log.w(TAG, "generateEmbedding called before initialize() or after a load failure — returning zero-vector")
-            return@withContext FloatArray(EMBEDDING_DIM)
-        }
-        val tok = tokenizer ?: run {
-            Log.w(TAG, "generateEmbedding called before initialize() or after a load failure — returning zero-vector")
-            return@withContext FloatArray(EMBEDDING_DIM)
-        }
+        val session = ortSession ?: return@withContext FloatArray(EMBEDDING_DIM)
+        val tok = tokenizer ?: return@withContext FloatArray(EMBEDDING_DIM)
         runInference(session, tok, text)
     }
 
