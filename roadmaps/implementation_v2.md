@@ -236,39 +236,34 @@ DONE — commit ccd7e10
 ```
 
 ### 🟢 Task 5.3: Memory-Augmented Socratic Dialogue
-```markdown
-# Task: RAG Evidence Injection + Streaming UiState + ReframeBottomSheet
-NOTE: !reframe detection, triggerReframe(), and TransitEvent logging were pulled
-forward into Task 5.1 (commit 370e2ee). Remaining 5.3 deliverables:
-
-Deliverables:
-- SearchRepository.findEvidenceEntries(
-      placeholders: Set<String>,
-      minValence: Float = 0.5f,
-      limit: Int = 5
-  ): Flow<List<JournalEntry>>
-  - Reuses Snowflake Arctic XS embeddings (existing cosine logic from findSimilarEntries).
-  - Fetches entries where valence > minValence (positive quadrant only).
-  - Filters to entries whose maskedContent contains at least one placeholder from the set
-    (cross-entry evidence anchoring to the same people/entities).
-  - Zero-vector entries excluded.
-- JournalDao: add getEntriesWithMinValence(minValence: Float): List<JournalEntry>
-  (suspend, one-shot).
-- ReframingLoop Stage 3: inject top evidence entries as "Evidence for the Contrary"
-  block into both Q2 and Q3 prompts.
-- JournalEditorViewModel:
-  - ✅ DONE: !reframe detection + stripping (commit 370e2ee).
-  - ✅ DONE: triggerReframe() with fail-fast pipeline + TransitEvent logging.
-  - Upgrade EditorUiState.isReframing/reframeResult → sealed ReframeState:
-    Idle | Loading | Streaming(partial: String) | Done(text: String) | Error(msg: String)
-  - Stream LlmResult.Token chunks into ReframeState.Streaming; seal to Done on Complete.
-- ReframeBottomSheet.kt (app/ui): modal bottom sheet consuming reframeState.
-  - Skeleton shimmer while Loading; token-by-token text append while Streaming.
-  - "Apply" action: appends reframed text below original in editor field.
-  - "Dismiss" resets reframeState to Idle.
-- Unit tests (5): cloud provider never invoked, Streaming → Done state transition,
-  valence gate enforced, placeholder match required, evidence block injected into prompt.
 ```
+NOTE: !reframe detection, triggerReframe(), and TransitEvent logging were pulled
+forward into Task 5.1 (commit 370e2ee). Remaining work split into three chunks:
+```
+
+#### 5.3-A: RAG Evidence Layer (core-data + core-logic)
+- [ ] `JournalDao`: add `getEntriesWithMinValence(minValence: Float): List<JournalEntry>` (suspend, one-shot)
+- [ ] `SearchRepository.findEvidenceEntries(placeholders, minValence=0.5f, limit=5)`: Flow<List<JournalEntry>>
+  - Reuses Snowflake Arctic XS cosine logic from `findSimilarEntries`
+  - Filters to `valence > minValence` (positive quadrant only)
+  - Keeps only entries whose `maskedContent` contains ≥ 1 placeholder from the set (cross-entry anchoring)
+  - Excludes zero-vector entries
+- [ ] `ReframingLoop` Stage 3: inject top evidence entries as an "Evidence for the Contrary" block into Q2 and Q3 prompts
+- [ ] Unit tests (3): valence gate enforced, placeholder match required, evidence block present in prompt string
+
+#### 5.3-B: Streaming UiState (ViewModel)
+- [ ] Replace `EditorUiState.isReframing: Boolean` + `reframeResult: String?` with sealed `ReframeState`:
+  `Idle | Loading | Streaming(partial: String) | Done(text: String) | Error(msg: String)`
+- [ ] `triggerReframe()`: emit `Loading` on start; collect `LlmResult.Token` chunks into `Streaming(partial)`; seal to `Done` on `LlmResult.Complete`
+- [ ] `applyReframe()` / `dismissReframe()` adapted to new `ReframeState` (was previously `reframeResult: String?`)
+- [ ] Unit tests (2): `Streaming → Done` state transition, cloud provider never invoked
+
+#### 5.3-C: ReframeBottomSheet UI (app)
+- [ ] `ReframeBottomSheet.kt`: modal bottom sheet consuming `reframeState`
+  - Skeleton shimmer while `Loading`
+  - Token-by-token text append while `Streaming`
+  - "Apply": calls `applyReframe()` (persists via `updateReframedContent`, clears sheet)
+  - "Dismiss": calls `dismissReframe()` (resets state to `Idle`, no DB write)
 
 ### ✅ Task 5.4: Room Schema Update & Audit Trail
 ```markdown
