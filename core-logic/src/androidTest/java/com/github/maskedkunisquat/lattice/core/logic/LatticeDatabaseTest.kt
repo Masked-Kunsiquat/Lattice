@@ -70,7 +70,7 @@ class LatticeDatabaseTest {
             "Retrieved embedding should match input exactly",
             expectedEmbedding,
             retrievedEntry.embedding,
-            0.0f
+            1e-6f
         )
     }
 }

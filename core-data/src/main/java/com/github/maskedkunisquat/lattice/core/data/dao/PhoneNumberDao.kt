@@ -26,4 +26,7 @@ interface PhoneNumberDao {
 
     @Query("SELECT * FROM phone_numbers")
     fun getAllPhoneNumbers(): Flow<List<PhoneNumber>>
+
+    @Query("DELETE FROM phone_numbers WHERE personId = :personId")
+    suspend fun deleteByPersonId(personId: UUID)
 }

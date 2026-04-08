@@ -8,14 +8,10 @@ object CbtLogic {
      * Currently supports 'All-or-Nothing' thinking.
      */
     fun detectDistortions(text: String): List<String> {
-        val distortions = mutableListOf<String>()
-        
-        val words = text.lowercase().split(Regex("\\s+")).map { it.trim(',', '.', '!', '?', ';', ':') }
-        
-        if (words.any { it in allOrNothingWords }) {
-            distortions.add("All-or-Nothing")
+        val words = text.lowercase().split(Regex("\\s+"))
+            .map { it.replace(Regex("'s$"), "").replace(Regex("[^a-z]"), "") }
+        return buildList {
+            if (words.any { it in allOrNothingWords }) add("All-or-Nothing")
         }
-        
-        return distortions
     }
 }

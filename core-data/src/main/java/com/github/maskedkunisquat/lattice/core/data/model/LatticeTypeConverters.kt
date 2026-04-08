@@ -38,11 +38,13 @@ class LatticeTypeConverters {
     }
 
     @TypeConverter
-    fun fromStringList(value: List<String>?): String? = value?.joinToString("|||")
+    fun fromStringList(value: List<String>?): String? = value?.let {
+        org.json.JSONArray(it).toString()
+    }
 
     @TypeConverter
     fun toStringList(value: String?): List<String>? = value?.let {
-        if (it.isEmpty()) emptyList()
-        else it.split("|||")
+        val array = org.json.JSONArray(it)
+        List(array.length()) { i -> array.getString(i) }
     }
 }
