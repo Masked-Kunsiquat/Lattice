@@ -79,4 +79,13 @@ class JournalRepository(
     suspend fun deleteEntry(entry: JournalEntry) {
         journalDao.deleteEntry(entry)
     }
+
+    /**
+     * Returns [text] with all known people's names replaced by [PERSON_uuid] placeholders.
+     * Used by callers that need masked text without persisting an entry (e.g. the reframe pipeline).
+     */
+    suspend fun maskText(text: String): String {
+        val people = personDao.getPersons().first()
+        return PiiShield.mask(text, people)
+    }
 }
