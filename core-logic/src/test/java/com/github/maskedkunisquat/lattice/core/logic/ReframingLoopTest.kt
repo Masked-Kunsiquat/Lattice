@@ -156,4 +156,130 @@ class ReframingLoopTest {
         val result = ReframingLoop(orchestrator).runStage1AffectiveMap("test")
         assertTrue(result.isFailure)
     }
+
+    // ── Stage 2: parseDotOutput ───────────────────────────────────────────────
+
+    @Test
+    fun `parseDotOutput - single distortion`() {
+        val result = loop.parseDotOutput("DISTORTIONS: Catastrophizing")
+        assertEquals(listOf(CognitiveDistortion.CATASTROPHIZING), result.distortions)
+    }
+
+    @Test
+    fun `parseDotOutput - multiple distortions`() {
+        val result = loop.parseDotOutput(
+            "Step 1: facts...\nStep 2: beliefs...\nDISTORTIONS: Labeling, Fortune Telling, All-or-Nothing"
+        )
+        assertEquals(
+            listOf(
+                CognitiveDistortion.LABELING,
+                CognitiveDistortion.FORTUNE_TELLING,
+                CognitiveDistortion.ALL_OR_NOTHING,
+            ),
+            result.distortions
+        )
+    }
+
+    @Test
+    fun `parseDotOutput - NONE produces empty list`() {
+        val result = loop.parseDotOutput("DISTORTIONS: NONE")
+        assertTrue(result.distortions.isEmpty())
+    }
+
+    @Test
+    fun `parseDotOutput - case-insensitive sentinel`() {
+        val result = loop.parseDotOutput("distortions: Personalization")
+        assertEquals(listOf(CognitiveDistortion.PERSONALIZATION), result.distortions)
+    }
+
+    @Test
+    fun `parseDotOutput - normalises hyphen and case variations`() {
+        // Model may output "All or Nothing" without the hyphen
+        val result = loop.parseDotOutput("DISTORTIONS: All or Nothing, emotional reasoning")
+        assertEquals(
+            listOf(CognitiveDistortion.ALL_OR_NOTHING, CognitiveDistortion.EMOTIONAL_REASONING),
+            result.distortions
+        )
+    }
+
+    @Test
+    fun `parseDotOutput - unrecognised tokens silently dropped`() {
+        val result = loop.parseDotOutput("DISTORTIONS: Catastrophizing, MadeUpDistortion, Blame")
+        assertEquals(
+            listOf(CognitiveDistortion.CATASTROPHIZING, CognitiveDistortion.BLAME),
+            result.distortions
+        )
+    }
+
+    @Test
+    fun `parseDotOutput - uses last DISTORTIONS line when model repeats itself`() {
+        val raw = "DISTORTIONS: Labeling\n...\nDISTORTIONS: Catastrophizing, Mind Reading"
+        val result = loop.parseDotOutput(raw)
+        assertEquals(
+            listOf(CognitiveDistortion.CATASTROPHIZING, CognitiveDistortion.MIND_READING),
+            result.distortions
+        )
+    }
+
+    @Test
+    fun `parseDotOutput - preserves full reasoning in result`() {
+        val raw = "Facts: X. Beliefs: Y.\nDISTORTIONS: Should Statements"
+        val result = loop.parseDotOutput(raw)
+        assertEquals(raw, result.reasoning)
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun `parseDotOutput - throws when sentinel missing`() {
+        loop.parseDotOutput("The text seems okay. No distortions here.")
+    }
+
+    // ── Stage 2: buildDotPrompt ───────────────────────────────────────────────
+
+    @Test
+    fun `buildDotPrompt - contains masked text and all 12 distortions`() {
+        val prompt = loop.buildDotPrompt("I feel [PERSON_abc] hates me.")
+        assertTrue(prompt.contains("[PERSON_abc]"))
+        assertTrue(prompt.contains("DISTORTIONS:"))
+        CognitiveDistortion.entries.forEach { distortion ->
+            assertTrue(
+                "Prompt must list ${distortion.label}",
+                prompt.contains(distortion.label, ignoreCase = true)
+            )
+        }
+        assertTrue(prompt.contains("<|begin_of_text|>"))
+        assertTrue(prompt.contains("<|eot_id|>"))
+    }
+
+    // ── Stage 2: end-to-end flow ──────────────────────────────────────────────
+
+    @Test
+    fun `runStage2DiagnosisOfThought - parses token stream and returns distortions`() = runTest {
+        val response = "Facts: X. Beliefs: Y.\nDISTORTIONS: Catastrophizing, Labeling"
+        val reframingLoop = loopWithResponse(*response.map { it.toString() }.toTypedArray())
+        val result = reframingLoop.runStage2DiagnosisOfThought("I know everything will go wrong.")
+        assertTrue(result.isSuccess)
+        val diagnosis = result.getOrThrow()
+        assertEquals(
+            listOf(CognitiveDistortion.CATASTROPHIZING, CognitiveDistortion.LABELING),
+            diagnosis.distortions
+        )
+    }
+
+    @Test
+    fun `runStage2DiagnosisOfThought - returns failure when model emits error`() = runTest {
+        val results = listOf(LlmResult.Error(RuntimeException("session closed")))
+        val provider = FakeProvider("fake_local", results)
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = provider,
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = false,
+        )
+        val result = ReframingLoop(orchestrator).runStage2DiagnosisOfThought("test")
+        assertTrue(result.isFailure)
+    }
 }

@@ -12,9 +12,9 @@ import kotlinx.coroutines.withContext
  * All prompts receive PII-masked text only — callers must pre-mask via PiiShield.
  *
  * ## Stages
- * - Stage 1 ([runStage1AffectiveMap])  — Affective Mapping: valence/arousal → MoodLabel
- * - Stage 2 — Distortion Detection    (TODO: Task 5.1 Stage 2)
- * - Stage 3 — CBT Reframe Generation  (TODO: Task 5.1 Stage 3)
+ * - Stage 1 ([runStage1AffectiveMap])       — Affective Mapping: valence/arousal → MoodLabel
+ * - Stage 2 ([runStage2DiagnosisOfThought]) — DoT: facts-vs-beliefs → [CognitiveDistortion] list
+ * - Stage 3                                 — CBT Reframe Generation (TODO: Task 5.1 Stage 3)
  */
 class ReframingLoop(
     private val orchestrator: LlmOrchestrator,
@@ -41,6 +41,30 @@ class ReframingLoop(
             }
         }
 
+    // ── Stage 2 ──────────────────────────────────────────────────────────────
+
+    /**
+     * Diagnosis of Thought: runs a chain-of-thought facts-vs-beliefs analysis then
+     * identifies which of the 12 CBT [CognitiveDistortion]s are present.
+     *
+     * The model is asked to reason aloud (chain-of-thought) before emitting a final
+     * `DISTORTIONS:` sentinel line. The full reasoning is preserved in
+     * [DiagnosisResult.reasoning] for optional display or debugging.
+     *
+     * @param maskedText PII-masked journal text.
+     * @return [Result.success] with [DiagnosisResult], or [Result.failure] on model
+     *   error or unparseable output (missing sentinel).
+     */
+    suspend fun runStage2DiagnosisOfThought(maskedText: String): Result<DiagnosisResult> =
+        withContext(dispatcher) {
+            runCatching {
+                val raw = collectTokens(
+                    orchestrator.process(buildDotPrompt(maskedText), "dot_diagnosis")
+                )
+                parseDotOutput(raw)
+            }
+        }
+
     // ── Prompt builders ──────────────────────────────────────────────────────
 
     internal fun buildAffectivePrompt(maskedText: String): String =
@@ -54,6 +78,24 @@ class ReframingLoop(
         "  v = valence  : -1.0 (very negative) to 1.0 (very positive)\n" +
         "  a = arousal  : -1.0 (calm / passive) to 1.0 (excited / active)\n" +
         "Numbers must be between -1.0 and 1.0. No other text.\n\n" +
+        "Text: $maskedText" +
+        "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+
+    internal fun buildDotPrompt(maskedText: String): String =
+        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
+        "You are a CBT therapist applying the Diagnosis of Thought (DoT) method. " +
+        "Reason step by step, then conclude with a DISTORTIONS line." +
+        "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
+        "Analyze the following text using the three-step Diagnosis of Thought:\n\n" +
+        "Step 1 — Facts vs. Beliefs:\n" +
+        "Separate what is objectively stated (facts) from what is interpreted, " +
+        "assumed, or felt (beliefs/thoughts).\n\n" +
+        "Step 2 — Contrastive Analysis:\n" +
+        "For each belief, identify the cognitive distortion from this list:\n" +
+        "${CognitiveDistortion.promptList}\n\n" +
+        "Step 3 — Final diagnosis:\n" +
+        "On the last line output ONLY:\n" +
+        "DISTORTIONS: <comma-separated distortion names, or NONE if none found>\n\n" +
         "Text: $maskedText" +
         "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
 
@@ -71,6 +113,29 @@ class ReframingLoop(
             arousal = ac,
             label = CircumplexMapper.getLabel(vc, ac)
         )
+    }
+
+    /**
+     * Finds the last `DISTORTIONS:` sentinel line in [raw] (the model may reason
+     * aloud and repeat itself before settling), splits the CSV, and resolves each
+     * token to a [CognitiveDistortion]. Unrecognised tokens are silently dropped.
+     */
+    internal fun parseDotOutput(raw: String): DiagnosisResult {
+        val sentinelLine = raw.lines()
+            .lastOrNull { it.contains("DISTORTIONS:", ignoreCase = true) }
+            ?: throw IllegalStateException(
+                "No DISTORTIONS: sentinel in model output: \"$raw\""
+            )
+
+        val colonIdx = sentinelLine.indexOf("DISTORTIONS:", ignoreCase = true)
+        val csv = sentinelLine.substring(colonIdx + "DISTORTIONS:".length).trim()
+
+        if (csv.equals("NONE", ignoreCase = true) || csv.isEmpty()) {
+            return DiagnosisResult(distortions = emptyList(), reasoning = raw)
+        }
+
+        val distortions = csv.split(",").mapNotNull { CognitiveDistortion.fromLabel(it) }
+        return DiagnosisResult(distortions = distortions, reasoning = raw)
     }
 
     // ── Token stream collector ───────────────────────────────────────────────
@@ -96,6 +161,18 @@ class ReframingLoop(
         val valence: Float,
         val arousal: Float,
         val label: MoodLabel
+    )
+
+    /**
+     * Output of Stage 2.
+     *
+     * @param distortions Identified [CognitiveDistortion]s. Empty when none detected.
+     * @param reasoning   Full raw model output including the chain-of-thought
+     *   facts/beliefs analysis. Preserved for debugging and optional UI display.
+     */
+    data class DiagnosisResult(
+        val distortions: List<CognitiveDistortion>,
+        val reasoning: String
     )
 
     companion object {
