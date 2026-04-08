@@ -92,7 +92,7 @@ class LlamaTokenizer(private val context: Context) {
             var bestId = -1
             for ((content, id) in specialTokens) {
                 val idx = remaining.indexOf(content)
-                if (idx in 0 until bestIdx) {
+                if (idx >= 0 && (idx < bestIdx || (idx == bestIdx && content.length > (bestContent?.length ?: -1)))) {
                     bestIdx = idx
                     bestContent = content
                     bestId = id
@@ -125,9 +125,13 @@ class LlamaTokenizer(private val context: Context) {
      */
     fun decodeToBytes(tokenId: Int): ByteArray {
         check(initialized) { "LlamaTokenizer.initialize() must be called first." }
-        val piece = idToToken[tokenId] ?: return ByteArray(0)
+        val piece = idToToken[tokenId]
+            ?: throw IllegalArgumentException("Unknown token id: $tokenId")
         return ByteArray(piece.length) { i ->
-            (UNICODE_TO_BYTE[piece[i]] ?: piece[i].code.toByte())
+            UNICODE_TO_BYTE[piece[i]] ?: run {
+                Log.w(TAG, "Unmapped byte-level char '${piece[i]}' in token $tokenId — substituting '?'")
+                '?'.code.toByte()
+            }
         }
     }
 
@@ -194,7 +198,7 @@ class LlamaTokenizer(private val context: Context) {
         symbols.forEach { sym ->
             val id = vocab[sym]
             if (id != null) out.add(id.toLong())
-            // silently skip unmapped symbols (should not happen for a well-formed tokenizer)
+            else Log.w(TAG, "BPE symbol '$sym' not in vocab — skipped")
         }
     }
 

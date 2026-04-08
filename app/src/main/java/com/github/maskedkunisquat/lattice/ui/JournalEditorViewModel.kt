@@ -13,6 +13,7 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,6 +48,8 @@ class JournalEditorViewModel(
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
+    private var reframeJob: Job? = null
+
     /**
      * Called on every keystroke. Intercepts the [REFRAME_COMMAND] token anywhere in
      * [newText]: strips it from the displayed text and fires the reframe pipeline.
@@ -57,7 +60,7 @@ class JournalEditorViewModel(
             _uiState.update { it.copy(text = stripped) }
             triggerReframe(stripped)
         } else {
-            _uiState.update { it.copy(text = newText) }
+            _uiState.update { it.copy(text = newText, reframeResult = null) }
         }
     }
 
@@ -111,7 +114,8 @@ class JournalEditorViewModel(
      */
     private fun triggerReframe(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch {
+        reframeJob?.cancel()
+        reframeJob = viewModelScope.launch {
             _uiState.update { it.copy(isReframing = true, reframeResult = null, error = null) }
             try {
                 // Mask PII before any text reaches the LLM
