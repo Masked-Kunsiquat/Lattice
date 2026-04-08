@@ -31,7 +31,7 @@ DONE — commit 874ee19
 
 ---
 
-## Phase 3: The Orchestrator (Privacy Switchboard) 🔄
+## Phase 3: The Orchestrator (Privacy Switchboard) ✅
 
 ### ✅ Task 3.1: LLM Strategy Manager, Fallbacks & Export
 ```markdown
@@ -64,15 +64,22 @@ Unit tests (8): routing priority, sovereignty state flip, TransitEvent DAO write
 cloud gating when cloudEnabled=false.
 ```
 
-### 🟢 Task 3.2: Privacy Guardrails & State
+### ✅ Task 3.2: Privacy Guardrails & State
 ```markdown
 # Task: Privacy State & Cloud Warning Logic
-1. **State:** PrivacyLevel sealed class already done in 3.1 (LocalOnly / CloudTransit).
-2. **Logic:** Cloud routing already flips state in LlmOrchestrator.applyPrivacyState().
-   Remaining: ensure PiiShield is recursively called on all Cloud-bound payloads
-   (currently caller responsibility — validate in orchestrator before dispatch).
-3. **Audit:** Add a Unit Test ensuring CloudProvider throws an error if raw (unmasked)
-   PII is detected in the payload (detect [PERSON_uuid] absence on known-PII strings).
+DONE
+
+1. **State:** PrivacyLevel sealed class done in 3.1 (LocalOnly / CloudTransit). ✅
+2. **Logic:** LlmOrchestrator.process() now validates cloud-bound prompts via piiDetector:
+   - New piiDetector: (String) -> Boolean parameter (default: no-op / always false).
+   - If cloud is selected AND piiDetector returns true → emits LlmResult.Error(SecurityException)
+     and returns early (cloud provider is never invoked, no TransitEvent logged).
+   - privacyState does NOT flip to CloudTransit on a blocked request.
+3. **Tests (2 added):**
+   - `cloud dispatch is blocked and error emitted when raw PII is detected`
+     Verifies: error emitted, cloud processCallCount=0, no DAO write, state stays LocalOnly.
+   - `cloud dispatch proceeds when prompt contains only PII placeholders`
+     Verifies: masked prompts are not blocked, cloud is called, Complete result returned.
 ```
 
 ---

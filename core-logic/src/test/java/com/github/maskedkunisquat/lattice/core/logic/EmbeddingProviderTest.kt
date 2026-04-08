@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -21,7 +22,7 @@ class EmbeddingProviderTest {
         var dispatchInvoked = false
 
         val trackingDispatcher = object : CoroutineDispatcher() {
-            val delegate = UnconfinedTestDispatcher(testScheduler)
+            val delegate = StandardTestDispatcher(testScheduler)
             override fun dispatch(context: CoroutineContext, block: Runnable) {
                 dispatchInvoked = true
                 delegate.dispatch(context, block)
@@ -30,6 +31,7 @@ class EmbeddingProviderTest {
 
         val provider = EmbeddingProvider(dispatcher = trackingDispatcher)
         provider.generateEmbedding("test input — no model loaded, expects zero-vector")
+        testScheduler.advanceUntilIdle()
 
         assertTrue(
             "generateEmbedding must use withContext(dispatcher); dispatch was never called",
