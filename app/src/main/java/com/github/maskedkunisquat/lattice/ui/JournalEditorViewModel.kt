@@ -13,8 +13,18 @@ import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+
+data class EditorUiState(
+    val text: String = "",
+    val valence: Float = 0f,
+    val arousal: Float = 0f,
+    val label: MoodLabel = MoodLabel.ALIVE,
+    val moodSelected: Boolean = false,
+    val saved: Boolean = false,
+)
 
 class JournalEditorViewModel(
     private val journalRepository: JournalRepository,
@@ -24,30 +34,37 @@ class JournalEditorViewModel(
     /** Drives the blue / amber privacy border in the UI. */
     val privacyState: StateFlow<PrivacyLevel> = orchestrator.privacyState
 
-    private val _saved = MutableStateFlow(false)
+    private val _uiState = MutableStateFlow(EditorUiState())
+    val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
-    /** Pulses true after a successful save; call [resetSaved] to clear it. */
-    val saved: StateFlow<Boolean> = _saved.asStateFlow()
+    fun onTextChanged(text: String) {
+        _uiState.update { it.copy(text = text) }
+    }
 
-    fun save(content: String, valence: Float, arousal: Float, label: MoodLabel) {
+    fun onMoodChanged(valence: Float, arousal: Float, label: MoodLabel) {
+        _uiState.update { it.copy(valence = valence, arousal = arousal, label = label, moodSelected = true) }
+    }
+
+    fun save() {
+        val state = _uiState.value
         viewModelScope.launch {
             journalRepository.saveEntry(
                 JournalEntry(
                     id = UUID.randomUUID(),
                     timestamp = System.currentTimeMillis(),
-                    content = content,
-                    valence = valence,
-                    arousal = arousal,
-                    moodLabel = label.name, // recalculated by repository, but must be non-null
+                    content = state.text,
+                    valence = state.valence,
+                    arousal = state.arousal,
+                    moodLabel = state.label.name, // recalculated by repository, but must be non-null
                     embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
                 )
             )
-            _saved.value = true
+            _uiState.update { it.copy(saved = true) }
         }
     }
 
     fun resetSaved() {
-        _saved.value = false
+        _uiState.update { EditorUiState() }
     }
 
     companion object {
