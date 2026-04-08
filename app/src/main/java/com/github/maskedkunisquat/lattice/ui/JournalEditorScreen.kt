@@ -17,10 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
@@ -33,29 +29,34 @@ import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
 private val LocalBlue = Color(0xFF1976D2)
 private val CloudAmber = Color(0xFFFF8F00)
 
-// Public entry point — pulls state from the ViewModel and delegates to JournalEditorContent.
+// Public entry point — collects ViewModel state and delegates to JournalEditorContent.
 @Composable
 fun JournalEditorScreen(
     viewModel: JournalEditorViewModel,
     modifier: Modifier = Modifier,
 ) {
     val privacyState by viewModel.privacyState.collectAsStateWithLifecycle()
-    val saved by viewModel.saved.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     JournalEditorContent(
         privacyState = privacyState,
-        saved = saved,
+        uiState = uiState,
+        onTextChanged = viewModel::onTextChanged,
+        onMoodChanged = viewModel::onMoodChanged,
         onSave = viewModel::save,
         onResetSaved = viewModel::resetSaved,
         modifier = modifier,
     )
 }
 
-// Stateless inner composable — previews target this directly.
+// Stateless inner composable — all mutable state lives in the ViewModel.
+// Previews target this directly with stub state.
 @Composable
 private fun JournalEditorContent(
     privacyState: PrivacyLevel,
-    saved: Boolean,
-    onSave: (content: String, valence: Float, arousal: Float, label: MoodLabel) -> Unit,
+    uiState: EditorUiState,
+    onTextChanged: (String) -> Unit,
+    onMoodChanged: (Float, Float, MoodLabel) -> Unit,
+    onSave: () -> Unit,
     onResetSaved: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -68,18 +69,8 @@ private fun JournalEditorContent(
         label = "privacyBorder",
     )
 
-    var text by remember { mutableStateOf("") }
-    var valence by remember { mutableFloatStateOf(0f) }
-    var arousal by remember { mutableFloatStateOf(0f) }
-    var currentLabel by remember { mutableStateOf(MoodLabel.ALIVE) }
-    var moodSelected by remember { mutableStateOf(false) }
-
-    LaunchedEffect(saved) {
-        if (saved) {
-            text = ""
-            moodSelected = false
-            onResetSaved()
-        }
+    LaunchedEffect(uiState.saved) {
+        if (uiState.saved) onResetSaved()
     }
 
     val privacyLabel = when (val ps = privacyState) {
@@ -111,18 +102,13 @@ private fun JournalEditorContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(0.45f),
-            onMoodChanged = { v, a, l ->
-                valence = v
-                arousal = a
-                currentLabel = l
-                moodSelected = true
-            },
+            onMoodChanged = onMoodChanged,
         )
 
         // Privacy-bordered journal text field
         OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
+            value = uiState.text,
+            onValueChange = onTextChanged,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(0.45f),
@@ -138,9 +124,9 @@ private fun JournalEditorContent(
         )
 
         Button(
-            onClick = { onSave(text, valence, arousal, currentLabel) },
+            onClick = onSave,
             modifier = Modifier.fillMaxWidth(),
-            enabled = text.isNotBlank() && moodSelected,
+            enabled = uiState.text.isNotBlank() && uiState.moodSelected,
         ) {
             Text("Save Entry")
         }
@@ -153,8 +139,10 @@ private fun EditorLocalPreview() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         JournalEditorContent(
             privacyState = PrivacyLevel.LocalOnly,
-            saved = false,
-            onSave = { _, _, _, _ -> },
+            uiState = EditorUiState(text = "Today I spoke with [PERSON_00000000-0000-0000-0000-000000000001] about the project."),
+            onTextChanged = {},
+            onMoodChanged = { _, _, _ -> },
+            onSave = {},
             onResetSaved = {},
         )
     }
@@ -169,8 +157,10 @@ private fun EditorCloudPreview() {
                 providerName = "cloud_claude",
                 sinceTimestamp = 0L,
             ),
-            saved = false,
-            onSave = { _, _, _, _ -> },
+            uiState = EditorUiState(text = "Feeling anxious about the presentation.", moodSelected = true),
+            onTextChanged = {},
+            onMoodChanged = { _, _, _ -> },
+            onSave = {},
             onResetSaved = {},
         )
     }

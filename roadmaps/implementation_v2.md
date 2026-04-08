@@ -106,6 +106,11 @@ DONE — commit a15198f
 DONE
 - LatticeApplication.kt: manual DI container — Room DB, EmbeddingProvider, JournalRepository,
   LlmOrchestrator all lazily wired; embeddingProvider.initialize() called in onCreate().
+  **DI evolution note:** manual lazy wiring is intentional for Phase 4 (one ViewModel, no
+  circular deps, no test pain yet). Migrate to Hilt (best for multi-module Android, strong
+  AS tooling) or Koin (lighter, KMP-friendly) if any of these signals appear: multiple
+  ViewModels needing the same deps, factory boilerplate growing, test setup requiring manual
+  wiring, or cyclic dependency errors. Action: open a migration spike ticket at that point.
 - PiiHighlightTransformation.kt: VisualTransformation matching [PERSON_UUID] placeholders
   via regex; applies tertiary color + 15% alpha background tint inline in the TextField.
 - JournalEditorViewModel.kt: exposes orchestrator.privacyState StateFlow; save() calls

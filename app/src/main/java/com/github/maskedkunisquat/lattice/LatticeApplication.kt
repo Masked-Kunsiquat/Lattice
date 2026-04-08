@@ -3,7 +3,6 @@ package com.github.maskedkunisquat.lattice
 import android.app.Application
 import androidx.room.Room
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
-import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
@@ -32,9 +31,10 @@ class LatticeApplication : Application() {
         LlmOrchestrator(
             nanoProvider = NanoProvider(this),
             localFallbackProvider = LocalFallbackProvider(this),
-            cloudProvider = CloudProvider(),
             transitEventDao = database.transitEventDao(),
             cloudEnabled = false,
+            // cloudProvider omitted: cloud routing is disabled by default.
+            // Inject a CloudProvider (+ piiDetector) here when the user enables cloud models.
         )
     }
 
