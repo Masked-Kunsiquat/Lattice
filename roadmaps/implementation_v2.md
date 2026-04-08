@@ -71,15 +71,15 @@ DONE
 
 1. **State:** PrivacyLevel sealed class done in 3.1 (LocalOnly / CloudTransit). ✅
 2. **Logic:** LlmOrchestrator.process() now validates cloud-bound prompts via piiDetector:
-   - New piiDetector: (String) -> Boolean parameter (default: no-op / always false).
-   - If cloud is selected AND piiDetector returns true → emits LlmResult.Error(SecurityException)
-     and returns early (cloud provider is never invoked, no TransitEvent logged).
-   - privacyState does NOT flip to CloudTransit on a blocked request.
+    - New piiDetector: (String) -> Boolean parameter (default: no-op / always false).
+    - If cloud is selected AND piiDetector returns true → emits LlmResult.Error(SecurityException)
+      and returns early (cloud provider is never invoked, no TransitEvent logged).
+    - privacyState does NOT flip to CloudTransit on a blocked request.
 3. **Tests (2 added):**
-   - `cloud dispatch is blocked and error emitted when raw PII is detected`
-     Verifies: error emitted, cloud processCallCount=0, no DAO write, state stays LocalOnly.
-   - `cloud dispatch proceeds when prompt contains only PII placeholders`
-     Verifies: masked prompts are not blocked, cloud is called, Complete result returned.
+    - `cloud dispatch is blocked and error emitted when raw PII is detected`
+      Verifies: error emitted, cloud processCallCount=0, no DAO write, state stays LocalOnly.
+    - `cloud dispatch proceeds when prompt contains only PII placeholders`
+      Verifies: masked prompts are not blocked, cloud is called, Complete result returned.
 ```
 
 ---
@@ -126,67 +126,96 @@ DONE
 
 ## Phase 5: The Reframing Engine (CBT)
 
-> **Strategy:** All reframing runs locally via `LocalFallbackProvider` (Qwen-1.5B ONNX).
-> `NanoProvider` and `CloudProvider` are excluded from the reframe routing path.
+> **Strategy:** All reframing runs locally via `LocalFallbackProvider` using the `llama-3.2-3b.onnx`
+> foundation model. `NanoProvider` and `CloudProvider` are excluded from the reframe routing path.
 > No reframe content — masked or otherwise — ever leaves the device.
+> **Architecture pivot (2026-04-08):** Replaced modular multi-model approach (Qwen-1.5B) with a
+> Unified Agent loop on Llama-3.2-3B. Single model handles affective mapping, distortion
+> classification, and intervention generation via sequential prompting.
 
-### 🟢 Task 5.1: Qwen-Specific Prompt Engineering
+### 🟢 Task 5.1: The Unified Reframing Loop (Sequential Prompting)
 ```markdown
-# Task: CbtPromptBuilder — Qwen-1.5B Prompt Formatting
+# Task: 3-Stage Inference Loop in LocalFallbackProvider (Llama-3.2-3B)
 Deliverables:
-- CbtPromptBuilder.kt (core-logic): pure function object, no Android deps.
-  - build(maskedText: String, distortions: List<CbtDistortion>, evidence: List<String>): String
-  - Formats a structured <|im_start|>/<|im_end|> ChatML prompt (Qwen native format).
-  - System turn: instructs Qwen to act as a CBT coach, never reveal PII placeholders,
-    output a reframe in ≤ 3 sentences.
-  - Evidence turn: injects "Evidence for the Contrary" block when evidence list non-empty.
-  - User turn: masked journal text + detected distortion labels.
-  - Distortion coverage: Catastrophizing, Black-and-White Thinking, Mind Reading,
-    Overgeneralization, Emotional Reasoning (maps to CbtDistortion enum).
-- Unit tests (5): empty evidence path, multi-distortion label formatting,
-  placeholder passthrough (no UUID stripping), max-length guard, golden-string snapshot.
+- LocalFallbackProvider: wire ONNX inference against llama-3.2-3b.onnx asset;
+  retain stub/scaffold behaviour (placeholder tokens) when asset absent.
+- ReframingLoop.kt (core-logic): orchestrates the 3-stage sequential prompt chain.
+  All stages operate on PII-masked text only.
+
+  Stage 1 — Affective Mapping:
+  - Prompt Llama to output valence (v) and arousal (a) coordinates from the masked text.
+  - Output used to classify circumplex quadrant (via CircumplexMapper) for Stage 3 routing.
+
+  Stage 2 — Diagnosis of Thought (DoT):
+  - Multi-class classification prompt with clinical reasoning chain.
+  - 12-distortion coverage: Labeling, Fortune Telling, Catastrophizing, Mind Reading,
+    Overgeneralization, Emotional Reasoning, Black-and-White Thinking, Should Statements,
+    Personalization, Mental Filter, Disqualifying the Positive, Magnification/Minimization.
+  - Output: List<CbtDistortion> (replaces / extends current CbtLogic keyword rules).
+
+  Stage 3 — Strategic Pivot Intervention (quadrant-gated):
+  - Quadrant II (High Arousal / Negative valence: v < 0, a ≥ 0):
+    Prioritize probability overestimation testing and cognitive de-escalation.
+  - Quadrant III (Low Arousal / Negative valence: v < 0, a < 0):
+    Prioritize Behavioral Activation (BA) — retrieve a value-aligned activity from
+    ActivityHierarchy (Task 5.2) and inject as "Step 1" suggestion.
+    Also inject "Evidence for the Contrary" from RAG (Task 5.3).
+  - Output: reframe string streamed as LlmResult.Token → Complete sequence.
+
+- CbtDistortion.kt: sealed enum with all 12 distortion types.
+- Unit tests (6): stage isolation (each stage prompt format), quadrant II routing,
+  quadrant III routing, DoT multi-label output, placeholder passthrough (no UUID stripping),
+  fallback stub emits tokens when model asset absent.
 ```
 
-### 🟢 Task 5.2: Semantic Evidence RAG
+### 🟢 Task 5.2: Behavioral Activation (BA) Integration
 ```markdown
-# Task: Positive-Valence Evidence Retrieval in SearchRepository
+# Task: ActivityHierarchy Room Entity + Quadrant III Retrieval
+Deliverables:
+- ActivityHierarchy Room entity (core-data):
+  - Fields: id: UUID, taskName: String, difficulty: Int (0–10), valueCategory: String
+  - Table: activity_hierarchy
+- ActivityHierarchyDao: getActivitiesByMaxDifficulty(max: Int): List<ActivityHierarchy>
+  (suspend, one-shot; used by ReframingLoop to find an accessible "Step 1" activity).
+- LatticeDatabase migration v3 → v4: CREATE TABLE activity_hierarchy (same block as 5.4).
+- ReframingLoop Stage 3 (Quadrant III path): calls getActivitiesByMaxDifficulty(),
+  selects the lowest-difficulty activity whose valueCategory aligns with entry context,
+  injects it into the Llama prompt as a concrete BA suggestion.
+- Unit tests (3): difficulty gate enforced, empty hierarchy handled gracefully (Stage 3
+  proceeds without BA block), activity injected into prompt string.
+```
+
+### 🟢 Task 5.3: Memory-Augmented Socratic Dialogue
+```markdown
+# Task: RAG Evidence Injection + !reframe Trigger
 Deliverables:
 - SearchRepository.findEvidenceEntries(
       placeholders: Set<String>,
       minValence: Float = 0.5f,
       limit: Int = 5
   ): Flow<List<JournalEntry>>
+  - Reuses Snowflake Arctic XS embeddings (existing cosine logic from findSimilarEntries).
   - Fetches entries where valence > minValence (positive quadrant only).
   - Filters to entries whose maskedContent contains at least one placeholder from the set
-    (same person/entity as current entry — cross-entry evidence anchoring).
-  - Ranks by cosine similarity to the current entry's embedding (reuses existing
-    in-memory cosine logic from findSimilarEntries).
+    (cross-entry evidence anchoring to the same people/entities).
   - Zero-vector entries excluded.
 - JournalDao: add getEntriesWithMinValence(minValence: Float): List<JournalEntry>
-  (suspend, one-shot; drives the positive-only pre-filter before cosine ranking).
-- Unit tests (4): valence gate enforced, placeholder match required, cosine ranking order,
-  limit capping.
-```
-
-### 🟢 Task 5.3: !reframe Command Trigger & Stream
-```markdown
-# Task: !reframe Interception, LocalFallbackProvider Routing, UI Stream
-Deliverables:
+  (suspend, one-shot).
+- ReframingLoop: injects top evidence entries as "Evidence for the Contrary" block
+  into the Stage 3 prompt (both Quadrant II and III paths).
 - JournalEditorViewModel:
   - Detect trailing "!reframe" token in live text via regex; strip it before save.
-  - triggerReframe(): collects findEvidenceEntries(), calls CbtPromptBuilder.build(),
-    routes prompt exclusively through LocalFallbackProvider (bypasses LlmOrchestrator
-    tier selection — no cloud path possible).
-  - New UiState fields: reframeState: ReframeState (Idle | Loading | Streaming(partial) | Done(text) | Error)
+  - triggerReframe(): calls ReframingLoop, routes exclusively through LocalFallbackProvider
+    (bypasses LlmOrchestrator tier selection — no cloud path possible).
+  - New UiState fields: reframeState: ReframeState
+    (Idle | Loading | Streaming(partial) | Done(text) | Error)
   - Streams LlmResult.Token chunks into reframeState.Streaming; seals to Done on Complete.
 - ReframeBottomSheet.kt (app/ui): modal bottom sheet consuming reframeState.
   - Skeleton shimmer while Loading; token-by-token text append while Streaming.
   - "Apply" action: appends reframed text below original in editor field.
   - "Dismiss" resets reframeState to Idle.
-- LocalFallbackProvider: wire real ONNX inference call when model asset present;
-  retain stub/scaffold behaviour (emitting placeholder tokens) when asset absent.
-- Unit tests (3): !reframe stripped from saved text, cloud provider never invoked,
-  Streaming → Done state transition.
+- Unit tests (5): !reframe stripped from saved text, cloud provider never invoked,
+  Streaming → Done state transition, valence gate enforced, placeholder match required.
 ```
 
 ### 🟢 Task 5.4: Room Schema Update & Audit Trail
