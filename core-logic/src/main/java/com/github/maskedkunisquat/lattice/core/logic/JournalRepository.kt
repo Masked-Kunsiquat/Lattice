@@ -40,6 +40,7 @@ class JournalRepository(
     /**
      * Saves a journal entry, ensuring PII is masked before hitting the database.
      * This enforces the PII Isolation Prime Directive.
+     * Also updates the vibeScore of mentioned persons based on entry valence.
      */
     suspend fun saveEntry(entry: JournalEntry) {
         val people = personDao.getPersons().first()
@@ -55,6 +56,23 @@ class JournalRepository(
         )
         
         journalDao.insertEntry(entryToSave)
+
+        // Vibe Evolution: Update vibe scores for mentioned persons
+        // Extract UUIDs from [PERSON_UUID] placeholders
+        val regex = Regex("\\[PERSON_([a-fA-F0-9-]{36})\\]")
+        val mentions = regex.findAll(maskedContent)
+            .map { it.groupValues[1] }
+            .distinct()
+            .map { UUID.fromString(it) }
+
+        mentions.forEach { personId ->
+            personDao.getPersonById(personId).first()?.let { person ->
+                // Apply a portion of the valence to the vibeScore
+                val delta = entry.valence * 0.1f
+                val newScore = (person.vibeScore + delta).coerceIn(-1f, 1f)
+                personDao.updatePerson(person.copy(vibeScore = newScore))
+            }
+        }
     }
 
     suspend fun deleteEntry(entry: JournalEntry) {
