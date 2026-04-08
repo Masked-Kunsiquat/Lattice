@@ -73,6 +73,7 @@ class JournalEditorViewModel(
     fun save() {
         val state = _uiState.value
         val newId = UUID.randomUUID()
+        savedEntryId = null  // invalidate any prior entry before the async write
         viewModelScope.launch {
             try {
                 journalRepository.saveEntry(
@@ -89,12 +90,14 @@ class JournalEditorViewModel(
                 savedEntryId = newId
                 _uiState.update { it.copy(saved = true) }
             } catch (e: Exception) {
+                savedEntryId = null
                 _uiState.update { it.copy(error = e.message ?: "Failed to save entry") }
             }
         }
     }
 
     fun resetSaved() {
+        savedEntryId = null
         _uiState.update { EditorUiState() }
     }
 
@@ -108,8 +111,12 @@ class JournalEditorViewModel(
         val entryId = savedEntryId ?: return
         val reframe = _uiState.value.reframeResult ?: return
         viewModelScope.launch {
-            journalRepository.updateReframedContent(entryId.toString(), reframe)
-            _uiState.update { it.copy(reframeResult = null) }
+            try {
+                journalRepository.updateReframedContent(entryId.toString(), reframe)
+                _uiState.update { it.copy(reframeResult = null) }
+            } catch (e: Throwable) {
+                _uiState.update { it.copy(error = "Failed to save reframe: ${e.message}") }
+            }
         }
     }
 

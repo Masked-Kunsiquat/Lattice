@@ -73,7 +73,7 @@ abstract class LatticeDatabase : RoomDatabase() {
                     CREATE TABLE IF NOT EXISTS activity_hierarchy (
                         id TEXT NOT NULL PRIMARY KEY,
                         taskName TEXT NOT NULL,
-                        difficulty INTEGER NOT NULL,
+                        difficulty INTEGER NOT NULL CHECK(difficulty BETWEEN 0 AND 10),
                         valueCategory TEXT NOT NULL
                     )
                     """.trimIndent()

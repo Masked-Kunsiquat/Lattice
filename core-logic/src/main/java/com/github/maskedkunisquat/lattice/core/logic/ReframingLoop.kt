@@ -129,8 +129,8 @@ class ReframingLoop(
         val dao = activityHierarchyDao ?: return null
         val candidates = dao.getActivitiesByMaxDifficulty(BA_MAX_DIFFICULTY)
         if (candidates.isEmpty()) return null
-        val lowerText = maskedText.lowercase()
-        return candidates.firstOrNull { it.valueCategory.lowercase() in lowerText }
+        val tokens = maskedText.lowercase().split(Regex("\\W+")).filter { it.isNotBlank() }.toSet()
+        return candidates.firstOrNull { it.valueCategory.lowercase() in tokens }
             ?: candidates.first()
     }
 
