@@ -98,6 +98,7 @@ class ReframingLoop(
                     "intervention"
                 )
             )
+            if (reframe.isBlank()) throw IllegalStateException("Model returned an empty reframe.")
             ReframeResult(strategy = strategy, reframe = reframe)
         }
     }

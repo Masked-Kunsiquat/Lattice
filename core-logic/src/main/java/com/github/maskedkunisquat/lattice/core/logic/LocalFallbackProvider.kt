@@ -54,7 +54,7 @@ class LocalFallbackProvider(
 
     override val id = "llama3_onnx_local"
 
-    private var session: OrtSession? = null
+    @Volatile private var session: OrtSession? = null
     private val env = OrtEnvironment.getEnvironment()
     private val tokenizer = LlamaTokenizer(context)
 
@@ -147,7 +147,7 @@ class LocalFallbackProvider(
             kvCache = result.presentKv
             pastLen = promptTokens.size
 
-            var nextTokenId = greedySample(result.logits, (pastLen - 1) * vocabSize)
+            var nextTokenId = greedySample(result.logits, 0)
             result.logits = FloatArray(0) // release memory
 
             // Streaming byte buffer for UTF-8 reconstruction
