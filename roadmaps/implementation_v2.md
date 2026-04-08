@@ -1,57 +1,78 @@
 # 📑 Lattice: Master Implementation Backlog (v2.0)
 
-## Phase 2: The Librarian (Local Semantic Intelligence)
+## Phase 2: The Librarian (Local Semantic Intelligence) ✅
 
-### 🟢 Task 2.1: ONNX Embedding Pipeline
+### ✅ Task 2.1: ONNX Embedding Pipeline
 ```markdown
 # Task: Implement ONNX Embedding Pipeline
-In the `:core-data` and `:core-logic` modules, set up local text embeddings.
-1. **Dependency:** Add `microsoft.onnxruntime:onnxruntime-android` to `:core-logic`.
-2. **Model Asset:** Create a placeholder in `assets/` for `snowflake-arctic-embed-xs.onnx`.
-3. **Provider:** Create `EmbeddingProvider.kt` in `:core-logic`:
-   - Implement `generateEmbedding(text: String): FloatArray` (384-dim).
-   - Ensure it runs on `Dispatchers.Default` to avoid blocking the UI.
-4. **Integration:** Update `JournalRepository`:
-   - When saving an entry, trigger `EmbeddingProvider` using MASKED text.
-   - Save the resulting `FloatArray` to the `embedding` column in the DB.
-5. **Test:** Add a test verifying that embedding generation is off-main-thread.
+DONE — commit 0e14ce3
+- EmbeddingProvider: open class, dispatcher-injectable, initialize(context) lazy-loads
+  snowflake-arctic-embed-xs.onnx from assets, falls back to zero-vectors if absent.
+- JournalRepository.saveEntry() calls generateEmbedding(maskedContent) — PII-masked
+  text only ever enters the embedding pipeline.
+- onnxruntime-android 1.20.0 added to core-logic.
+- assets/snowflake-arctic-embed-xs.onnx.placeholder documents model placement.
+- Unit tests: off-main-thread dispatch contract + 384-dim fallback output.
+- WordPieceTokenizer.kt implemented: lowercase → CJK/punct spacing → WordPiece with [CLS]/[SEP]; vocab.txt and int8 ONNX model bundled as assets.
 ```
 
-### 🟢 Task 2.2: Vector Search Engine
+### ✅ Task 2.2: Vector Search Engine
 ```markdown
 # Task: Implement Local Semantic Search
-Enable the app to find "Related Memories" using vector distance.
-1. **DAO:** Update `JournalDao` with a query for Euclidean distance or Cosine Similarity.
-2. **Logic:** Create `SearchRepository.kt` in `:core-data`:
-   - Implement `findSimilarEntries(queryText: String, limit: Int): Flow<List<JournalEntry>>`.
-   - Logic: Vectorize the query string -> search DB for nearest neighbors.
-3. **Privacy:** Ensure search queries are masked via `PiiShield` before vectorization.
+DONE — commit 874ee19
+- SearchRepository.findSimilarEntries(queryText, limit): Flow<List<JournalEntry>>
+  in-memory cosine similarity (SQLite has no native vector ops), flowOn(Dispatchers.Default).
+- Query text is PII-masked via PiiShield before vectorization (matches stored embeddings).
+- Zero-vector entries excluded from results (score > 0f guard).
+- JournalDao.getAllEntries() one-shot suspend query added.
+- EmbeddingProvider made open with open generateEmbedding() for test subclassing.
+- Unit tests (4): PII masking enforcement, cosine ranking, limit capping, zero-vector exclusion.
 ```
 
 ---
 
-## Phase 3: The Orchestrator (Privacy Switchboard)
+## Phase 3: The Orchestrator (Privacy Switchboard) 🔄
 
-### 🟢 Task 3.1: LLM Strategy Manager & Fallbacks
+### ✅ Task 3.1: LLM Strategy Manager, Fallbacks & Export
 ```markdown
-# Task: Implement LLM Orchestrator & Local Fallbacks
-Manage how the app handles "Reframing" and "Summarization" based on hardware.
-1. **Interface:** Create `LlmProvider` interface with a `process(text: String): Flow<Result>` method.
-2. **Strategies:** Implement three tiers:
-   - `NanoProvider`: Uses Google AICore (Gemini Nano).
-   - `LocalFallbackProvider`: Uses MediaPipe/ONNX to run a bundled `Qwen-1.5B`.
-   - `CloudProvider`: Secure implementation for Claude/Gemini Pro (DISABLED by default).
-3. **Orchestrator:** Create `LlmOrchestrator.kt` to auto-detect hardware and select the best Local tier.
+# Task: Implement LLM Orchestrator, Local Fallbacks, Export & Spec
+DONE — commit ff26eee
+
+LLM Provider Tier:
+- LlmProvider interface: id, isAvailable(), process(prompt): Flow<LlmResult>
+- LlmResult sealed class: Token | Complete | Error
+- NanoProvider: Gemini Nano via AICore (API 35+, gracefully unavailable below)
+- LocalFallbackProvider: Qwen-1.5B ONNX scaffold (model asset placeholder)
+- CloudProvider: remote API stub, DISABLED by default
+
+Privacy Switchboard (LlmOrchestrator):
+- Local-first routing: Nano → Local ONNX → Cloud (only if cloudEnabled=true)
+- PrivacyLevel sealed class: LocalOnly | CloudTransit(provider, since)
+- Sovereignty gate: cloud routing flips StateFlow<PrivacyLevel> to CloudTransit
+  AND writes a TransitEvent to Room (timestamp + provider, never the prompt content)
+
+Data layer:
+- TransitEvent Room entity + TransitEventDao (audit trail)
+- LatticeDatabase migrated v2 → v3 (transit_events table + index)
+
+Export:
+- ExportManager.generateManifest(): portable manifest.json with model_spec
+  (embedding model, dims, type) — content exported masked, embeddings excluded
+- SPEC.md at project root: canonical JSON schema for all entities
+
+Unit tests (8): routing priority, sovereignty state flip, TransitEvent DAO write,
+cloud gating when cloudEnabled=false.
 ```
 
 ### 🟢 Task 3.2: Privacy Guardrails & State
 ```markdown
 # Task: Privacy State & Cloud Warning Logic
-1. **State:** Create a `PrivacyLevel` Sealed Class: `LOCAL_ONLY`, `CLOUD_TRANSIT`.
-2. **Logic:** Implement a check in `LlmOrchestrator`:
-   - If a request is routed to `CloudProvider`, the state must flip to `CLOUD_TRANSIT`.
-   - Ensure `PiiShield` is recursively called on all Cloud-bound payloads.
-3. **Audit:** Add a Unit Test ensuring `CloudProvider` throws an error if raw (unmasked) PII is detected in the payload.
+1. **State:** PrivacyLevel sealed class already done in 3.1 (LocalOnly / CloudTransit).
+2. **Logic:** Cloud routing already flips state in LlmOrchestrator.applyPrivacyState().
+   Remaining: ensure PiiShield is recursively called on all Cloud-bound payloads
+   (currently caller responsibility — validate in orchestrator before dispatch).
+3. **Audit:** Add a Unit Test ensuring CloudProvider throws an error if raw (unmasked)
+   PII is detected in the payload (detect [PERSON_uuid] absence on known-PII strings).
 ```
 
 ---
@@ -72,11 +93,13 @@ Build the interactive emotional input tool in the `:app` module.
 ```markdown
 # Task: Build the Privacy-Aware Editor
 1. **UI:** Create a `JournalEditorScreen` with a Material 3 `TextField`.
-2. **Privacy Highlighting:** Implement a VisualTransformation that highlights masked PII placeholders (e.g., [PERSON_UUID]) in a specific color.
+2. **Privacy Highlighting:** Implement a VisualTransformation that highlights masked PII
+   placeholders (e.g., [PERSON_UUID]) in a specific color.
 3. **Privacy Border:** Implement a dynamic UI border/background:
-   - Blue = Processing Locally.
-   - Amber = Cloud Model Selected (Warning).
-4. **Integration:** Connect the `MoodGrid` result and Text result to `JournalRepository.saveEntry()`.
+   - Blue  = Processing Locally  (PrivacyLevel.LocalOnly)
+   - Amber = Cloud Model Selected (PrivacyLevel.CloudTransit)
+   Observe LlmOrchestrator.privacyState StateFlow.
+4. **Integration:** Connect the MoodGrid result and Text result to JournalRepository.saveEntry().
 ```
 
 ---
@@ -86,7 +109,11 @@ Build the interactive emotional input tool in the `:app` module.
 ### 🟢 Task 5.1: Distortion Detection & !reframe
 ```markdown
 # Task: Implement the CBT Reframing Flow
-1. **Detection:** Create `DistortionAnalyzer.kt` to tag `cognitiveDistortions` in journal text.
-2. **Command:** Implement the "!reframe" trigger logic.
-3. **RAG Integration:** When reframing, use `SearchRepository` to pull "Evidence for the Contrary" (Positive past entries about the mentioned person) to ground the AI's response.
+1. **Detection:** DistortionAnalyzer — CbtLogic.detectDistortions() is already wired into
+   saveEntry(). Extend with more distortion rules as needed.
+2. **Command:** Implement the "!reframe" trigger logic — route masked journal content
+   through LlmOrchestrator.process(prompt, operationType="reframe").
+3. **RAG Integration:** When reframing, use SearchRepository.findSimilarEntries() to pull
+   "Evidence for the Contrary" (positive past entries about the mentioned person)
+   and inject as context into the LLM prompt.
 ```

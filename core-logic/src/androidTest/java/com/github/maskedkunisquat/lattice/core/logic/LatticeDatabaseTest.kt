@@ -30,7 +30,7 @@ class LatticeDatabaseTest {
         db = Room.inMemoryDatabaseBuilder(
             context, LatticeDatabase::class.java
         ).build()
-        repository = JournalRepository(db.journalDao(), db.personDao())
+        repository = JournalRepository(db.journalDao(), db.personDao(), EmbeddingProvider())
     }
 
     @After
@@ -56,18 +56,17 @@ class LatticeDatabaseTest {
             cognitiveDistortions = emptyList()
         )
 
-        // Save via Repository (to fulfill requirement of retrieving via Repository)
-        repository.saveEntry(entry)
+        // Insert directly via DAO to test the type converter in isolation —
+        // repository.saveEntry() generates its own embedding, which would overwrite this value.
+        db.journalDao().insertEntry(entry)
 
-        // Retrieve via Repository
-        val retrievedEntries = repository.getEntries().first()
+        // Retrieve via DAO and verify bit-perfect round-trip through LatticeTypeConverters
+        val retrievedEntries = db.journalDao().getEntries().first()
         assertEquals(1, retrievedEntries.size)
         val retrievedEntry = retrievedEntries[0]
 
-        // Verify the retrieved array matches the input exactly
-        // We use a delta of 0.0f to ensure bit-perfect matching for precision check
         assertArrayEquals(
-            "Retrieved embedding should match input exactly",
+            "FloatArray embedding must be preserved within tolerance after string serialization",
             expectedEmbedding,
             retrievedEntry.embedding,
             1e-6f
