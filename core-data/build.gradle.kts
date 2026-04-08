@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.github.maskedkunisquat.lattice.core.data"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24

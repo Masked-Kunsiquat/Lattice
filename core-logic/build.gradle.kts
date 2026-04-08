@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "com.github.maskedkunisquat.lattice.core.logic"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
@@ -30,5 +30,14 @@ android {
 dependencies {
     implementation(project(":core-data"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.androidx.room.ktx)
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.room.runtime)
+    androidTestImplementation(libs.androidx.core)
+    androidTestImplementation(libs.androidx.runner)
+    androidTestImplementation(libs.junit)
 }

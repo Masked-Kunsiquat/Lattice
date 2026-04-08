@@ -15,7 +15,7 @@
 local.properties
 
 # Project exclude paths
-/core-data/build/
+**/build/
 
 # Misc Agent Files
 .agent/

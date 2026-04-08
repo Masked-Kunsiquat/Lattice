@@ -26,4 +26,7 @@ interface PersonDao {
 
     @Query("SELECT * FROM people WHERE id = :id")
     fun getPersonById(id: UUID): Flow<Person?>
+
+    @Query("UPDATE people SET vibeScore = MAX(-1, MIN(1, vibeScore + :delta)) WHERE id = :personId")
+    suspend fun incrementVibeScore(personId: UUID, delta: Float)
 }
