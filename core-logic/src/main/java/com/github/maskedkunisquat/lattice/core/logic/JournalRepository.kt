@@ -10,7 +10,8 @@ import java.util.UUID
 
 class JournalRepository(
     private val journalDao: JournalDao,
-    private val personDao: PersonDao
+    private val personDao: PersonDao,
+    private val embeddingProvider: EmbeddingProvider
 ) {
     /**
      * Returns a flow of journal entries with content unmasked for UI display.
@@ -50,11 +51,13 @@ class JournalRepository(
         
         val maskedContent = PiiShield.mask(entry.content, people)
         val distortions = CbtLogic.detectDistortions(maskedContent)
+        val embedding = embeddingProvider.generateEmbedding(maskedContent)
 
         val entryToSave = entry.copy(
             content = maskedContent,
             moodLabel = calculatedLabel,
-            cognitiveDistortions = distortions
+            cognitiveDistortions = distortions,
+            embedding = embedding
         )
 
         journalDao.insertEntry(entryToSave)
