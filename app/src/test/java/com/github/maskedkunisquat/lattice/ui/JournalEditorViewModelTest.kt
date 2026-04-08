@@ -12,7 +12,9 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.LlmProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -26,6 +28,7 @@ import org.junit.Before
 import org.junit.Test
 import java.util.UUID
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class JournalEditorViewModelTest {
 
     // ── Fakes ─────────────────────────────────────────────────────────────────
@@ -63,7 +66,15 @@ class JournalEditorViewModelTest {
     @Before fun setUp() { Dispatchers.setMain(testDispatcher) }
     @After fun tearDown() { Dispatchers.resetMain() }
 
-    private fun makeViewModel(journalDao: FakeJournalDao): JournalEditorViewModel {
+    /**
+     * Builds a ViewModel whose local provider returns [tokens] for every process() call.
+     * A response of "v=0.5 a=0.5\nDISTORTIONS: NONE\n<reframe>" satisfies all three
+     * ReframingLoop stages from a single token stream.
+     */
+    private fun makeViewModel(
+        journalDao: FakeJournalDao,
+        providerTokens: List<String> = emptyList(),
+    ): JournalEditorViewModel {
         val repo = JournalRepository(
             journalDao = journalDao,
             personDao = FakePersonDao(),
@@ -76,16 +87,24 @@ class JournalEditorViewModelTest {
             override suspend fun isAvailable() = false
             override fun process(prompt: String): Flow<LlmResult> = flowOf()
         }
+        val fakeLocal = object : LlmProvider {
+            override val id = "fake_local"
+            override suspend fun isAvailable() = providerTokens.isNotEmpty()
+            override fun process(prompt: String): Flow<LlmResult> =
+                (providerTokens.map { LlmResult.Token(it) } + LlmResult.Complete).asFlow()
+        }
         val orchestrator = LlmOrchestrator(
             nanoProvider = unavailableProvider,
-            localFallbackProvider = unavailableProvider,
+            localFallbackProvider = fakeLocal,
             transitEventDao = FakeTransitEventDao(),
             cloudEnabled = false,
         )
         return JournalEditorViewModel(
             journalRepository = repo,
             orchestrator = orchestrator,
-            reframingLoop = ReframingLoop(orchestrator),
+            // Use testDispatcher so ReframingLoop's withContext() stays on the unconfined
+            // scheduler and completes synchronously within runTest.
+            reframingLoop = ReframingLoop(orchestrator, dispatcher = testDispatcher),
             transitEventDao = FakeTransitEventDao(),
         )
     }
@@ -93,35 +112,35 @@ class JournalEditorViewModelTest {
     // ── Tests ─────────────────────────────────────────────────────────────────
 
     @Test
-    fun `dismissReframe does not write to the DAO`() = runTest {
+    fun `dismissReframe clears non-null reframeResult without writing to the DAO`() = runTest {
         val dao = FakeJournalDao()
-        val vm = makeViewModel(dao)
-
-        // Simulate the "Apply" path by writing directly through the repo (as the ViewModel
-        // would do in applyReframe). This confirms the DAO records one write.
-        val repo = JournalRepository(
+        // Single token stream that satisfies all three ReframingLoop stages:
+        //   Stage 1 — affective coords parsed from "v=0.5 a=0.5"
+        //   Stage 2 — DISTORTIONS: sentinel parsed
+        //   Stage 3 — non-blank reframe text collected
+        val vm = makeViewModel(
             journalDao = dao,
-            personDao = FakePersonDao(),
-            embeddingProvider = object : EmbeddingProvider() {
-                override suspend fun generateEmbedding(text: String) = FloatArray(384)
-            }
+            providerTokens = listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "You are doing well."),
         )
-        val entryId = UUID.randomUUID().toString()
-        repo.updateReframedContent(entryId, "You handled this with care.")
-        assertEquals(1, dao.updatedReframes.size)
 
-        // Now call dismissReframe() on the ViewModel — this must NOT touch the DAO.
+        // Trigger the full pipeline so reframeResult becomes non-null.
+        vm.onTextChanged("!reframe I feel stuck today.")
+        // UnconfinedTestDispatcher runs coroutines eagerly, so the pipeline is already done.
+        val reframeResult = vm.uiState.value.reframeResult
+        org.junit.Assert.assertNotNull(
+            "Pipeline must have produced a reframeResult before dismissReframe() is tested",
+            reframeResult
+        )
+
+        // No DAO writes should have happened yet (triggerReframe only writes a TransitEvent,
+        // not a reframedContent — applyReframe() is the only writer).
+        assertEquals(0, dao.updatedReframes.size)
+
+        // Dismiss — must clear reframeResult without writing to the DAO.
         vm.dismissReframe()
 
-        assertEquals(
-            "dismissReframe must not call updateReframedContent",
-            1,
-            dao.updatedReframes.size
-        )
-        assertNull(
-            "reframeResult should be null after dismiss",
-            vm.uiState.value.reframeResult
-        )
+        assertNull("reframeResult must be null after dismiss", vm.uiState.value.reframeResult)
+        assertEquals("dismissReframe must not call updateReframedContent", 0, dao.updatedReframes.size)
     }
 
     @Test

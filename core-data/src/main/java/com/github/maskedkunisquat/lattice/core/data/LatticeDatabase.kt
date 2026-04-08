@@ -78,6 +78,9 @@ abstract class LatticeDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_activity_hierarchy_difficulty ON activity_hierarchy(difficulty)"
+                )
             }
         }
 
