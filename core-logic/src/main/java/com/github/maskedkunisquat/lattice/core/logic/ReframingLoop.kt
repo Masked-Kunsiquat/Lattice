@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
  * ## Stages
  * - Stage 1 ([runStage1AffectiveMap])       — Affective Mapping: valence/arousal → MoodLabel
  * - Stage 2 ([runStage2DiagnosisOfThought]) — DoT: facts-vs-beliefs → [CognitiveDistortion] list
- * - Stage 3                                 — CBT Reframe Generation (TODO: Task 5.1 Stage 3)
+ * - Stage 3 ([runStage3Intervention])        — Strategic Pivot: quadrant-aware CBT reframe
  */
 class ReframingLoop(
     private val orchestrator: LlmOrchestrator,
@@ -65,6 +65,43 @@ class ReframingLoop(
             }
         }
 
+    // ── Stage 3 ──────────────────────────────────────────────────────────────
+
+    /**
+     * Strategic Pivot: generates a quadrant-aware CBT reframe using the emotional
+     * state from Stage 1 and the distortion diagnosis from Stage 2.
+     *
+     * Strategy selection:
+     * - **Quadrant II** (v<0, a≥0 — angry/tense): Socratic questioning, Reality Testing,
+     *   and probability calibration to challenge activated negative cognitions.
+     * - **Quadrant III** (v<0, a<0 — depressed/fatigued): Behavioral Activation and
+     *   Evidence for the Contrary to re-engage and counter helplessness.
+     * - **Quadrant I/IV** (v≥0 — positive valence): Strengths affirmation to consolidate.
+     *
+     * The reframe is free-form natural language — no parsing sentinel required.
+     *
+     * @param maskedText   PII-masked journal text.
+     * @param affectiveMap Output of Stage 1 (determines the quadrant / strategy).
+     * @param diagnosis    Output of Stage 2 (distortions injected as context).
+     * @return [Result.success] with [ReframeResult], or [Result.failure] on model error.
+     */
+    suspend fun runStage3Intervention(
+        maskedText: String,
+        affectiveMap: AffectiveMapResult,
+        diagnosis: DiagnosisResult,
+    ): Result<ReframeResult> = withContext(dispatcher) {
+        runCatching {
+            val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
+            val reframe = collectTokens(
+                orchestrator.process(
+                    buildInterventionPrompt(maskedText, strategy, diagnosis.distortions),
+                    "intervention"
+                )
+            )
+            ReframeResult(strategy = strategy, reframe = reframe)
+        }
+    }
+
     // ── Prompt builders ──────────────────────────────────────────────────────
 
     internal fun buildAffectivePrompt(maskedText: String): String =
@@ -98,6 +135,68 @@ class ReframingLoop(
         "DISTORTIONS: <comma-separated distortion names, or NONE if none found>\n\n" +
         "Text: $maskedText" +
         "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+
+    /**
+     * Selects the intervention strategy based on circumplex quadrant.
+     * v<0 and a≥0 → Quadrant II → [ReframeStrategy.SOCRATIC_REALITY_TESTING]
+     * v<0 and a<0  → Quadrant III → [ReframeStrategy.BEHAVIORAL_ACTIVATION]
+     * v≥0 (any a)  → Positive valence → [ReframeStrategy.STRENGTHS_AFFIRMATION]
+     */
+    internal fun selectStrategy(valence: Float, arousal: Float): ReframeStrategy = when {
+        valence < 0f && arousal >= 0f -> ReframeStrategy.SOCRATIC_REALITY_TESTING
+        valence < 0f && arousal < 0f  -> ReframeStrategy.BEHAVIORAL_ACTIVATION
+        else                          -> ReframeStrategy.STRENGTHS_AFFIRMATION
+    }
+
+    internal fun buildInterventionPrompt(
+        maskedText: String,
+        strategy: ReframeStrategy,
+        distortions: List<CognitiveDistortion>,
+    ): String {
+        val distortionContext = if (distortions.isEmpty())
+            "No specific cognitive distortions were identified."
+        else
+            "Identified cognitive distortions: ${distortions.joinToString(", ") { it.label }}"
+
+        val (systemMsg, techniqueBlock) = when (strategy) {
+            ReframeStrategy.SOCRATIC_REALITY_TESTING -> Pair(
+                "You are a compassionate CBT therapist. The client is experiencing " +
+                "high-arousal negative emotions — anxiety, anger, or tension. " +
+                "Guide them using Socratic questioning and Reality Testing.",
+                "Generate a concise (2–4 sentence) CBT reframe using:\n" +
+                "1. Socratic questioning — invite the client to examine the evidence " +
+                    "for and against their interpretation.\n" +
+                "2. Reality testing — gently check whether the situation matches the belief.\n" +
+                "3. Probability calibration — help them assess the realistic likelihood " +
+                    "of the feared outcome."
+            )
+            ReframeStrategy.BEHAVIORAL_ACTIVATION -> Pair(
+                "You are a compassionate CBT therapist. The client is experiencing " +
+                "low-arousal negative emotions — depression, fatigue, or hopelessness. " +
+                "Guide them using Behavioral Activation and Evidence for the Contrary.",
+                "Generate a concise (2–4 sentence) CBT reframe using:\n" +
+                "1. Evidence for the contrary — identify specific evidence or past " +
+                    "experiences that challenge the negative belief.\n" +
+                "2. Behavioral activation — suggest one small, concrete action to break " +
+                    "the cycle and restore a sense of agency."
+            )
+            ReframeStrategy.STRENGTHS_AFFIRMATION -> Pair(
+                "You are a compassionate CBT therapist. The client is experiencing " +
+                "positive emotions. Help them consolidate and build on this state.",
+                "Generate a brief (2–3 sentence) affirming reflection that helps the " +
+                "client recognise their strengths and anchor this positive experience."
+            )
+        }
+
+        return "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
+            systemMsg +
+            "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
+            "The client wrote:\n\"$maskedText\"\n\n" +
+            "$distortionContext\n\n" +
+            "$techniqueBlock\n\n" +
+            "Address the client directly and warmly. Do not name the techniques." +
+            "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+    }
 
     // ── Parsers ──────────────────────────────────────────────────────────────
 
@@ -173,6 +272,29 @@ class ReframingLoop(
     data class DiagnosisResult(
         val distortions: List<CognitiveDistortion>,
         val reasoning: String
+    )
+
+    /**
+     * The CBT intervention strategy selected by Stage 3, derived from the circumplex quadrant.
+     */
+    enum class ReframeStrategy {
+        /** Quadrant II (v<0, a≥0): Socratic questioning + Reality Testing + probability. */
+        SOCRATIC_REALITY_TESTING,
+        /** Quadrant III (v<0, a<0): Behavioral Activation + Evidence for the Contrary. */
+        BEHAVIORAL_ACTIVATION,
+        /** Quadrant I/IV (v≥0): Positive-valence strengths affirmation. */
+        STRENGTHS_AFFIRMATION,
+    }
+
+    /**
+     * Output of Stage 3.
+     *
+     * @param strategy The intervention approach that was applied.
+     * @param reframe  The generated CBT reframe, addressed directly to the client.
+     */
+    data class ReframeResult(
+        val strategy: ReframeStrategy,
+        val reframe: String,
     )
 
     companion object {

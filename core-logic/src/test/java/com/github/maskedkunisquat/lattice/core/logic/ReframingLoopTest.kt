@@ -282,4 +282,138 @@ class ReframingLoopTest {
         val result = ReframingLoop(orchestrator).runStage2DiagnosisOfThought("test")
         assertTrue(result.isFailure)
     }
+
+    // ── Stage 3: selectStrategy ───────────────────────────────────────────────
+
+    @Test
+    fun `selectStrategy - Q2 when negative valence and positive arousal`() {
+        assertEquals(
+            ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
+            loop.selectStrategy(-0.5f, 0.8f)
+        )
+    }
+
+    @Test
+    fun `selectStrategy - Q3 when negative valence and negative arousal`() {
+        assertEquals(
+            ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
+            loop.selectStrategy(-0.4f, -0.6f)
+        )
+    }
+
+    @Test
+    fun `selectStrategy - strengths affirmation for positive valence`() {
+        assertEquals(
+            ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
+            loop.selectStrategy(0.3f, 0.7f)  // Q1
+        )
+        assertEquals(
+            ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
+            loop.selectStrategy(0.6f, -0.4f)  // Q4
+        )
+    }
+
+    @Test
+    fun `selectStrategy - Q2 on zero arousal boundary with negative valence`() {
+        assertEquals(
+            ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
+            loop.selectStrategy(-0.1f, 0f)
+        )
+    }
+
+    // ── Stage 3: buildInterventionPrompt ─────────────────────────────────────
+
+    @Test
+    fun `buildInterventionPrompt - Q2 prompt contains Socratic techniques`() {
+        val prompt = loop.buildInterventionPrompt(
+            maskedText = "I know [PERSON_abc] is angry at me.",
+            strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
+            distortions = listOf(CognitiveDistortion.MIND_READING),
+        )
+        assertTrue(prompt.contains("[PERSON_abc]"))
+        assertTrue(prompt.contains("Mind Reading"))
+        assertTrue(prompt.contains("Socratic", ignoreCase = true))
+        assertTrue(prompt.contains("Reality", ignoreCase = true))
+        assertTrue(prompt.contains("probability", ignoreCase = true))
+        assertTrue(prompt.contains("<|begin_of_text|>"))
+    }
+
+    @Test
+    fun `buildInterventionPrompt - Q3 prompt contains Behavioral Activation techniques`() {
+        val prompt = loop.buildInterventionPrompt(
+            maskedText = "Nothing ever works out for me.",
+            strategy = ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
+            distortions = listOf(CognitiveDistortion.OVERGENERALIZATION),
+        )
+        assertTrue(prompt.contains("Overgeneralization"))
+        assertTrue(prompt.contains("Behavioral", ignoreCase = true))
+        assertTrue(prompt.contains("contrary", ignoreCase = true))
+        assertTrue(prompt.contains("<|begin_of_text|>"))
+    }
+
+    @Test
+    fun `buildInterventionPrompt - empty distortions produces no-distortion context`() {
+        val prompt = loop.buildInterventionPrompt(
+            maskedText = "test",
+            strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
+            distortions = emptyList(),
+        )
+        assertTrue(prompt.contains("No specific cognitive distortions were identified."))
+    }
+
+    // ── Stage 3: end-to-end flow ──────────────────────────────────────────────
+
+    @Test
+    fun `runStage3Intervention - Q2 route returns SOCRATIC_REALITY_TESTING strategy`() = runTest {
+        val reframe = "Have you considered whether there is evidence against this view?"
+        val reframingLoop = loopWithResponse(*reframe.map { it.toString() }.toTypedArray())
+
+        val affectiveMap = ReframingLoop.AffectiveMapResult(-0.6f, 0.7f, MoodLabel.TENSE)
+        val diagnosis = ReframingLoop.DiagnosisResult(
+            listOf(CognitiveDistortion.FORTUNE_TELLING), "reasoning"
+        )
+
+        val result = reframingLoop.runStage3Intervention("test", affectiveMap, diagnosis)
+        assertTrue(result.isSuccess)
+        val reframeResult = result.getOrThrow()
+        assertEquals(ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING, reframeResult.strategy)
+        assertEquals(reframe, reframeResult.reframe)
+    }
+
+    @Test
+    fun `runStage3Intervention - Q3 route returns BEHAVIORAL_ACTIVATION strategy`() = runTest {
+        val reframe = "One small step today can begin to shift this feeling."
+        val reframingLoop = loopWithResponse(*reframe.map { it.toString() }.toTypedArray())
+
+        val affectiveMap = ReframingLoop.AffectiveMapResult(-0.7f, -0.5f, MoodLabel.DEPRESSED)
+        val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "reasoning")
+
+        val result = reframingLoop.runStage3Intervention("test", affectiveMap, diagnosis)
+        assertTrue(result.isSuccess)
+        assertEquals(
+            ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
+            result.getOrThrow().strategy
+        )
+    }
+
+    @Test
+    fun `runStage3Intervention - returns failure when model emits error`() = runTest {
+        val results = listOf(LlmResult.Error(RuntimeException("model unavailable")))
+        val provider = FakeProvider("fake_local", results)
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = provider,
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = false,
+        )
+        val affectiveMap = ReframingLoop.AffectiveMapResult(-0.5f, 0.5f, MoodLabel.ANGRY)
+        val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "")
+        val result = ReframingLoop(orchestrator)
+            .runStage3Intervention("test", affectiveMap, diagnosis)
+        assertTrue(result.isFailure)
+    }
 }
