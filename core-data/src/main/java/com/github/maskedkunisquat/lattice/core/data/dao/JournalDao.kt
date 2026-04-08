@@ -26,4 +26,7 @@ interface JournalDao {
 
     @Query("SELECT * FROM journal_entries WHERE id = :id")
     fun getEntryById(id: UUID): Flow<JournalEntry?>
+
+    @Query("SELECT * FROM journal_entries")
+    suspend fun getAllEntries(): List<JournalEntry>
 }
