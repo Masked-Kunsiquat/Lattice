@@ -44,13 +44,18 @@ class WordPieceTokenizer(vocabLines: List<String>) {
         basicTokenize(text).flatMap { wordPiece(it) }
 
     private fun basicTokenize(text: String): List<String> {
-        val buf = StringBuilder(text.length * 2)
-        for (ch in text.lowercase()) {
+        val lower = text.lowercase()
+        val buf = StringBuilder(lower.length * 2)
+        var i = 0
+        while (i < lower.length) {
+            val cp = lower.codePointAt(i)
+            val len = Character.charCount(cp)
             when {
-                ch.isControl() -> buf.append(' ')
-                ch.isCjk() || ch.isPunct() -> buf.append(' ').append(ch).append(' ')
-                else -> buf.append(ch)
+                lower[i].isControl() -> buf.append(' ')
+                isCjk(cp) || lower[i].isPunct() -> buf.append(' ').append(lower, i, i + len).append(' ')
+                else -> buf.append(lower, i, i + len)
             }
+            i += len
         }
         return buf.split(whitespaceRegex).filter { it.isNotEmpty() }
     }
@@ -100,17 +105,15 @@ class WordPieceTokenizer(vocabLines: List<String>) {
     }
 
     /** CJK Unified Ideographs and the most common extension/compatibility blocks. */
-    private fun Char.isCjk(): Boolean {
-        val c = code
-        return c in 0x4E00..0x9FFF ||
-            c in 0x3400..0x4DBF ||
-            c in 0x20000..0x2A6DF ||
-            c in 0x2A700..0x2B73F ||
-            c in 0x2B740..0x2B81F ||
-            c in 0x2B820..0x2CEAF ||
-            c in 0xF900..0xFAFF ||
-            c in 0x2F800..0x2FA1F
-    }
+    private fun isCjk(codePoint: Int): Boolean =
+        codePoint in 0x4E00..0x9FFF ||
+            codePoint in 0x3400..0x4DBF ||
+            codePoint in 0x20000..0x2A6DF ||
+            codePoint in 0x2A700..0x2B73F ||
+            codePoint in 0x2B740..0x2B81F ||
+            codePoint in 0x2B820..0x2CEAF ||
+            codePoint in 0xF900..0xFAFF ||
+            codePoint in 0x2F800..0x2FA1F
 
     companion object {
         const val PAD_ID = 0

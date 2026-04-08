@@ -13,7 +13,7 @@ DONE — commit 0e14ce3
 - onnxruntime-android 1.20.0 added to core-logic.
 - assets/snowflake-arctic-embed-xs.onnx.placeholder documents model placement.
 - Unit tests: off-main-thread dispatch contract + 384-dim fallback output.
-- Tokenizer is a stub — replace runInference() once vocab.txt is bundled.
+- WordPieceTokenizer.kt implemented: lowercase → CJK/punct spacing → WordPiece with [CLS]/[SEP]; vocab.txt and int8 ONNX model bundled as assets.
 ```
 
 ### ✅ Task 2.2: Vector Search Engine

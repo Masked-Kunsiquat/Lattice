@@ -52,9 +52,18 @@ open class EmbeddingProvider(
      *
      * Suspends and resumes on [dispatcher] (default: [Dispatchers.Default]).
      */
+    /** True only after [initialize] has loaded both the ONNX model and the vocabulary. */
+    val isInitialized: Boolean get() = ortSession != null && tokenizer != null
+
     open suspend fun generateEmbedding(text: String): FloatArray = withContext(dispatcher) {
-        val session = ortSession ?: return@withContext FloatArray(EMBEDDING_DIM)
-        val tok = tokenizer ?: return@withContext FloatArray(EMBEDDING_DIM)
+        val session = ortSession ?: run {
+            Log.w(TAG, "generateEmbedding called before initialize() or after a load failure — returning zero-vector")
+            return@withContext FloatArray(EMBEDDING_DIM)
+        }
+        val tok = tokenizer ?: run {
+            Log.w(TAG, "generateEmbedding called before initialize() or after a load failure — returning zero-vector")
+            return@withContext FloatArray(EMBEDDING_DIM)
+        }
         runInference(session, tok, text)
     }
 
