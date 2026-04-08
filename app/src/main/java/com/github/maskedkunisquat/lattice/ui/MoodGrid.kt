@@ -29,9 +29,13 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.github.maskedkunisquat.lattice.core.logic.CircumplexMapper
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
@@ -43,12 +47,27 @@ private data class MoodState(
     val arousal: Float,
 )
 
+// Quadrant label definitions: text, quadrant-center multipliers (of cx/cy), tint color.
+private val QUADRANT_LABELS = listOf(
+    Triple("Excited",  Offset(1.5f, 0.5f), Color(0xFFFFB300)),  // top-right  – amber
+    Triple("Tense",    Offset(0.5f, 0.5f), Color(0xFFF44336)),  // top-left   – red
+    Triple("Calm",     Offset(1.5f, 1.5f), Color(0xFF4CAF50)),  // bottom-right – green
+    Triple("Fatigued", Offset(0.5f, 1.5f), Color(0xFF607D8B)),  // bottom-left  – blue-grey
+)
+
 @Composable
 fun MoodGrid(
     modifier: Modifier = Modifier,
     onMoodChanged: (valence: Float, arousal: Float, label: MoodLabel) -> Unit = { _, _, _ -> },
 ) {
     var moodState by remember { mutableStateOf<MoodState?>(null) }
+    val textMeasurer = rememberTextMeasurer()
+
+    // Capture outside the draw scope (no Composable context inside Canvas block).
+    val quadrantLabelStyle = TextStyle(
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Medium,
+    )
 
     Column(
         modifier = modifier,
@@ -106,16 +125,32 @@ fun MoodGrid(
                 val cy = h / 2f
 
                 // Quadrant backgrounds (subtle tint per emotional region)
-                drawRect(Color(0xFFFFB300).copy(alpha = 0.08f), topLeft = Offset(cx, 0f),  size = Size(cx, cy)) // excited  – amber
-                drawRect(Color(0xFF4CAF50).copy(alpha = 0.08f), topLeft = Offset(cx, cy),  size = Size(cx, cy)) // calm     – green
+                drawRect(Color(0xFFFFB300).copy(alpha = 0.08f), topLeft = Offset(cx, 0f), size = Size(cx, cy)) // excited  – amber
+                drawRect(Color(0xFF4CAF50).copy(alpha = 0.08f), topLeft = Offset(cx, cy), size = Size(cx, cy)) // calm     – green
                 drawRect(Color(0xFF607D8B).copy(alpha = 0.08f), topLeft = Offset(0f,  cy), size = Size(cx, cy)) // fatigued – blue-grey
-                drawRect(Color(0xFFF44336).copy(alpha = 0.08f), topLeft = Offset(0f,  0f),  size = Size(cx, cy)) // tense   – red
+                drawRect(Color(0xFFF44336).copy(alpha = 0.08f), topLeft = Offset(0f,  0f), size = Size(cx, cy)) // tense   – red
 
                 // Axis lines
                 val axisColor = Color.White.copy(alpha = 0.15f)
                 val strokePx = 1.dp.toPx()
                 drawLine(axisColor, Offset(0f, cy), Offset(w, cy), strokePx)
                 drawLine(axisColor, Offset(cx, 0f), Offset(cx, h), strokePx)
+
+                // Quadrant labels — centered in each quadrant, tinted to match the region
+                QUADRANT_LABELS.forEach { (name, multipliers, tint) ->
+                    val center = Offset(cx * multipliers.x, cy * multipliers.y)
+                    val style = quadrantLabelStyle.copy(color = tint.copy(alpha = 0.45f))
+                    val measured = textMeasurer.measure(name, style)
+                    drawText(
+                        textMeasurer = textMeasurer,
+                        text = name,
+                        topLeft = Offset(
+                            center.x - measured.size.width / 2f,
+                            center.y - measured.size.height / 2f,
+                        ),
+                        style = style,
+                    )
+                }
 
                 // Glowing selector dot
                 moodState?.position?.let { pos ->
@@ -164,7 +199,7 @@ fun MoodGrid(
 @Preview(name = "Mood Grid (dark)", showBackground = true, backgroundColor = 0xFF1C1B1F)
 @Composable
 private fun MoodGridPreview() {
-    LatticeTheme(dynamicColor = false) {
+    LatticeTheme(darkTheme = true, dynamicColor = false) {
         MoodGrid(
             modifier = Modifier
                 .fillMaxWidth()
