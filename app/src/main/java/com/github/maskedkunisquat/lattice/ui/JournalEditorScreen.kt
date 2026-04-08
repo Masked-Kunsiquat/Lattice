@@ -23,14 +23,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
+import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
 
 private val LocalBlue = Color(0xFF1976D2)
 private val CloudAmber = Color(0xFFFF8F00)
 
+// Public entry point — pulls state from the ViewModel and delegates to JournalEditorContent.
 @Composable
 fun JournalEditorScreen(
     viewModel: JournalEditorViewModel,
@@ -38,7 +41,24 @@ fun JournalEditorScreen(
 ) {
     val privacyState by viewModel.privacyState.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
+    JournalEditorContent(
+        privacyState = privacyState,
+        saved = saved,
+        onSave = viewModel::save,
+        onResetSaved = viewModel::resetSaved,
+        modifier = modifier,
+    )
+}
 
+// Stateless inner composable — previews target this directly.
+@Composable
+private fun JournalEditorContent(
+    privacyState: PrivacyLevel,
+    saved: Boolean,
+    onSave: (content: String, valence: Float, arousal: Float, label: MoodLabel) -> Unit,
+    onResetSaved: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val borderColor by animateColorAsState(
         targetValue = when (privacyState) {
             is PrivacyLevel.LocalOnly -> LocalBlue
@@ -58,7 +78,7 @@ fun JournalEditorScreen(
         if (saved) {
             text = ""
             moodSelected = false
-            viewModel.resetSaved()
+            onResetSaved()
         }
     }
 
@@ -118,11 +138,40 @@ fun JournalEditorScreen(
         )
 
         Button(
-            onClick = { viewModel.save(text, valence, arousal, currentLabel) },
+            onClick = { onSave(text, valence, arousal, currentLabel) },
             modifier = Modifier.fillMaxWidth(),
             enabled = text.isNotBlank() && moodSelected,
         ) {
             Text("Save Entry")
         }
+    }
+}
+
+@Preview(name = "Editor – Local (dark)", showBackground = true, backgroundColor = 0xFF1C1B1F)
+@Composable
+private fun EditorLocalPreview() {
+    LatticeTheme(dynamicColor = false) {
+        JournalEditorContent(
+            privacyState = PrivacyLevel.LocalOnly,
+            saved = false,
+            onSave = { _, _, _, _ -> },
+            onResetSaved = {},
+        )
+    }
+}
+
+@Preview(name = "Editor – Cloud transit (dark)", showBackground = true, backgroundColor = 0xFF1C1B1F)
+@Composable
+private fun EditorCloudPreview() {
+    LatticeTheme(dynamicColor = false) {
+        JournalEditorContent(
+            privacyState = PrivacyLevel.CloudTransit(
+                providerName = "cloud_claude",
+                sinceTimestamp = 0L,
+            ),
+            saved = false,
+            onSave = { _, _, _, _ -> },
+            onResetSaved = {},
+        )
     }
 }

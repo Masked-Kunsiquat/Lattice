@@ -31,9 +31,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.awaitPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.github.maskedkunisquat.lattice.core.logic.CircumplexMapper
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
+import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
 
 private data class MoodState(
     val position: Offset,
@@ -156,6 +158,18 @@ fun MoodGrid(
             fontWeight = FontWeight.Bold,
             color = if (moodState != null) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+        )
+    }
+}
+
+@Preview(name = "Mood Grid (dark)", showBackground = true, backgroundColor = 0xFF1C1B1F)
+@Composable
+private fun MoodGridPreview() {
+    LatticeTheme(dynamicColor = false) {
+        MoodGrid(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(360.dp),
         )
     }
 }
