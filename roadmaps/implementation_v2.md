@@ -215,19 +215,22 @@ Stage 3 — Strategic Pivot ✅
    clinical review requires strict spec alignment.
 ```
 
-### 🟢 Task 5.2: Behavioral Activation (BA) Integration
+### ✅ Task 5.2: Behavioral Activation (BA) Integration
 ```markdown
 # Task: ActivityHierarchy Room Entity + Quadrant III Retrieval
-Deliverables:
+DONE — commit ccd7e10
+
 - ActivityHierarchy Room entity (core-data):
   - Fields: id: UUID, taskName: String, difficulty: Int (0–10), valueCategory: String
   - Table: activity_hierarchy
 - ActivityHierarchyDao: getActivitiesByMaxDifficulty(max: Int): List<ActivityHierarchy>
-  (suspend, one-shot; used by ReframingLoop to find an accessible "Step 1" activity).
-- LatticeDatabase migration v3 → v4: CREATE TABLE activity_hierarchy (same block as 5.4).
-- ReframingLoop Stage 3 (Quadrant III path): calls getActivitiesByMaxDifficulty(),
-  selects the lowest-difficulty activity whose valueCategory aligns with entry context,
-  injects it into the Llama prompt as a concrete BA suggestion.
+  (suspend, one-shot; ordered ASC by difficulty).
+- LatticeDatabase migration v3 → v4: CREATE TABLE activity_hierarchy.
+- ReframingLoop: optional activityHierarchyDao param; Q3 path calls pickBaActivity()
+  which selects lowest-difficulty activity (≤ BA_MAX_DIFFICULTY=5) whose valueCategory
+  appears in entry context; falls back to easiest overall; skips if hierarchy is empty.
+- buildInterventionPrompt: injects baActivity.taskName + valueCategory into Q3 prompt.
+- LatticeApplication: MIGRATION_3_4 added; reframingLoop wired with activityHierarchyDao.
 - Unit tests (3): difficulty gate enforced, empty hierarchy handled gracefully (Stage 3
   proceeds without BA block), activity injected into prompt string.
 ```
@@ -267,18 +270,18 @@ Deliverables:
   valence gate enforced, placeholder match required, evidence block injected into prompt.
 ```
 
-### 🟢 Task 5.4: Room Schema Update & Audit Trail
+### ✅ Task 5.4: Room Schema Update & Audit Trail
 ```markdown
 # Task: JournalEntry reframedContent Column + TransitEvent Logging
-Deliverables:
-- JournalEntry entity: add reframedContent: String? = null column.
-- LatticeDatabase migration v3 → v4:
-  ALTER TABLE journal_entries ADD COLUMN reframed_content TEXT;
-- JournalDao: updateReframedContent(entryId: String, content: String) suspend fun.
-- JournalEditorViewModel: on "Apply" (from ReframeBottomSheet), call
-  updateReframedContent() — no additional TransitEvent needed (already logged by
-  triggerReframe() in Task 5.1 at generation time, provider="local_llama_3b").
-- TransitEvent.operationType already exists (added in Phase 3 — no migration needed).
-- Unit tests (3): migration no-op for null reframedContent, TransitEvent logged on apply,
-  TransitEvent NOT logged on dismiss.
+DONE — commit cb0240d
+
+- JournalEntry entity: reframedContent: String? = null column added.
+- LatticeDatabase migration v4 → v5 (note: v3→v4 was consumed by Task 5.2 activity_hierarchy):
+  ALTER TABLE journal_entries ADD COLUMN reframedContent TEXT
+- JournalDao: updateReframedContent(entryId: String, content: String) @Query suspend fun.
+- JournalRepository: updateReframedContent() delegates to DAO (no extra TransitEvent).
+- JournalEditorViewModel: tracks savedEntryId after save(); applyReframe() calls
+  updateReframedContent() and clears reframeResult; dismissReframe() unchanged (state-only).
+- LatticeApplication: MIGRATION_4_5 added to migration chain.
+- Unit tests (3): null default on entity, DAO delegation on apply, DAO untouched on dismiss.
 ```
