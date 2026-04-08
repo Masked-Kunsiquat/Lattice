@@ -1,0 +1,44 @@
+package com.github.maskedkunisquat.lattice.core.data.model
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import java.util.UUID
+
+@Entity(tableName = "journal_entries")
+data class JournalEntry(
+    @PrimaryKey val id: UUID,
+    val timestamp: Long,
+    val content: String,
+    val valence: Float,
+    val arousal: Float,
+    val moodLabel: String,
+    val embedding: FloatArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as JournalEntry
+
+        if (id != other.id) return false
+        if (timestamp != other.timestamp) return false
+        if (content != other.content) return false
+        if (valence != other.valence) return false
+        if (arousal != other.arousal) return false
+        if (moodLabel != other.moodLabel) return false
+        if (!embedding.contentEquals(other.embedding)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = id.hashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + content.hashCode()
+        result = 31 * result + valence.hashCode()
+        result = 31 * result + arousal.hashCode()
+        result = 31 * result + moodLabel.hashCode()
+        result = 31 * result + embedding.contentHashCode()
+        return result
+    }
+}
