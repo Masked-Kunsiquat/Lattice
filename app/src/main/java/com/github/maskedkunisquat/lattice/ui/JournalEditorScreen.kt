@@ -150,7 +150,7 @@ private fun JournalEditorContent(
 @Preview(name = "Editor – Local (dark)", showBackground = true, backgroundColor = 0xFF1C1B1F)
 @Composable
 private fun EditorLocalPreview() {
-    LatticeTheme(dynamicColor = false) {
+    LatticeTheme(darkTheme = true, dynamicColor = false) {
         JournalEditorContent(
             privacyState = PrivacyLevel.LocalOnly,
             saved = false,
@@ -163,7 +163,7 @@ private fun EditorLocalPreview() {
 @Preview(name = "Editor – Cloud transit (dark)", showBackground = true, backgroundColor = 0xFF1C1B1F)
 @Composable
 private fun EditorCloudPreview() {
-    LatticeTheme(dynamicColor = false) {
+    LatticeTheme(darkTheme = true, dynamicColor = false) {
         JournalEditorContent(
             privacyState = PrivacyLevel.CloudTransit(
                 providerName = "cloud_claude",
