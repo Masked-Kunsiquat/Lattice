@@ -31,6 +31,7 @@ class EmbeddingProviderTest {
 
         val provider = EmbeddingProvider(dispatcher = trackingDispatcher)
         provider.generateEmbedding("test input — no model loaded, expects zero-vector")
+        testScheduler.advanceUntilIdle()
 
         assertTrue(
             "generateEmbedding must use withContext(dispatcher); dispatch was never called",

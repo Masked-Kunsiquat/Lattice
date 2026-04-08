@@ -34,6 +34,8 @@ import java.util.UUID
  * @param cloudEnabled Gates cloud routing. False by default — users must explicitly opt in.
  * @param piiDetector Returns true if the prompt contains unmasked PII. When true, cloud
  *   dispatch is blocked and [LlmResult.Error] is emitted. Defaults to no-op (always false).
+ *   Implementations should not throw — if the detector throws, the orchestrator treats the
+ *   prompt as containing PII (fail-safe: block the request rather than risk leaking data).
  */
 class LlmOrchestrator(
     private val nanoProvider: LlmProvider,
@@ -59,7 +61,8 @@ class LlmOrchestrator(
         operationType: String = "reframe"
     ): Flow<LlmResult> = flow {
         val provider = selectProvider()
-        if (provider === cloudProvider && piiDetector(prompt)) {
+        val piiDetected = provider === cloudProvider && runCatching { piiDetector(prompt) }.getOrDefault(true)
+        if (piiDetected) {
             emit(
                 LlmResult.Error(
                     SecurityException(
