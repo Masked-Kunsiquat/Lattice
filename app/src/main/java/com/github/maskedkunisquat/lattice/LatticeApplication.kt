@@ -14,7 +14,11 @@ class LatticeApplication : Application() {
 
     val database by lazy {
         Room.databaseBuilder(this, LatticeDatabase::class.java, "lattice.db")
-            .addMigrations(LatticeDatabase.MIGRATION_1_2, LatticeDatabase.MIGRATION_2_3)
+            .addMigrations(
+                LatticeDatabase.MIGRATION_1_2,
+                LatticeDatabase.MIGRATION_2_3,
+                LatticeDatabase.MIGRATION_3_4,
+            )
             .build()
     }
 
@@ -30,7 +34,9 @@ class LatticeApplication : Application() {
         )
     }
 
-    val reframingLoop by lazy { ReframingLoop(llmOrchestrator) }
+    val reframingLoop by lazy {
+        ReframingLoop(llmOrchestrator, database.activityHierarchyDao())
+    }
 
     val llmOrchestrator by lazy {
         LlmOrchestrator(

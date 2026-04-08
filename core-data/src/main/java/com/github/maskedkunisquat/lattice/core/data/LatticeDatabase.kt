@@ -5,11 +5,13 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PhoneNumberDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
+import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.LatticeTypeConverters
 import com.github.maskedkunisquat.lattice.core.data.model.Mention
@@ -23,9 +25,10 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         PhoneNumber::class,
         JournalEntry::class,
         Mention::class,
-        TransitEvent::class
+        TransitEvent::class,
+        ActivityHierarchy::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -35,6 +38,7 @@ abstract class LatticeDatabase : RoomDatabase() {
     abstract fun phoneNumberDao(): PhoneNumberDao
     abstract fun mentionDao(): MentionDao
     abstract fun transitEventDao(): TransitEventDao
+    abstract fun activityHierarchyDao(): ActivityHierarchyDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -58,6 +62,21 @@ abstract class LatticeDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_transit_events_timestamp ON transit_events (timestamp)"
+                )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS activity_hierarchy (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        taskName TEXT NOT NULL,
+                        difficulty INTEGER NOT NULL,
+                        valueCategory TEXT NOT NULL
+                    )
+                    """.trimIndent()
                 )
             }
         }

@@ -1,7 +1,10 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
+import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
+import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flowOf
@@ -413,5 +416,90 @@ class ReframingLoopTest {
         val result = ReframingLoop(orchestrator)
             .runStage3Intervention("test", affectiveMap, diagnosis)
         assertTrue(result.isFailure)
+    }
+
+    // ── Task 5.2: Behavioral Activation integration ───────────────────────────
+
+    private class FakeActivityHierarchyDao(
+        private val activities: List<ActivityHierarchy> = emptyList()
+    ) : ActivityHierarchyDao {
+        var lastMaxDifficulty: Int? = null
+
+        override suspend fun insertActivity(activity: ActivityHierarchy) = Unit
+
+        override suspend fun getActivitiesByMaxDifficulty(max: Int): List<ActivityHierarchy> {
+            lastMaxDifficulty = max
+            return activities.filter { it.difficulty <= max }.sortedBy { it.difficulty }
+        }
+    }
+
+    private fun loopWithResponseAndDao(
+        dao: ActivityHierarchyDao,
+        vararg tokens: String
+    ): ReframingLoop {
+        val results: List<LlmResult> = tokens.map { LlmResult.Token(it) } + LlmResult.Complete
+        val provider = FakeProvider("fake_local", results)
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = provider,
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = false,
+        )
+        return ReframingLoop(orchestrator, dao)
+    }
+
+    @Test
+    fun `BA - difficulty gate enforced - only activities at or below max are returned`() = runTest {
+        val hard = ActivityHierarchy(UUID.randomUUID(), "Hard task", difficulty = 8, valueCategory = "health")
+        val easy = ActivityHierarchy(UUID.randomUUID(), "Easy walk", difficulty = 3, valueCategory = "health")
+        val dao = FakeActivityHierarchyDao(listOf(hard, easy))
+
+        val reframingLoop = loopWithResponseAndDao(dao, "reframe text")
+        val affectiveMap = ReframingLoop.AffectiveMapResult(-0.7f, -0.5f, MoodLabel.DEPRESSED)
+        val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "")
+
+        reframingLoop.runStage3Intervention("health matters", affectiveMap, diagnosis)
+
+        // DAO must have been queried with BA_MAX_DIFFICULTY; hard task (8) must be excluded
+        assertEquals(ReframingLoop.BA_MAX_DIFFICULTY, dao.lastMaxDifficulty)
+        val returned = dao.getActivitiesByMaxDifficulty(ReframingLoop.BA_MAX_DIFFICULTY)
+        assertTrue(returned.none { it.difficulty > ReframingLoop.BA_MAX_DIFFICULTY })
+        assertTrue(returned.any { it.taskName == "Easy walk" })
+        assertTrue(returned.none { it.taskName == "Hard task" })
+    }
+
+    @Test
+    fun `BA - empty hierarchy handled gracefully - Stage 3 proceeds without BA block`() = runTest {
+        val dao = FakeActivityHierarchyDao(emptyList())
+        val reframingLoop = loopWithResponseAndDao(dao, "You can do this.")
+
+        val affectiveMap = ReframingLoop.AffectiveMapResult(-0.6f, -0.4f, MoodLabel.DEPRESSED)
+        val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "")
+
+        val result = reframingLoop.runStage3Intervention("test", affectiveMap, diagnosis)
+        assertTrue(result.isSuccess)
+        assertEquals(ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION, result.getOrThrow().strategy)
+    }
+
+    @Test
+    fun `BA - activity injected into prompt string when available`() {
+        val activity = ActivityHierarchy(
+            UUID.randomUUID(),
+            taskName = "Take a 5-minute walk",
+            difficulty = 2,
+            valueCategory = "health"
+        )
+        val prompt = loop.buildInterventionPrompt(
+            maskedText = "I feel exhausted and hopeless.",
+            strategy = ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
+            distortions = emptyList(),
+            baActivity = activity,
+        )
+        assertTrue(prompt.contains("Take a 5-minute walk"))
+        assertTrue(prompt.contains("health"))
     }
 }
