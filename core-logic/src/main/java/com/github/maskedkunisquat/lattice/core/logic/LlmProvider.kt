@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * Three tiers are implemented:
  * - [NanoProvider]        — Gemini Nano via Google AICore (on-device, API 35+)
- * - [LocalFallbackProvider] — Qwen-1.5B via ONNX Runtime (on-device, all API levels)
+ * - [LocalFallbackProvider] — Llama3-8B via ONNX Runtime (on-device, all API levels)
  * - [CloudProvider]       — Remote API (off-device, DISABLED by default)
  *
  * The [LlmOrchestrator] selects among these based on hardware availability and

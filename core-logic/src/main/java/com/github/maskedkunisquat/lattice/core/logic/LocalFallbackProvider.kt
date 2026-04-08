@@ -11,16 +11,16 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
 /**
- * LLM provider backed by a locally-bundled Qwen-1.5B ONNX model.
+ * LLM provider backed by a locally-bundled Llama3-8B ONNX model.
  *
  * This is the primary fallback when Gemini Nano (AICore) is unavailable. The model
  * runs entirely on-device via ONNX Runtime, so no data ever leaves the device.
  *
- * Setup: Place the ONNX export of Qwen-1.5B in:
- *   core-logic/src/main/assets/qwen-1.5b.onnx
+ * Setup: Place the ONNX export of Llama3-8B in:
+ *   core-logic/src/main/assets/llama3-8b.onnx
  *
  * TODO: Implement autoregressive decoding once the model asset is bundled:
- *   1. Tokenize prompt with Qwen BPE vocabulary (bundle vocab.json alongside model)
+ *   1. Tokenize prompt with Llama3 BPE vocabulary (bundle tokenizer.json alongside model)
  *   2. Run forward pass → logits
  *   3. Sample next token (greedy or top-p)
  *   4. Repeat until EOS token or max_new_tokens reached
@@ -31,14 +31,14 @@ class LocalFallbackProvider(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : LlmProvider {
 
-    override val id = "qwen_onnx_local"
+    override val id = "llama3_onnx_local"
 
     private var session: OrtSession? = null
     private val env = OrtEnvironment.getEnvironment()
     @Volatile private var initAttempted = false
 
     /**
-     * Loads the Qwen ONNX model from assets. Silent on failure — [isAvailable]
+     * Loads the Llama3 ONNX model from assets. Silent on failure — [isAvailable]
      * will return false and the orchestrator will handle the fallback.
      * Safe to call multiple times; subsequent calls are no-ops.
      */
@@ -63,7 +63,7 @@ class LocalFallbackProvider(
             emit(
                 LlmResult.Error(
                     IllegalStateException(
-                        "Qwen-1.5B model not loaded. Place $MODEL_ASSET in core-logic/src/main/assets/ " +
+                        "Llama3-8B model not loaded. Place $MODEL_ASSET in core-logic/src/main/assets/ " +
                         "and call LocalFallbackProvider.initialize() at app startup."
                     )
                 )
@@ -72,10 +72,10 @@ class LocalFallbackProvider(
         }
 
         // TODO: Replace stub with real autoregressive inference once model is bundled.
-        emit(LlmResult.Error(UnsupportedOperationException("Qwen inference not yet implemented.")))
+        emit(LlmResult.Error(UnsupportedOperationException("Llama3 inference not yet implemented.")))
     }.flowOn(dispatcher)
 
     companion object {
-        private const val MODEL_ASSET = "qwen-1.5b.onnx"
+        private const val MODEL_ASSET = "llama3-8b.onnx"
     }
 }
