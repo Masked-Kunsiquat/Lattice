@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.LongBuffer
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Generates 384-dimensional sentence embeddings using the Snowflake Arctic Embed XS ONNX model.
@@ -25,7 +26,9 @@ open class EmbeddingProvider(
 ) {
     private var ortSession: OrtSession? = null
     private var tokenizer: WordPieceTokenizer? = null
-    private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
+    private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
+    private val fallbackLoggedSession = AtomicBoolean(false)
+    private val fallbackLoggedTokenizer = AtomicBoolean(false)
 
     /**
      * Loads the ONNX model and WordPiece vocabulary from assets.
@@ -57,11 +60,17 @@ open class EmbeddingProvider(
 
     open suspend fun generateEmbedding(text: String): FloatArray = withContext(dispatcher) {
         val session = ortSession ?: run {
-            Log.w(TAG, "generateEmbedding called before initialize() or after a load failure — returning zero-vector")
+            if (fallbackLoggedSession.compareAndSet(false, true)) {
+                Log.w(TAG, "generateEmbedding returning zero-vector: model not initialized. " +
+                    "Call initialize(context) at app startup. isInitialized=$isInitialized")
+            }
             return@withContext FloatArray(EMBEDDING_DIM)
         }
         val tok = tokenizer ?: run {
-            Log.w(TAG, "generateEmbedding called before initialize() or after a load failure — returning zero-vector")
+            if (fallbackLoggedTokenizer.compareAndSet(false, true)) {
+                Log.w(TAG, "generateEmbedding returning zero-vector: tokenizer not initialized. " +
+                    "Call initialize(context) at app startup. isInitialized=$isInitialized")
+            }
             return@withContext FloatArray(EMBEDDING_DIM)
         }
         runInference(session, tok, text)
