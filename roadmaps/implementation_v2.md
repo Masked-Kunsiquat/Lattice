@@ -133,39 +133,82 @@ DONE
 > Unified Agent loop on Llama-3.2-3B. Single model handles affective mapping, distortion
 > classification, and intervention generation via sequential prompting.
 
-### 🟢 Task 5.1: The Unified Reframing Loop (Sequential Prompting)
+### ✅ Task 5.1: The Unified Reframing Loop (Sequential Prompting)
 ```markdown
 # Task: 3-Stage Inference Loop in LocalFallbackProvider (Llama-3.2-3B)
-Deliverables:
-- LocalFallbackProvider: wire ONNX inference against llama-3.2-3b.onnx asset;
-  retain stub/scaffold behaviour (placeholder tokens) when asset absent.
-- ReframingLoop.kt (core-logic): orchestrates the 3-stage sequential prompt chain.
-  All stages operate on PII-masked text only.
+DONE — commits 499d285 (assets), ff922a2 (Stage 1), a6eae2c (Stage 2), 876506f (Stage 3),
+        370e2ee (!reframe wiring + audit trail)
 
-  Stage 1 — Affective Mapping:
-  - Prompt Llama to output valence (v) and arousal (a) coordinates from the masked text.
-  - Output used to classify circumplex quadrant (via CircumplexMapper) for Stage 3 routing.
+## Completed
 
-  Stage 2 — Diagnosis of Thought (DoT):
-  - Multi-class classification prompt with clinical reasoning chain.
-  - 12-distortion coverage: Labeling, Fortune Telling, Catastrophizing, Mind Reading,
-    Overgeneralization, Emotional Reasoning, Black-and-White Thinking, Should Statements,
-    Personalization, Mental Filter, Disqualifying the Positive, Magnification/Minimization.
-  - Output: List<CbtDistortion> (replaces / extends current CbtLogic keyword rules).
+### Asset integration
+- model_q4.onnx + model_q4.onnx_data + model_q4.onnx_data_1 → app/src/main/assets/
+- LocalFallbackProvider rewritten: copyAssetsToFilesDir() stages all three shards to
+  context.filesDir on first init (ORT needs real filesystem paths for external-data models),
+  then opens OrtSession with NNAPI (NPU/GPU on Snapdragon 8 Elite) falling back to CPU.
+- Dispatcher changed to Dispatchers.IO; id = "llama3_onnx_local".
+- LatticeApplication: localFallbackProvider extracted as top-level lazy; eager background
+  init in onCreate() avoids first-request stall.
+- ⚠️  INFERENCE STUB: OrtSession loads successfully but process() still emits
+  UnsupportedOperationException("Llama-3.2-3B inference not yet implemented.").
+  Blocked on: LlamaTokenizer (BPE vocab from tokenizer.json) + autoregressive decode loop.
+  isAvailable() returns true once the session is open; the orchestrator will route to it
+  but receive an error result until the loop is implemented.
 
-  Stage 3 — Strategic Pivot Intervention (quadrant-gated):
-  - Quadrant II (High Arousal / Negative valence: v < 0, a ≥ 0):
-    Prioritize probability overestimation testing and cognitive de-escalation.
-  - Quadrant III (Low Arousal / Negative valence: v < 0, a < 0):
-    Prioritize Behavioral Activation (BA) — retrieve a value-aligned activity from
-    ActivityHierarchy (Task 5.2) and inject as "Step 1" suggestion.
-    Also inject "Evidence for the Contrary" from RAG (Task 5.3).
-  - Output: reframe string streamed as LlmResult.Token → Complete sequence.
+### ReframingLoop.kt (core-logic)
+Stage 1 — Affective Mapping ✅
+  - Llama-3.2 chat-template prompt requests ONLY "v=<n> a=<n>" output.
+  - collectTokens() drains Flow<LlmResult> stream; regex parser tolerates spaces,
+    integers, leading dash, stray preamble; clamps both axes to [-1, 1].
+  - Maps to MoodLabel via CircumplexMapper.getLabel(); returns Result<AffectiveMapResult>.
 
-- CbtDistortion.kt: sealed enum with all 12 distortion types.
-- Unit tests (6): stage isolation (each stage prompt format), quadrant II routing,
-  quadrant III routing, DoT multi-label output, placeholder passthrough (no UUID stripping),
-  fallback stub emits tokens when model asset absent.
+Stage 2 — Diagnosis of Thought (DoT) ✅
+  - Three-step chain-of-thought prompt: facts/beliefs separation → contrastive analysis
+    → DISTORTIONS: <csv> sentinel on the final line.
+  - Parser takes the *last* DISTORTIONS: line (handles model self-correction),
+    resolves tokens via CognitiveDistortion.fromLabel() with hyphen/case normalisation,
+    silently drops unrecognised tokens; preserves full CoT in DiagnosisResult.reasoning.
+  - Returns Result<DiagnosisResult(distortions, reasoning)>.
+  - ⚠️  NAMING DEVIATION: enum is CognitiveDistortion (not CbtDistortion as specced).
+    12th entry is BLAME (Burns taxonomy) — spec listed Magnification/Minimization.
+    Rationale: BLAME is a distinct Burns distortion; Catastrophizing already covers
+    magnification. Revisit if clinical review requires the spec list verbatim.
+
+Stage 3 — Strategic Pivot ✅
+  - selectStrategy(): v<0 & a≥0 → SOCRATIC_REALITY_TESTING (Q2);
+                      v<0 & a<0 → BEHAVIORAL_ACTIVATION (Q3); v≥0 → STRENGTHS_AFFIRMATION.
+  - Q2 prompt: Socratic questioning + Reality Testing + probability calibration.
+  - Q3 prompt: Evidence for the Contrary + one concrete Behavioral Activation step.
+  - Free-form reframe — no sentinel parsing; collected via collectTokens().
+  - Returns Result<ReframeResult(strategy, reframe)>.
+  - ⚠️  DEFERRED (Task 5.2): ActivityHierarchy BA retrieval + prompt injection not yet wired.
+  - ⚠️  DEFERRED (Task 5.3): RAG evidence injection not yet wired.
+
+### !reframe command + audit trail (pulled forward from Task 5.3)
+  - JournalRepository.maskText(text): new helper for non-persisting callers.
+  - JournalEditorViewModel.onTextChanged(): detects "!reframe" anywhere in live text,
+    strips it, fires triggerReframe() on viewModelScope.
+  - triggerReframe(): masks → Stage 1 → Stage 2 → Stage 3 (fail-fast getOrThrow()),
+    updates mood coords from Stage 1, exposes reframe in EditorUiState.reframeResult.
+  - On completion logs TransitEvent(providerName="local_llama_3b", operationType="reframe").
+  - Save button disabled while isReframing=true.
+  - JournalEditorScreen: CircularProgressIndicator + dismissible SecondaryContainer result
+    card. (Full streaming UiState + ReframeBottomSheet remain in Task 5.3 scope.)
+
+### Tests
+  33 unit tests (all passing):
+  - Stage 1: 11 tests — parser edge cases, prompt structure, end-to-end token stream.
+  - Stage 2: 12 tests — DISTORTIONS: sentinel, multi-label, normalisation, last-line wins,
+    reasoning preserved, buildDotPrompt keyword assertions.
+  - Stage 3: 10 tests — selectStrategy boundaries (Q2/Q3/Q1/Q4/zero-arousal), Q2 & Q3
+    prompt keyword assertions, empty-distortion context, end-to-end strategy routing x2,
+    model error propagation.
+
+## Open items before 5.1 is fully production-ready
+1. LlamaTokenizer — bundle tokenizer.json (Llama-3 BPE), implement encode/decode.
+2. Autoregressive decode loop in LocalFallbackProvider.process() — greedy or top-p sampling.
+3. Replace BLAME with Magnification/Minimization in CognitiveDistortion if clinical
+   review requires strict spec alignment.
 ```
 
 ### 🟢 Task 5.2: Behavioral Activation (BA) Integration
@@ -187,7 +230,10 @@ Deliverables:
 
 ### 🟢 Task 5.3: Memory-Augmented Socratic Dialogue
 ```markdown
-# Task: RAG Evidence Injection + !reframe Trigger
+# Task: RAG Evidence Injection + Streaming UiState + ReframeBottomSheet
+NOTE: !reframe detection, triggerReframe(), and TransitEvent logging were pulled
+forward into Task 5.1 (commit 370e2ee). Remaining 5.3 deliverables:
+
 Deliverables:
 - SearchRepository.findEvidenceEntries(
       placeholders: Set<String>,
@@ -201,21 +247,20 @@ Deliverables:
   - Zero-vector entries excluded.
 - JournalDao: add getEntriesWithMinValence(minValence: Float): List<JournalEntry>
   (suspend, one-shot).
-- ReframingLoop: injects top evidence entries as "Evidence for the Contrary" block
-  into the Stage 3 prompt (both Quadrant II and III paths).
+- ReframingLoop Stage 3: inject top evidence entries as "Evidence for the Contrary"
+  block into both Q2 and Q3 prompts.
 - JournalEditorViewModel:
-  - Detect trailing "!reframe" token in live text via regex; strip it before save.
-  - triggerReframe(): calls ReframingLoop, routes exclusively through LocalFallbackProvider
-    (bypasses LlmOrchestrator tier selection — no cloud path possible).
-  - New UiState fields: reframeState: ReframeState
-    (Idle | Loading | Streaming(partial) | Done(text) | Error)
-  - Streams LlmResult.Token chunks into reframeState.Streaming; seals to Done on Complete.
+  - ✅ DONE: !reframe detection + stripping (commit 370e2ee).
+  - ✅ DONE: triggerReframe() with fail-fast pipeline + TransitEvent logging.
+  - Upgrade EditorUiState.isReframing/reframeResult → sealed ReframeState:
+    Idle | Loading | Streaming(partial: String) | Done(text: String) | Error(msg: String)
+  - Stream LlmResult.Token chunks into ReframeState.Streaming; seal to Done on Complete.
 - ReframeBottomSheet.kt (app/ui): modal bottom sheet consuming reframeState.
   - Skeleton shimmer while Loading; token-by-token text append while Streaming.
   - "Apply" action: appends reframed text below original in editor field.
   - "Dismiss" resets reframeState to Idle.
-- Unit tests (5): !reframe stripped from saved text, cloud provider never invoked,
-  Streaming → Done state transition, valence gate enforced, placeholder match required.
+- Unit tests (5): cloud provider never invoked, Streaming → Done state transition,
+  valence gate enforced, placeholder match required, evidence block injected into prompt.
 ```
 
 ### 🟢 Task 5.4: Room Schema Update & Audit Trail
@@ -226,10 +271,10 @@ Deliverables:
 - LatticeDatabase migration v3 → v4:
   ALTER TABLE journal_entries ADD COLUMN reframed_content TEXT;
 - JournalDao: updateReframedContent(entryId: String, content: String) suspend fun.
-- JournalEditorViewModel: on "Apply", call updateReframedContent() and log a
-  TransitEvent(provider="local_qwen", operationType="reframe", entryId=...) —
-  timestamp + provider only, no content written to audit trail.
-- TransitEvent entity: add operationType: String column (migration v3→v4 same block).
+- JournalEditorViewModel: on "Apply" (from ReframeBottomSheet), call
+  updateReframedContent() — no additional TransitEvent needed (already logged by
+  triggerReframe() in Task 5.1 at generation time, provider="local_llama_3b").
+- TransitEvent.operationType already exists (added in Phase 3 — no migration needed).
 - Unit tests (3): migration no-op for null reframedContent, TransitEvent logged on apply,
   TransitEvent NOT logged on dismiss.
 ```
