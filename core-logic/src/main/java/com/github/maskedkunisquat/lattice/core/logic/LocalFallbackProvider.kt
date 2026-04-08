@@ -35,12 +35,16 @@ class LocalFallbackProvider(
 
     private var session: OrtSession? = null
     private val env = OrtEnvironment.getEnvironment()
+    @Volatile private var initAttempted = false
 
     /**
      * Loads the Qwen ONNX model from assets. Silent on failure — [isAvailable]
      * will return false and the orchestrator will handle the fallback.
+     * Safe to call multiple times; subsequent calls are no-ops.
      */
     fun initialize() {
+        if (initAttempted) return
+        initAttempted = true
         try {
             val bytes = context.assets.open(MODEL_ASSET).readBytes()
             session = env.createSession(bytes, OrtSession.SessionOptions())
@@ -49,8 +53,9 @@ class LocalFallbackProvider(
         }
     }
 
-    override suspend fun isAvailable(): Boolean = withContext(dispatcher) {
-        session != null
+    override suspend fun isAvailable(): Boolean {
+        if (!initAttempted) withContext(dispatcher) { initialize() }
+        return session != null
     }
 
     override fun process(prompt: String): Flow<LlmResult> = flow {
