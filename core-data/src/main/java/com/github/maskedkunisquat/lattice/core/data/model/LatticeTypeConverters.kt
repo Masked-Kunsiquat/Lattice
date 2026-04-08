@@ -36,4 +36,15 @@ class LatticeTypeConverters {
         if (it.isEmpty()) floatArrayOf()
         else it.split(",").map { s -> s.toFloat() }.toFloatArray()
     }
+
+    @TypeConverter
+    fun fromStringList(value: List<String>?): String? = value?.let {
+        org.json.JSONArray(it).toString()
+    }
+
+    @TypeConverter
+    fun toStringList(value: String?): List<String>? = value?.let {
+        val array = org.json.JSONArray(it)
+        List(array.length()) { i -> array.getString(i) }
+    }
 }

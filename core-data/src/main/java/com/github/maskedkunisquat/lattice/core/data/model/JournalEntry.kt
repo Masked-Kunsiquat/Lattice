@@ -1,10 +1,14 @@
 package com.github.maskedkunisquat.lattice.core.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
-@Entity(tableName = "journal_entries")
+@Entity(
+    tableName = "journal_entries",
+    indices = [Index(value = ["timestamp"])]
+)
 data class JournalEntry(
     @PrimaryKey val id: UUID,
     val timestamp: Long,
@@ -12,7 +16,8 @@ data class JournalEntry(
     val valence: Float,
     val arousal: Float,
     val moodLabel: String,
-    val embedding: FloatArray
+    val embedding: FloatArray,
+    val cognitiveDistortions: List<String> = emptyList()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -27,6 +32,7 @@ data class JournalEntry(
         if (arousal != other.arousal) return false
         if (moodLabel != other.moodLabel) return false
         if (!embedding.contentEquals(other.embedding)) return false
+        if (cognitiveDistortions != other.cognitiveDistortions) return false
 
         return true
     }
@@ -39,6 +45,7 @@ data class JournalEntry(
         result = 31 * result + arousal.hashCode()
         result = 31 * result + moodLabel.hashCode()
         result = 31 * result + embedding.contentHashCode()
+        result = 31 * result + cognitiveDistortions.hashCode()
         return result
     }
 }

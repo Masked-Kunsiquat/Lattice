@@ -19,7 +19,7 @@ import java.util.UUID
     indices = [Index("personId")]
 )
 data class PhoneNumber(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: UUID,
     val personId: UUID,
     val rawNumber: String,
     val normalizedNumber: String

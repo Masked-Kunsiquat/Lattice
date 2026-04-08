@@ -15,6 +15,9 @@ interface PhoneNumberDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPhoneNumber(phoneNumber: PhoneNumber)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPhoneNumbers(phoneNumbers: List<PhoneNumber>)
+
     @Update
     suspend fun updatePhoneNumber(phoneNumber: PhoneNumber)
 
@@ -23,4 +26,10 @@ interface PhoneNumberDao {
 
     @Query("SELECT * FROM phone_numbers WHERE personId = :personId")
     fun getPhoneNumbersForPerson(personId: UUID): Flow<List<PhoneNumber>>
+
+    @Query("SELECT * FROM phone_numbers")
+    fun getAllPhoneNumbers(): Flow<List<PhoneNumber>>
+
+    @Query("DELETE FROM phone_numbers WHERE personId = :personId")
+    suspend fun deleteByPersonId(personId: UUID)
 }
