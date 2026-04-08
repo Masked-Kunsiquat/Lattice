@@ -252,10 +252,14 @@ forward into Task 5.1 (commit 370e2ee). Remaining work split into three chunks:
 - [ ] Unit tests (3): valence gate enforced, placeholder match required, evidence block present in prompt string
 
 #### 5.3-B: Streaming UiState (ViewModel)
+- [x] `onTextChanged()`: `!reframe` detection, stripping, `triggerReframe()` dispatch — commit 370e2ee
+- [x] `triggerReframe()`: fail-fast 3-stage pipeline + `TransitEvent` audit logging — commit 370e2ee
+- [x] `applyReframe()`: persists accepted reframe via `updateReframedContent()` — commit cb0240d
+- [x] `dismissReframe()`: clears `reframeResult` (state-only, no DB write) — commit cb0240d
 - [ ] Replace `EditorUiState.isReframing: Boolean` + `reframeResult: String?` with sealed `ReframeState`:
   `Idle | Loading | Streaming(partial: String) | Done(text: String) | Error(msg: String)`
-- [ ] `triggerReframe()`: emit `Loading` on start; collect `LlmResult.Token` chunks into `Streaming(partial)`; seal to `Done` on `LlmResult.Complete`
-- [ ] `applyReframe()` / `dismissReframe()` adapted to new `ReframeState` (was previously `reframeResult: String?`)
+- [ ] Upgrade `triggerReframe()`: emit `Loading` on start; collect `LlmResult.Token` into `Streaming(partial)`; seal to `Done` on `LlmResult.Complete`
+- [ ] Adapt `applyReframe()` / `dismissReframe()` to consume `ReframeState` instead of `reframeResult: String?`
 - [ ] Unit tests (2): `Streaming → Done` state transition, cloud provider never invoked
 
 #### 5.3-C: ReframeBottomSheet UI (app)
