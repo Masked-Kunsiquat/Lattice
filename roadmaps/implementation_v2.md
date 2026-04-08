@@ -84,29 +84,37 @@ DONE
 
 ---
 
-## Phase 4: The Interface (Visualizing the Logic)
+## Phase 4: The Interface (Visualizing the Logic) ✅
 
-### 🟢 Task 4.1: The 2D Mood Grid
+### ✅ Task 4.1: The 2D Mood Grid
 ```markdown
 # Task: Implement the 2D Mood Grid UI
-Build the interactive emotional input tool in the `:app` module.
-1. **Canvas:** Create `MoodGrid.kt` using Jetpack Compose `Canvas`.
-2. **Math:** Map 2D touch coordinates to (-1.0, 1.0) for Valence and Arousal.
-3. **Mapping:** Link touch updates to `CircumplexMapper.getLabel()` for real-time feedback.
-4. **Visuals:** Add axis labels ("Pleasant", "High Energy", etc.) and a glowing selector dot.
+DONE — commit a15198f
+- MoodGrid.kt: Compose Canvas with quadrant tint backgrounds (amber/green/blue-grey/red),
+  axis lines, and a BlurMaskFilter glow dot for the selector.
+- Touch & drag handled via awaitEachGesture / awaitFirstDown (no dual-pointerInput conflicts).
+- Raw pixel offset mapped to valence ∈ [-1,1] (X) and arousal ∈ [-1,1] (Y, inverted).
+- CircumplexMapper.getLabel() called on every pointer event for real-time MoodLabel feedback.
+- Axis labels (High/Low Energy, Pleasant/Unpleasant) as rotated Text composables outside the canvas.
+- Current MoodLabel displayed below; placeholder text shown until first touch.
+- Added :core-logic dependency to :app module.
 ```
 
-### 🟢 Task 4.2: Privacy-Aware Journal Editor
+### ✅ Task 4.2: Privacy-Aware Journal Editor
 ```markdown
 # Task: Build the Privacy-Aware Editor
-1. **UI:** Create a `JournalEditorScreen` with a Material 3 `TextField`.
-2. **Privacy Highlighting:** Implement a VisualTransformation that highlights masked PII
-   placeholders (e.g., [PERSON_UUID]) in a specific color.
-3. **Privacy Border:** Implement a dynamic UI border/background:
-   - Blue  = Processing Locally  (PrivacyLevel.LocalOnly)
-   - Amber = Cloud Model Selected (PrivacyLevel.CloudTransit)
-   Observe LlmOrchestrator.privacyState StateFlow.
-4. **Integration:** Connect the MoodGrid result and Text result to JournalRepository.saveEntry().
+DONE
+- LatticeApplication.kt: manual DI container — Room DB, EmbeddingProvider, JournalRepository,
+  LlmOrchestrator all lazily wired; embeddingProvider.initialize() called in onCreate().
+- PiiHighlightTransformation.kt: VisualTransformation matching [PERSON_UUID] placeholders
+  via regex; applies tertiary color + 15% alpha background tint inline in the TextField.
+- JournalEditorViewModel.kt: exposes orchestrator.privacyState StateFlow; save() calls
+  JournalRepository.saveEntry() from viewModelScope; saved pulse state resets after UI ack.
+- JournalEditorScreen.kt: animateColorAsState transitions the OutlinedTextField border
+  between LocalBlue (#1976D2) and CloudAmber (#FF8F00) over 600 ms; privacy pill at top
+  shows current provider label; Save button gated on non-blank text + mood selection.
+- MainActivity updated to cast Application → LatticeApplication and inject ViewModel factory.
+- Added :core-data dependency to :app module.
 ```
 
 ---
