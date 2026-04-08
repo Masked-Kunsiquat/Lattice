@@ -124,6 +124,41 @@ class LlmOrchestratorTest {
     }
 
     @Test
+    fun `cloud dispatch is blocked and error emitted when raw PII is detected`() = runTest {
+        val dao = FakeTransitEventDao()
+        val nano = FakeProvider("gemini_nano", false)
+        val local = FakeProvider("qwen_onnx_local", false)
+        val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
+        // Detector: simulates a prompt that still contains a raw name (no [PERSON_uuid] placeholder)
+        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true,
+            piiDetector = { prompt -> "John" in prompt })
+
+        val results = orch.process("John did something today").toList()
+
+        assertTrue("Expected an error result", results.any { it is LlmResult.Error })
+        assertEquals("Cloud must not be called when PII detected", 0, cloud.processCallCount)
+        assertEquals("No transit event should be logged", 0, dao.insertedEvents.size)
+        // State should NOT have flipped to CloudTransit
+        assertEquals(PrivacyLevel.LocalOnly, orch.privacyState.value)
+    }
+
+    @Test
+    fun `cloud dispatch proceeds when prompt contains only PII placeholders`() = runTest {
+        val dao = FakeTransitEventDao()
+        val nano = FakeProvider("gemini_nano", false)
+        val local = FakeProvider("qwen_onnx_local", false)
+        val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
+        // Detector: raw name absent — prompt is already masked
+        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true,
+            piiDetector = { prompt -> "John" in prompt })
+
+        val results = orch.process("[PERSON_abc123] did something today").toList()
+
+        assertTrue("Expected complete result", results.any { it is LlmResult.Complete })
+        assertEquals("Cloud should be called for masked prompt", 1, cloud.processCallCount)
+    }
+
+    @Test
     fun `cloud is not invoked when cloudEnabled is false even if local unavailable`() = runTest {
         val dao = FakeTransitEventDao()
         val (orch, _, _) = orchestrator(

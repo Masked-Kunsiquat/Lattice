@@ -27,16 +27,21 @@ import java.util.UUID
  *
  * ## PII Contract
  * Callers are responsible for masking PII via [PiiShield] before passing a prompt to
- * [process]. The orchestrator validates this for cloud-bound prompts in Task 3.2.
+ * [process]. The orchestrator enforces this for cloud-bound prompts via [piiDetector]:
+ * if [piiDetector] returns true (raw PII detected), the request is rejected with
+ * [LlmResult.Error] before any data leaves the device.
  *
  * @param cloudEnabled Gates cloud routing. False by default — users must explicitly opt in.
+ * @param piiDetector Returns true if the prompt contains unmasked PII. When true, cloud
+ *   dispatch is blocked and [LlmResult.Error] is emitted. Defaults to no-op (always false).
  */
 class LlmOrchestrator(
     private val nanoProvider: LlmProvider,
     private val localFallbackProvider: LlmProvider,
     private val cloudProvider: LlmProvider,
     private val transitEventDao: TransitEventDao,
-    val cloudEnabled: Boolean = false
+    val cloudEnabled: Boolean = false,
+    private val piiDetector: (String) -> Boolean = { false }
 ) {
     private val _privacyState = MutableStateFlow<PrivacyLevel>(PrivacyLevel.LocalOnly)
 
@@ -54,6 +59,17 @@ class LlmOrchestrator(
         operationType: String = "reframe"
     ): Flow<LlmResult> = flow {
         val provider = selectProvider()
+        if (provider === cloudProvider && piiDetector(prompt)) {
+            emit(
+                LlmResult.Error(
+                    SecurityException(
+                        "Cloud dispatch blocked: raw PII detected in prompt. " +
+                        "Mask all personal data via PiiShield before routing to cloud."
+                    )
+                )
+            )
+            return@flow
+        }
         applyPrivacyState(provider, operationType)
         emitAll(provider.process(prompt))
     }
