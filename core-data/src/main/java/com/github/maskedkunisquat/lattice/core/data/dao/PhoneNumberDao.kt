@@ -23,4 +23,7 @@ interface PhoneNumberDao {
 
     @Query("SELECT * FROM phone_numbers WHERE personId = :personId")
     fun getPhoneNumbersForPerson(personId: UUID): Flow<List<PhoneNumber>>
+
+    @Query("SELECT * FROM phone_numbers")
+    fun getAllPhoneNumbers(): Flow<List<PhoneNumber>>
 }
