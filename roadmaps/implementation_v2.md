@@ -126,14 +126,81 @@ DONE
 
 ## Phase 5: The Reframing Engine (CBT)
 
-### 🟢 Task 5.1: Distortion Detection & !reframe
+> **Strategy:** All reframing runs locally via `LocalFallbackProvider` (Qwen-1.5B ONNX).
+> `NanoProvider` and `CloudProvider` are excluded from the reframe routing path.
+> No reframe content — masked or otherwise — ever leaves the device.
+
+### 🟢 Task 5.1: Qwen-Specific Prompt Engineering
 ```markdown
-# Task: Implement the CBT Reframing Flow
-1. **Detection:** DistortionAnalyzer — CbtLogic.detectDistortions() is already wired into
-   saveEntry(). Extend with more distortion rules as needed.
-2. **Command:** Implement the "!reframe" trigger logic — route masked journal content
-   through LlmOrchestrator.process(prompt, operationType="reframe").
-3. **RAG Integration:** When reframing, use SearchRepository.findSimilarEntries() to pull
-   "Evidence for the Contrary" (positive past entries about the mentioned person)
-   and inject as context into the LLM prompt.
+# Task: CbtPromptBuilder — Qwen-1.5B Prompt Formatting
+Deliverables:
+- CbtPromptBuilder.kt (core-logic): pure function object, no Android deps.
+  - build(maskedText: String, distortions: List<CbtDistortion>, evidence: List<String>): String
+  - Formats a structured <|im_start|>/<|im_end|> ChatML prompt (Qwen native format).
+  - System turn: instructs Qwen to act as a CBT coach, never reveal PII placeholders,
+    output a reframe in ≤ 3 sentences.
+  - Evidence turn: injects "Evidence for the Contrary" block when evidence list non-empty.
+  - User turn: masked journal text + detected distortion labels.
+  - Distortion coverage: Catastrophizing, Black-and-White Thinking, Mind Reading,
+    Overgeneralization, Emotional Reasoning (maps to CbtDistortion enum).
+- Unit tests (5): empty evidence path, multi-distortion label formatting,
+  placeholder passthrough (no UUID stripping), max-length guard, golden-string snapshot.
+```
+
+### 🟢 Task 5.2: Semantic Evidence RAG
+```markdown
+# Task: Positive-Valence Evidence Retrieval in SearchRepository
+Deliverables:
+- SearchRepository.findEvidenceEntries(
+      placeholders: Set<String>,
+      minValence: Float = 0.5f,
+      limit: Int = 5
+  ): Flow<List<JournalEntry>>
+  - Fetches entries where valence > minValence (positive quadrant only).
+  - Filters to entries whose maskedContent contains at least one placeholder from the set
+    (same person/entity as current entry — cross-entry evidence anchoring).
+  - Ranks by cosine similarity to the current entry's embedding (reuses existing
+    in-memory cosine logic from findSimilarEntries).
+  - Zero-vector entries excluded.
+- JournalDao: add getEntriesWithMinValence(minValence: Float): List<JournalEntry>
+  (suspend, one-shot; drives the positive-only pre-filter before cosine ranking).
+- Unit tests (4): valence gate enforced, placeholder match required, cosine ranking order,
+  limit capping.
+```
+
+### 🟢 Task 5.3: !reframe Command Trigger & Stream
+```markdown
+# Task: !reframe Interception, LocalFallbackProvider Routing, UI Stream
+Deliverables:
+- JournalEditorViewModel:
+  - Detect trailing "!reframe" token in live text via regex; strip it before save.
+  - triggerReframe(): collects findEvidenceEntries(), calls CbtPromptBuilder.build(),
+    routes prompt exclusively through LocalFallbackProvider (bypasses LlmOrchestrator
+    tier selection — no cloud path possible).
+  - New UiState fields: reframeState: ReframeState (Idle | Loading | Streaming(partial) | Done(text) | Error)
+  - Streams LlmResult.Token chunks into reframeState.Streaming; seals to Done on Complete.
+- ReframeBottomSheet.kt (app/ui): modal bottom sheet consuming reframeState.
+  - Skeleton shimmer while Loading; token-by-token text append while Streaming.
+  - "Apply" action: appends reframed text below original in editor field.
+  - "Dismiss" resets reframeState to Idle.
+- LocalFallbackProvider: wire real ONNX inference call when model asset present;
+  retain stub/scaffold behaviour (emitting placeholder tokens) when asset absent.
+- Unit tests (3): !reframe stripped from saved text, cloud provider never invoked,
+  Streaming → Done state transition.
+```
+
+### 🟢 Task 5.4: Room Schema Update & Audit Trail
+```markdown
+# Task: JournalEntry reframedContent Column + TransitEvent Logging
+Deliverables:
+- JournalEntry entity: add reframedContent: String? = null column.
+- LatticeDatabase migration v3 → v4:
+  ALTER TABLE journal_entries ADD COLUMN reframed_content TEXT;
+- JournalDao: updateReframedContent(entryId: String, content: String) suspend fun.
+- JournalEditorViewModel: on "Apply", call updateReframedContent() and log a
+  TransitEvent(provider="local_qwen", operationType="reframe", entryId=...) —
+  timestamp + provider only, no content written to audit trail.
+- TransitEvent entity: add operationType: String column (migration v3→v4 same block).
+- Unit tests (3): migration no-op for null reframedContent, TransitEvent logged on apply,
+  TransitEvent NOT logged on dismiss.
 ```

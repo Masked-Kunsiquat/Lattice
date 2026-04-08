@@ -24,6 +24,7 @@ data class EditorUiState(
     val label: MoodLabel = MoodLabel.ALIVE,
     val moodSelected: Boolean = false,
     val saved: Boolean = false,
+    val error: String? = null,
 )
 
 class JournalEditorViewModel(
@@ -48,18 +49,22 @@ class JournalEditorViewModel(
     fun save() {
         val state = _uiState.value
         viewModelScope.launch {
-            journalRepository.saveEntry(
-                JournalEntry(
-                    id = UUID.randomUUID(),
-                    timestamp = System.currentTimeMillis(),
-                    content = state.text,
-                    valence = state.valence,
-                    arousal = state.arousal,
-                    moodLabel = state.label.name, // recalculated by repository, but must be non-null
-                    embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
+            try {
+                journalRepository.saveEntry(
+                    JournalEntry(
+                        id = UUID.randomUUID(),
+                        timestamp = System.currentTimeMillis(),
+                        content = state.text,
+                        valence = state.valence,
+                        arousal = state.arousal,
+                        moodLabel = state.label.name, // recalculated by repository, but must be non-null
+                        embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
+                    )
                 )
-            )
-            _uiState.update { it.copy(saved = true) }
+                _uiState.update { it.copy(saved = true) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message ?: "Failed to save entry") }
+            }
         }
     }
 
