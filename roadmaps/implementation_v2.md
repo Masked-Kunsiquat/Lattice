@@ -149,11 +149,9 @@ DONE — commits 499d285 (assets), ff922a2 (Stage 1), a6eae2c (Stage 2), 876506f
 - Dispatcher changed to Dispatchers.IO; id = "llama3_onnx_local".
 - LatticeApplication: localFallbackProvider extracted as top-level lazy; eager background
   init in onCreate() avoids first-request stall.
-- ⚠️  INFERENCE STUB: OrtSession loads successfully but process() still emits
-  UnsupportedOperationException("Llama-3.2-3B inference not yet implemented.").
-  Blocked on: LlamaTokenizer (BPE vocab from tokenizer.json) + autoregressive decode loop.
-  isAvailable() returns true once the session is open; the orchestrator will route to it
-  but receive an error result until the loop is implemented.
+- ✅ INFERENCE LIVE: LlamaTokenizer + KV-cached autoregressive loop implemented
+  (2026-04-08). OrtSession runs greedy decode, emits LlmResult.Token per generated
+  token, terminates on EOS or MAX_NEW_TOKENS=512.
 
 ### ReframingLoop.kt (core-logic)
 Stage 1 — Affective Mapping ✅
@@ -204,11 +202,17 @@ Stage 3 — Strategic Pivot ✅
     prompt keyword assertions, empty-distortion context, end-to-end strategy routing x2,
     model error propagation.
 
-## Open items before 5.1 is fully production-ready
-1. LlamaTokenizer — bundle tokenizer.json (Llama-3 BPE), implement encode/decode.
-2. Autoregressive decode loop in LocalFallbackProvider.process() — greedy or top-p sampling.
-3. Replace BLAME with Magnification/Minimization in CognitiveDistortion if clinical
-   review requires strict spec alignment.
+## Finalised (2026-04-08)
+1. ✅ LlamaTokenizer.kt — streaming parse of tokenizer.json (android.util.JsonReader),
+   Llama-3 tiktoken BPE (pre-tokeniser regex + ByteLevel encoding + merge-rank BPE),
+   special-token passthrough for chat-template delimiters, UTF-8 streaming decode.
+2. ✅ LocalFallbackProvider.process() — KV-cached autoregressive greedy-decode loop;
+   numLayers discovered dynamically from session.inputInfo; each token streamed as
+   LlmResult.Token; terminates on EOS (128001/128008/128009) or MAX_NEW_TOKENS=512.
+3. ✅ Assets — tokenizer.json + tokenizer_config.json + generation_config.json copied
+   to app/src/main/assets/ (read via context.assets; model shards still staged to filesDir).
+4. Open: Replace BLAME with Magnification/Minimization in CognitiveDistortion if
+   clinical review requires strict spec alignment.
 ```
 
 ### 🟢 Task 5.2: Behavioral Activation (BA) Integration
