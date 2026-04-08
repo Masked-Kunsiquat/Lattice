@@ -44,12 +44,15 @@ import java.util.UUID
 class LlmOrchestrator(
     private val nanoProvider: LlmProvider,
     private val localFallbackProvider: LlmProvider,
-    private val cloudProvider: LlmProvider,
+    private val cloudProvider: LlmProvider? = null,
     private val transitEventDao: TransitEventDao,
     val cloudEnabled: Boolean = false,
     private val piiDetector: ((String) -> Boolean)? = null
 ) {
     init {
+        require(!cloudEnabled || cloudProvider != null) {
+            "cloudProvider must be supplied when cloudEnabled=true."
+        }
         require(!cloudEnabled || piiDetector != null) {
             "piiDetector must be provided when cloudEnabled=true. " +
             "Pass { false } to explicitly opt out of PII checking only if prompts are pre-masked."
@@ -90,7 +93,8 @@ class LlmOrchestrator(
     private suspend fun selectProvider(): LlmProvider {
         if (nanoProvider.isAvailable()) return nanoProvider
         if (localFallbackProvider.isAvailable()) return localFallbackProvider
-        if (cloudEnabled) return cloudProvider
+        // cloudProvider is non-null here: init block enforces this when cloudEnabled=true.
+        if (cloudEnabled && cloudProvider != null) return cloudProvider
         // No provider available and cloud not enabled — return localFallback which will
         // emit LlmResult.Error explaining the model is not bundled.
         return localFallbackProvider

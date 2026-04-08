@@ -84,43 +84,123 @@ DONE
 
 ---
 
-## Phase 4: The Interface (Visualizing the Logic)
+## Phase 4: The Interface (Visualizing the Logic) ✅
 
-### 🟢 Task 4.1: The 2D Mood Grid
+### ✅ Task 4.1: The 2D Mood Grid
 ```markdown
 # Task: Implement the 2D Mood Grid UI
-Build the interactive emotional input tool in the `:app` module.
-1. **Canvas:** Create `MoodGrid.kt` using Jetpack Compose `Canvas`.
-2. **Math:** Map 2D touch coordinates to (-1.0, 1.0) for Valence and Arousal.
-3. **Mapping:** Link touch updates to `CircumplexMapper.getLabel()` for real-time feedback.
-4. **Visuals:** Add axis labels ("Pleasant", "High Energy", etc.) and a glowing selector dot.
+DONE — commit a15198f
+- MoodGrid.kt: Compose Canvas with quadrant tint backgrounds (amber/green/blue-grey/red),
+  axis lines, and a BlurMaskFilter glow dot for the selector.
+- Touch & drag handled via awaitEachGesture / awaitFirstDown (no dual-pointerInput conflicts).
+- Raw pixel offset mapped to valence ∈ [-1,1] (X) and arousal ∈ [-1,1] (Y, inverted).
+- CircumplexMapper.getLabel() called on every pointer event for real-time MoodLabel feedback.
+- Axis labels (High/Low Energy, Pleasant/Unpleasant) as rotated Text composables outside the canvas.
+- Current MoodLabel displayed below; placeholder text shown until first touch.
+- Added :core-logic dependency to :app module.
 ```
 
-### 🟢 Task 4.2: Privacy-Aware Journal Editor
+### ✅ Task 4.2: Privacy-Aware Journal Editor
 ```markdown
 # Task: Build the Privacy-Aware Editor
-1. **UI:** Create a `JournalEditorScreen` with a Material 3 `TextField`.
-2. **Privacy Highlighting:** Implement a VisualTransformation that highlights masked PII
-   placeholders (e.g., [PERSON_UUID]) in a specific color.
-3. **Privacy Border:** Implement a dynamic UI border/background:
-   - Blue  = Processing Locally  (PrivacyLevel.LocalOnly)
-   - Amber = Cloud Model Selected (PrivacyLevel.CloudTransit)
-   Observe LlmOrchestrator.privacyState StateFlow.
-4. **Integration:** Connect the MoodGrid result and Text result to JournalRepository.saveEntry().
+DONE
+- LatticeApplication.kt: manual DI container — Room DB, EmbeddingProvider, JournalRepository,
+  LlmOrchestrator all lazily wired; embeddingProvider.initialize() called in onCreate().
+  **DI evolution note:** manual lazy wiring is intentional for Phase 4 (one ViewModel, no
+  circular deps, no test pain yet). Migrate to Hilt (best for multi-module Android, strong
+  AS tooling) or Koin (lighter, KMP-friendly) if any of these signals appear: multiple
+  ViewModels needing the same deps, factory boilerplate growing, test setup requiring manual
+  wiring, or cyclic dependency errors. Action: open a migration spike ticket at that point.
+- PiiHighlightTransformation.kt: VisualTransformation matching [PERSON_UUID] placeholders
+  via regex; applies tertiary color + 15% alpha background tint inline in the TextField.
+- JournalEditorViewModel.kt: exposes orchestrator.privacyState StateFlow; save() calls
+  JournalRepository.saveEntry() from viewModelScope; saved pulse state resets after UI ack.
+- JournalEditorScreen.kt: animateColorAsState transitions the OutlinedTextField border
+  between LocalBlue (#1976D2) and CloudAmber (#FF8F00) over 600 ms; privacy pill at top
+  shows current provider label; Save button gated on non-blank text + mood selection.
+- MainActivity updated to cast Application → LatticeApplication and inject ViewModel factory.
+- Added :core-data dependency to :app module.
 ```
 
 ---
 
 ## Phase 5: The Reframing Engine (CBT)
 
-### 🟢 Task 5.1: Distortion Detection & !reframe
+> **Strategy:** All reframing runs locally via `LocalFallbackProvider` (Qwen-1.5B ONNX).
+> `NanoProvider` and `CloudProvider` are excluded from the reframe routing path.
+> No reframe content — masked or otherwise — ever leaves the device.
+
+### 🟢 Task 5.1: Qwen-Specific Prompt Engineering
 ```markdown
-# Task: Implement the CBT Reframing Flow
-1. **Detection:** DistortionAnalyzer — CbtLogic.detectDistortions() is already wired into
-   saveEntry(). Extend with more distortion rules as needed.
-2. **Command:** Implement the "!reframe" trigger logic — route masked journal content
-   through LlmOrchestrator.process(prompt, operationType="reframe").
-3. **RAG Integration:** When reframing, use SearchRepository.findSimilarEntries() to pull
-   "Evidence for the Contrary" (positive past entries about the mentioned person)
-   and inject as context into the LLM prompt.
+# Task: CbtPromptBuilder — Qwen-1.5B Prompt Formatting
+Deliverables:
+- CbtPromptBuilder.kt (core-logic): pure function object, no Android deps.
+  - build(maskedText: String, distortions: List<CbtDistortion>, evidence: List<String>): String
+  - Formats a structured <|im_start|>/<|im_end|> ChatML prompt (Qwen native format).
+  - System turn: instructs Qwen to act as a CBT coach, never reveal PII placeholders,
+    output a reframe in ≤ 3 sentences.
+  - Evidence turn: injects "Evidence for the Contrary" block when evidence list non-empty.
+  - User turn: masked journal text + detected distortion labels.
+  - Distortion coverage: Catastrophizing, Black-and-White Thinking, Mind Reading,
+    Overgeneralization, Emotional Reasoning (maps to CbtDistortion enum).
+- Unit tests (5): empty evidence path, multi-distortion label formatting,
+  placeholder passthrough (no UUID stripping), max-length guard, golden-string snapshot.
+```
+
+### 🟢 Task 5.2: Semantic Evidence RAG
+```markdown
+# Task: Positive-Valence Evidence Retrieval in SearchRepository
+Deliverables:
+- SearchRepository.findEvidenceEntries(
+      placeholders: Set<String>,
+      minValence: Float = 0.5f,
+      limit: Int = 5
+  ): Flow<List<JournalEntry>>
+  - Fetches entries where valence > minValence (positive quadrant only).
+  - Filters to entries whose maskedContent contains at least one placeholder from the set
+    (same person/entity as current entry — cross-entry evidence anchoring).
+  - Ranks by cosine similarity to the current entry's embedding (reuses existing
+    in-memory cosine logic from findSimilarEntries).
+  - Zero-vector entries excluded.
+- JournalDao: add getEntriesWithMinValence(minValence: Float): List<JournalEntry>
+  (suspend, one-shot; drives the positive-only pre-filter before cosine ranking).
+- Unit tests (4): valence gate enforced, placeholder match required, cosine ranking order,
+  limit capping.
+```
+
+### 🟢 Task 5.3: !reframe Command Trigger & Stream
+```markdown
+# Task: !reframe Interception, LocalFallbackProvider Routing, UI Stream
+Deliverables:
+- JournalEditorViewModel:
+  - Detect trailing "!reframe" token in live text via regex; strip it before save.
+  - triggerReframe(): collects findEvidenceEntries(), calls CbtPromptBuilder.build(),
+    routes prompt exclusively through LocalFallbackProvider (bypasses LlmOrchestrator
+    tier selection — no cloud path possible).
+  - New UiState fields: reframeState: ReframeState (Idle | Loading | Streaming(partial) | Done(text) | Error)
+  - Streams LlmResult.Token chunks into reframeState.Streaming; seals to Done on Complete.
+- ReframeBottomSheet.kt (app/ui): modal bottom sheet consuming reframeState.
+  - Skeleton shimmer while Loading; token-by-token text append while Streaming.
+  - "Apply" action: appends reframed text below original in editor field.
+  - "Dismiss" resets reframeState to Idle.
+- LocalFallbackProvider: wire real ONNX inference call when model asset present;
+  retain stub/scaffold behaviour (emitting placeholder tokens) when asset absent.
+- Unit tests (3): !reframe stripped from saved text, cloud provider never invoked,
+  Streaming → Done state transition.
+```
+
+### 🟢 Task 5.4: Room Schema Update & Audit Trail
+```markdown
+# Task: JournalEntry reframedContent Column + TransitEvent Logging
+Deliverables:
+- JournalEntry entity: add reframedContent: String? = null column.
+- LatticeDatabase migration v3 → v4:
+  ALTER TABLE journal_entries ADD COLUMN reframed_content TEXT;
+- JournalDao: updateReframedContent(entryId: String, content: String) suspend fun.
+- JournalEditorViewModel: on "Apply", call updateReframedContent() and log a
+  TransitEvent(provider="local_qwen", operationType="reframe", entryId=...) —
+  timestamp + provider only, no content written to audit trail.
+- TransitEvent entity: add operationType: String column (migration v3→v4 same block).
+- Unit tests (3): migration no-op for null reframedContent, TransitEvent logged on apply,
+  TransitEvent NOT logged on dismiss.
 ```
