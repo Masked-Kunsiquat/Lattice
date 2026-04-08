@@ -19,6 +19,8 @@ class LatticeApplication : Application() {
 
     val embeddingProvider by lazy { EmbeddingProvider() }
 
+    val localFallbackProvider by lazy { LocalFallbackProvider(this) }
+
     val journalRepository by lazy {
         JournalRepository(
             journalDao = database.journalDao(),
@@ -30,7 +32,7 @@ class LatticeApplication : Application() {
     val llmOrchestrator by lazy {
         LlmOrchestrator(
             nanoProvider = NanoProvider(this),
-            localFallbackProvider = LocalFallbackProvider(this),
+            localFallbackProvider = localFallbackProvider,
             transitEventDao = database.transitEventDao(),
             cloudEnabled = false,
             // cloudProvider omitted: cloud routing is disabled by default.
@@ -41,5 +43,9 @@ class LatticeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         embeddingProvider.initialize(this)
+        // Kick off the one-time asset→filesDir copy + ONNX session open in the background.
+        // isAvailable() lazily triggers this too, but doing it eagerly avoids a multi-second
+        // stall on the first reframe request after install/update.
+        Thread { localFallbackProvider.initialize() }.start()
     }
 }
