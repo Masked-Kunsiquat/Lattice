@@ -1,5 +1,7 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
+import androidx.room.withTransaction
+import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PhoneNumberDao
 import com.github.maskedkunisquat.lattice.core.data.model.Person
@@ -17,6 +19,7 @@ data class PersonWithPhones(
 )
 
 class PeopleRepository(
+    private val database: LatticeDatabase,
     private val personDao: PersonDao,
     private val phoneNumberDao: PhoneNumberDao
 ) {
@@ -43,9 +46,11 @@ class PeopleRepository(
     }
 
     suspend fun savePerson(person: Person, phoneNumbers: List<PhoneNumber>) {
-        personDao.insertPerson(person)
-        phoneNumberDao.deleteByPersonId(person.id)
-        phoneNumbers.forEach { phoneNumberDao.insertPhoneNumber(it) }
+        database.withTransaction {
+            personDao.insertPerson(person)
+            phoneNumberDao.deleteByPersonId(person.id)
+            phoneNumbers.forEach { phoneNumberDao.insertPhoneNumber(it) }
+        }
     }
 
     /**
