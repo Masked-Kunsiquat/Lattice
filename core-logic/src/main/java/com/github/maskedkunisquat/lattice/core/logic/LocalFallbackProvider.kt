@@ -82,9 +82,13 @@ class LocalFallbackProvider(
                 loadArchConfig()
                 copyAssetsToFilesDir()
                 val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
-                session = createSession(modelPath)
+                val newSession = createSession(modelPath)
                 logSessionInfo()
                 tokenizer.initialize()
+                // Assign only after both session AND tokenizer are ready;
+                // if tokenizer.initialize() throws, session stays null and
+                // isAvailable() correctly returns false.
+                session = newSession
             } catch (e: Exception) {
                 Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
             }
