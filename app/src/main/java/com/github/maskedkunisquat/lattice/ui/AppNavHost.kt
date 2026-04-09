@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -82,12 +83,14 @@ fun AppNavHost(app: LatticeApplication) {
                 val vm: JournalEditorViewModel = viewModel(
                     factory = JournalEditorViewModel.factory(app),
                 )
-                JournalEditorScreen(viewModel = vm)
+                Box(Modifier.fillMaxSize().testTag("screen:editor")) {
+                    JournalEditorScreen(viewModel = vm)
+                }
             }
 
             // TODO(6.7): replace with JournalHistoryScreen
             composable("history") {
-                PlaceholderScreen("History")
+                PlaceholderScreen("History", Modifier.testTag("screen:history"))
             }
 
             // TODO(6.7): load entry by id, open editor in edit mode
@@ -95,31 +98,33 @@ fun AppNavHost(app: LatticeApplication) {
                 val vm: JournalEditorViewModel = viewModel(
                     factory = JournalEditorViewModel.factory(app),
                 )
-                JournalEditorScreen(viewModel = vm)
+                Box(Modifier.fillMaxSize().testTag("screen:editor")) {
+                    JournalEditorScreen(viewModel = vm)
+                }
             }
 
             // TODO(6.5): replace with SettingsScreen
             composable("settings") {
-                PlaceholderScreen("Settings")
+                PlaceholderScreen("Settings", Modifier.testTag("screen:settings"))
             }
 
             // TODO(6.6): replace with AuditTrailScreen
             composable("settings/audit") {
-                PlaceholderScreen("Audit Trail")
+                PlaceholderScreen("Audit Trail", Modifier.testTag("screen:audit"))
             }
 
             // TODO(6.5): replace with ActivityHierarchyScreen
             composable("settings/activities") {
-                PlaceholderScreen("Behavioral Activation")
+                PlaceholderScreen("Behavioral Activation", Modifier.testTag("screen:activities"))
             }
         }
     }
 }
 
 @Composable
-private fun PlaceholderScreen(title: String) {
+private fun PlaceholderScreen(title: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         Text(title, style = MaterialTheme.typography.headlineMedium)
