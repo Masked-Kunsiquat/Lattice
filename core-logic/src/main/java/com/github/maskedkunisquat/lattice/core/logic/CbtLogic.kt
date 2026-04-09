@@ -2,9 +2,16 @@ package com.github.maskedkunisquat.lattice.core.logic
 
 object CbtLogic {
     private val allOrNothingWords = setOf("always", "never", "everyone", "everybody", "nobody", "none", "everything", "nothing")
+    private val catastrophizingWords = setOf("disaster", "catastrophe", "catastrophic", "catastrophizing", "catastrophising", "ruined", "ruin", "destroyed", "hopeless", "unbearable", "terrible", "horrible", "awful", "worst", "devastating", "doomed", "irreparable", "end")
+    private val negationWords = setOf("not", "no", "never", "n't")
 
     private val rules: Map<String, (List<String>) -> Boolean> = mapOf(
-        "All-or-Nothing" to { words -> words.any { it in allOrNothingWords } }
+        "All-or-Nothing" to { words -> words.any { it in allOrNothingWords } },
+        "Catastrophizing" to { words ->
+            words.indices.any { i ->
+                words[i] in catastrophizingWords && (i == 0 || words[i - 1] !in negationWords)
+            }
+        }
     )
 
     /**
