@@ -46,7 +46,7 @@ class SeedManagerTest {
     // ── parseSeed ─────────────────────────────────────────────────────────────
 
     @Test
-    fun `parseSeed - parses person and 30 entries`() {
+    fun parseSeed_parsesPersonAnd30Entries() {
         val seed = seedManager.parseSeed(minimalJson(entryCount = 30))
         assertEquals(1, seed.people.size)
         assertEquals(30, seed.journalEntries.size)
@@ -54,14 +54,13 @@ class SeedManagerTest {
     }
 
     @Test
-    fun `parseSeed - parses mood logs when present`() {
-        val json = minimalJson(entryCount = 30, moodLogCount = 3)
-        val seed = seedManager.parseSeed(json)
+    fun parseSeed_parsesMoodLogsWhenPresent() {
+        val seed = seedManager.parseSeed(minimalJson(entryCount = 30, moodLogCount = 3))
         assertEquals(3, seed.moodLogs.size)
     }
 
     @Test
-    fun `parseSeed - optional fields default correctly`() {
+    fun parseSeed_optionalFieldsDefaultCorrectly() {
         val seed = seedManager.parseSeed(minimalJson(entryCount = 30))
         val entry = seed.journalEntries[0]
         assertEquals(PERSON_ID, seed.people[0].id)
@@ -73,17 +72,17 @@ class SeedManagerTest {
     // ── validateSeed ──────────────────────────────────────────────────────────
 
     @Test(expected = IllegalArgumentException::class)
-    fun `validateSeed - fewer than 30 entries throws`() {
+    fun validateSeed_fewerThan30EntriesThrows() {
         seedManager.validateSeed(minimalSeed(entryCount = 29))
     }
 
     @Test
-    fun `validateSeed - exactly 30 entries passes`() {
+    fun validateSeed_exactly30EntriesPasses() {
         seedManager.validateSeed(minimalSeed(entryCount = 30))
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `validateSeed - unresolved placeholder throws`() {
+    fun validateSeed_unresolvedPlaceholderThrows() {
         val unknownId = UUID.randomUUID().toString()
         val seed = minimalSeed(entryCount = 30).copy(
             journalEntries = List(30) { i ->
@@ -95,7 +94,7 @@ class SeedManagerTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `validateSeed - raw first name in content throws`() {
+    fun validateSeed_rawFirstNameInContentThrows() {
         val seed = minimalSeed(entryCount = 30).copy(
             journalEntries = List(30) { i ->
                 if (i == 0) testEntry(1).copy(content = "Saw Alice at the pub.")
@@ -106,7 +105,7 @@ class SeedManagerTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `validateSeed - raw full name in content throws`() {
+    fun validateSeed_rawFullNameInContentThrows() {
         val seed = minimalSeed(entryCount = 30).copy(
             journalEntries = List(30) { i ->
                 if (i == 0) testEntry(1).copy(content = "Alice Doe was there.")
@@ -117,7 +116,7 @@ class SeedManagerTest {
     }
 
     @Test
-    fun `validateSeed - case-insensitive name check catches uppercase`() {
+    fun validateSeed_caseInsensitiveNameCheckCatchesUppercase() {
         var threw = false
         try {
             val seed = minimalSeed(entryCount = 30).copy(
@@ -136,20 +135,20 @@ class SeedManagerTest {
     // ── Seed lifecycle ────────────────────────────────────────────────────────
 
     @Test
-    fun `seedPersona - inserts 30 journal entries`() = runBlocking {
+    fun seedPersona_inserts30JournalEntries() = runBlocking {
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         assertEquals(30, db.journalDao().getAllEntries().size)
     }
 
     @Test
-    fun `seedPersona - inserts person record`() = runBlocking {
+    fun seedPersona_insertsPersonRecord() = runBlocking {
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         val persons = db.personDao().getPersons().first()
         assertEquals(1, persons.size)
     }
 
     @Test
-    fun `seedPersona - writes transit events for every entry`() = runBlocking {
+    fun seedPersona_writesTransitEventsForEveryEntry() = runBlocking {
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         val events = db.transitEventDao().getAllEvents()
         assertEquals(30, events.size)
@@ -158,28 +157,28 @@ class SeedManagerTest {
     }
 
     @Test
-    fun `seedPersona - transit events include mood logs`() = runBlocking {
+    fun seedPersona_transitEventsIncludeMoodLogs() = runBlocking {
         val seed = minimalSeed(30).copy(moodLogs = List(3) { testMoodLog(it + 1) })
         seedManager.seedPersona(SeedPersona.HOLMES, seed)
         assertEquals(33, db.transitEventDao().getAllEvents().size)
     }
 
     @Test
-    fun `getSeededEntryCount - zero before seed, 30 after`() = runBlocking {
+    fun getSeededEntryCount_zeroBeforeSeed30After() = runBlocking {
         assertEquals(0, seedManager.getSeededEntryCount(SeedPersona.HOLMES))
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         assertEquals(30, seedManager.getSeededEntryCount(SeedPersona.HOLMES))
     }
 
     @Test
-    fun `clearPersona - removes all journal entries`() = runBlocking {
+    fun clearPersona_removesAllJournalEntries() = runBlocking {
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         seedManager.clearPersona(SeedPersona.HOLMES)
         assertEquals(0, db.journalDao().getAllEntries().size)
     }
 
     @Test
-    fun `clearPersona - removes person record`() = runBlocking {
+    fun clearPersona_removesPersonRecord() = runBlocking {
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         seedManager.clearPersona(SeedPersona.HOLMES)
         val persons = db.personDao().getPersons().first()
@@ -187,35 +186,33 @@ class SeedManagerTest {
     }
 
     @Test
-    fun `clearPersona - removes transit events`() = runBlocking {
+    fun clearPersona_removesTransitEvents() = runBlocking {
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         seedManager.clearPersona(SeedPersona.HOLMES)
         assertEquals(0, db.transitEventDao().getAllEvents().size)
     }
 
     @Test
-    fun `clearPersona - resets manifest count to zero`() = runBlocking {
+    fun clearPersona_resetsManifestCountToZero() = runBlocking {
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         seedManager.clearPersona(SeedPersona.HOLMES)
         assertEquals(0, seedManager.getSeededEntryCount(SeedPersona.HOLMES))
     }
 
     @Test
-    fun `clearPersona - fallback to seed arg when manifest absent`() = runBlocking {
+    fun clearPersona_manifestAbsentCountIsZero() = runBlocking {
         // Seed, then wipe the manifest directly (simulates app reinstall / prefs clear).
-        val seed = minimalSeed(30)
-        seedManager.seedPersona(SeedPersona.HOLMES, seed)
+        seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         context.getSharedPreferences("lattice_seed_manager", Context.MODE_PRIVATE)
             .edit().remove(SeedPersona.HOLMES.name).commit()
 
         // clearPersona falls back to re-parsing; since no asset is available in core-data
-        // tests we verify the manifest-absent path by confirming getSeededEntryCount is 0
-        // (manifest was cleared) and the DB entries still exist (no asset to parse IDs from).
+        // tests we verify the manifest-absent path by confirming getSeededEntryCount is 0.
         assertEquals(0, seedManager.getSeededEntryCount(SeedPersona.HOLMES))
     }
 
     @Test
-    fun `seedPersona - re-seed after clear succeeds`() = runBlocking {
+    fun seedPersona_reseedAfterClearSucceeds() = runBlocking {
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         seedManager.clearPersona(SeedPersona.HOLMES)
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
