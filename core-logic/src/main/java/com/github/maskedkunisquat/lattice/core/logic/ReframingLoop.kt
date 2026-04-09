@@ -1,6 +1,8 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
 import android.util.Log
+import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
+import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -16,9 +18,15 @@ import kotlinx.coroutines.withContext
  * - Stage 1 ([runStage1AffectiveMap])       — Affective Mapping: valence/arousal → MoodLabel
  * - Stage 2 ([runStage2DiagnosisOfThought]) — DoT: facts-vs-beliefs → [CognitiveDistortion] list
  * - Stage 3 ([runStage3Intervention])        — Strategic Pivot: quadrant-aware CBT reframe
+ *
+ * @param activityHierarchyDao Optional DAO for the BA activity hierarchy. When provided
+ *   and Stage 3 selects [ReframeStrategy.BEHAVIORAL_ACTIVATION], the lowest-difficulty
+ *   activity (up to difficulty [BA_MAX_DIFFICULTY]) whose [ActivityHierarchy.valueCategory]
+ *   aligns with the entry context is injected into the prompt as a concrete first step.
  */
 class ReframingLoop(
     private val orchestrator: LlmOrchestrator,
+    private val activityHierarchyDao: ActivityHierarchyDao? = null,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
 
@@ -93,15 +101,37 @@ class ReframingLoop(
     ): Result<ReframeResult> = withContext(dispatcher) {
         runCatching {
             val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
+
+            // For Quadrant III (Behavioral Activation), look up the most accessible activity
+            // whose valueCategory aligns with the entry context.
+            val baActivity = if (strategy == ReframeStrategy.BEHAVIORAL_ACTIVATION) {
+                pickBaActivity(maskedText)
+            } else null
+
             val reframe = collectTokens(
                 orchestrator.process(
-                    buildInterventionPrompt(maskedText, strategy, diagnosis.distortions),
+                    buildInterventionPrompt(maskedText, strategy, diagnosis.distortions, baActivity),
                     "intervention"
                 )
             )
             if (reframe.isBlank()) throw IllegalStateException("Model returned an empty reframe.")
             ReframeResult(strategy = strategy, reframe = reframe)
         }
+    }
+
+    /**
+     * Fetches activities up to [BA_MAX_DIFFICULTY] and returns the first whose
+     * [ActivityHierarchy.valueCategory] appears as a word in [maskedText]. Falls back
+     * to the easiest activity overall if none match. Returns null when the DAO is absent
+     * or the hierarchy is empty — Stage 3 then proceeds without a BA suggestion block.
+     */
+    private suspend fun pickBaActivity(maskedText: String): ActivityHierarchy? {
+        val dao = activityHierarchyDao ?: return null
+        val candidates = dao.getActivitiesByMaxDifficulty(BA_MAX_DIFFICULTY)
+        if (candidates.isEmpty()) return null
+        val tokens = maskedText.lowercase().split(Regex("\\W+")).filter { it.isNotBlank() }.toSet()
+        return candidates.firstOrNull { it.valueCategory.lowercase() in tokens }
+            ?: candidates.first()
     }
 
     // ── Prompt builders ──────────────────────────────────────────────────────
@@ -154,6 +184,7 @@ class ReframingLoop(
         maskedText: String,
         strategy: ReframeStrategy,
         distortions: List<CognitiveDistortion>,
+        baActivity: ActivityHierarchy? = null,
     ): String {
         val distortionContext = if (distortions.isEmpty())
             "No specific cognitive distortions were identified."
@@ -172,16 +203,25 @@ class ReframingLoop(
                 "3. Probability calibration — help them assess the realistic likelihood " +
                     "of the feared outcome."
             )
-            ReframeStrategy.BEHAVIORAL_ACTIVATION -> Pair(
-                "You are a compassionate CBT therapist. The client is experiencing " +
-                "low-arousal negative emotions — depression, fatigue, or hopelessness. " +
-                "Guide them using Behavioral Activation and Evidence for the Contrary.",
-                "Generate a concise (2–4 sentence) CBT reframe using:\n" +
-                "1. Evidence for the contrary — identify specific evidence or past " +
-                    "experiences that challenge the negative belief.\n" +
-                "2. Behavioral activation — suggest one small, concrete action to break " +
+            ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
+                val baBlock = if (baActivity != null)
+                    "\n3. Concrete first step — suggest this specific activity from the " +
+                    "client's own hierarchy as the first step: \"${baActivity.taskName}\" " +
+                    "(value area: ${baActivity.valueCategory})."
+                else
+                    "\n3. Behavioral activation — suggest one small, concrete action to break " +
                     "the cycle and restore a sense of agency."
-            )
+                Pair(
+                    "You are a compassionate CBT therapist. The client is experiencing " +
+                    "low-arousal negative emotions — depression, fatigue, or hopelessness. " +
+                    "Guide them using Behavioral Activation and Evidence for the Contrary.",
+                    "Generate a concise (2–4 sentence) CBT reframe using:\n" +
+                    "1. Evidence for the contrary — identify specific evidence or past " +
+                        "experiences that challenge the negative belief.\n" +
+                    "2. Validate the difficulty without reinforcing hopelessness." +
+                    baBlock
+                )
+            }
             ReframeStrategy.STRENGTHS_AFFIRMATION -> Pair(
                 "You are a compassionate CBT therapist. The client is experiencing " +
                 "positive emotions. Help them consolidate and build on this state.",
@@ -310,6 +350,8 @@ class ReframingLoop(
 
     companion object {
         private const val TAG = "ReframingLoop"
+        /** Maximum activity difficulty included in the BA suggestion lookup (0–10 scale). */
+        internal const val BA_MAX_DIFFICULTY = 5
         // Both regexes tolerate optional spaces around `=` and an optional leading `-`.
         private val V_REGEX = Regex("""v\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
         private val A_REGEX = Regex("""a\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)

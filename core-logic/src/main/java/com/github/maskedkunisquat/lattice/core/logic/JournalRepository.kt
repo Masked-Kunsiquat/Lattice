@@ -81,6 +81,16 @@ class JournalRepository(
     }
 
     /**
+     * Persists the CBT reframe text the user accepted via the "Apply" action.
+     * Writes to the [reframedContent] column of the entry identified by [entryId].
+     * No additional [TransitEvent] is logged here — one was already written by
+     * the reframe pipeline at generation time.
+     */
+    suspend fun updateReframedContent(entryId: String, content: String) {
+        journalDao.updateReframedContent(entryId, content)
+    }
+
+    /**
      * Returns [text] with all known people's names replaced by [PERSON_uuid] placeholders.
      * Used by callers that need masked text without persisting an entry (e.g. the reframe pipeline).
      */
