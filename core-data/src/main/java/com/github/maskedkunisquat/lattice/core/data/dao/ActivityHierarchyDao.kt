@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 
 @Dao
 interface ActivityHierarchyDao {

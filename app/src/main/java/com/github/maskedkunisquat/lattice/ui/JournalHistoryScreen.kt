@@ -138,7 +138,7 @@ private fun EntryCard(
                 },
                 headlineContent = {
                     Text(
-                        entry.content?.let { if (it.length > 80) "${it.take(80)}…" else it } ?: "",
+                        entry.content?.let { if (it.length > 80) "${it.take(80)}…" else it } ?: "Mood log (no text)",
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )

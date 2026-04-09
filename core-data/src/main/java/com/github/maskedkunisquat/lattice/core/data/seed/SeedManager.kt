@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.lattice.core.data.seed
 
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.util.Base64
 import androidx.room.withTransaction
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
@@ -33,10 +34,20 @@ private val typeConverters = LatticeTypeConverters()
  * placeholders. [seedPersona] enforces this by scanning for raw names before any
  * DB writes occur.
  */
+private const val PREFS_NAME = "lattice_seed_manager"
+private const val EXPECTED_EMBEDDING_BYTES = 384 * Float.SIZE_BYTES // 1536
+
+private data class SeedManifest(
+    val entryIds: List<String>,
+    val personIds: List<String>,
+    val activityIds: List<String>
+)
+
 class SeedManager(
     private val db: LatticeDatabase,
     private val context: Context
 ) {
+    private val prefs by lazy { context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
 
     /**
      * Parses and inserts the full dataset for [persona] into the database.
@@ -52,6 +63,12 @@ class SeedManager(
 
         val seed = loadSeed(persona)
         validateSeed(seed)
+
+        val manifest = SeedManifest(
+            entryIds = seed.journalEntries.map { it.id } + seed.moodLogs.map { it.id },
+            personIds = seed.people.map { it.id },
+            activityIds = seed.activityHierarchy.map { it.id }
+        )
 
         db.withTransaction {
             // 1. People
@@ -110,34 +127,46 @@ class SeedManager(
                 )
             }
         }
+
+        persistManifest(persona, manifest)
     }
 
     /**
      * Removes all entities seeded for [persona] from the database.
      *
-     * Loads the seed file to recover the exact IDs. Deletion order:
-     * transit events → journal entries (cascades mentions) → people (cascades mentions
-     * and phone numbers) → activity hierarchy.
+     * Uses the [SeedManifest] persisted at seed time (via [persistManifest]) so deletion
+     * is not sensitive to changes in the seed file after seeding occurred. Falls back to
+     * re-reading the seed file if the manifest is absent (e.g., app reinstall, prefs cleared).
+     *
+     * Deletion order: transit events → journal entries (cascades mentions) → people
+     * (cascades mentions and phone numbers) → activity hierarchy.
      */
     suspend fun clearPersona(persona: SeedPersona) = withContext(Dispatchers.IO) {
-        val seed = loadSeed(persona)
+        val manifest = loadManifest(persona) ?: run {
+            val seed = loadSeed(persona)
+            SeedManifest(
+                entryIds = seed.journalEntries.map { it.id } + seed.moodLogs.map { it.id },
+                personIds = seed.people.map { it.id },
+                activityIds = seed.activityHierarchy.map { it.id }
+            )
+        }
 
         db.withTransaction {
-            val entryIds = seed.journalEntries.map { it.id } + seed.moodLogs.map { it.id }
-
             // Transit events first — no FK constraint on entryId column
-            entryIds.forEach { db.transitEventDao().deleteEventsForEntry(it) }
+            manifest.entryIds.forEach { db.transitEventDao().deleteEventsForEntry(it) }
 
             // Journal entries — FK CASCADE removes associated Mentions
-            entryIds.forEach { db.journalDao().deleteEntryById(UUID.fromString(it)) }
+            manifest.entryIds.forEach { db.journalDao().deleteEntryById(UUID.fromString(it)) }
 
             // People — FK CASCADE removes associated Mentions and PhoneNumbers
-            seed.people.forEach { db.personDao().deletePersonById(UUID.fromString(it.id)) }
+            manifest.personIds.forEach { db.personDao().deletePersonById(UUID.fromString(it)) }
 
-            seed.activityHierarchy.forEach {
-                db.activityHierarchyDao().deleteActivityById(UUID.fromString(it.id))
+            manifest.activityIds.forEach {
+                db.activityHierarchyDao().deleteActivityById(UUID.fromString(it))
             }
         }
+
+        clearManifest(persona)
     }
 
     // --- Seed loading ---
@@ -254,6 +283,36 @@ class SeedManager(
 
     private fun <T> JSONArray.parseList(transform: (JSONObject) -> T): List<T> =
         List(length()) { i -> transform(getJSONObject(i)) }
+
+    // --- Manifest persistence (SharedPreferences) ---
+
+    private fun persistManifest(persona: SeedPersona, manifest: SeedManifest) {
+        val obj = JSONObject().apply {
+            put("entryIds", JSONArray(manifest.entryIds))
+            put("personIds", JSONArray(manifest.personIds))
+            put("activityIds", JSONArray(manifest.activityIds))
+        }
+        prefs.edit().putString(persona.name, obj.toString()).apply()
+    }
+
+    private fun loadManifest(persona: SeedPersona): SeedManifest? {
+        val raw = prefs.getString(persona.name, null) ?: return null
+        return try {
+            val obj = JSONObject(raw)
+            fun JSONArray.toStringList() = List(length()) { getString(it) }
+            SeedManifest(
+                entryIds = obj.getJSONArray("entryIds").toStringList(),
+                personIds = obj.getJSONArray("personIds").toStringList(),
+                activityIds = obj.getJSONArray("activityIds").toStringList()
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun clearManifest(persona: SeedPersona) {
+        prefs.edit().remove(persona.name).apply()
+    }
 }
 
 // --- Entity mapping (file-private, outside class to keep class body lean) ---
@@ -268,6 +327,16 @@ private fun RawPerson.toPerson() = Person(
     isFavorite = isFavorite
 )
 
+private fun decodeEmbeddingSafely(base64: String): FloatArray {
+    return try {
+        val bytes = Base64.decode(base64, Base64.DEFAULT)
+        if (bytes.size != EXPECTED_EMBEDDING_BYTES) return FloatArray(384)
+        typeConverters.toFloatArray(bytes) ?: FloatArray(384)
+    } catch (_: IllegalArgumentException) {
+        FloatArray(384)
+    }
+}
+
 private fun RawJournalEntry.toJournalEntry() = JournalEntry(
     id = UUID.fromString(id),
     timestamp = timestamp,
@@ -275,8 +344,7 @@ private fun RawJournalEntry.toJournalEntry() = JournalEntry(
     valence = valence,
     arousal = arousal,
     moodLabel = moodLabel,
-    embedding = typeConverters.toFloatArray(Base64.decode(embeddingBase64, Base64.DEFAULT))
-        ?: FloatArray(384),
+    embedding = decodeEmbeddingSafely(embeddingBase64),
     cognitiveDistortions = cognitiveDistortions,
     reframedContent = reframedContent
 )
