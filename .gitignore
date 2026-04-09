@@ -17,6 +17,16 @@ local.properties
 # Project exclude paths
 **/build/
 
+# Llama-3.2-3B ONNX model files — fetch with: ./gradlew downloadModels
+# Source of truth: https://huggingface.co/masked-kunsiquat/Llama-3.2-3B-Instruct-Q4
+app/src/main/assets/model_q4.onnx
+app/src/main/assets/model_q4.onnx_data
+app/src/main/assets/model_q4.onnx_data_1
+app/src/main/assets/tokenizer.json
+app/src/main/assets/tokenizer_config.json
+app/src/main/assets/config.json
+app/src/main/assets/generation_config.json
+
 # Misc Agent Files
 .agent/
 .idea/

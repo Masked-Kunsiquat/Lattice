@@ -132,12 +132,28 @@ Seed JSON files currently contain zero-vector placeholders (`embeddingBase64` = 
 
 ## Assets
 
-Large files in `app/src/main/assets/` (≈3.3 GB total) are **not committed to git**:
+**Llama-3.2-3B model files** in `app/src/main/assets/` are gitignored. Fetch them once with:
 
-- `model_q4.onnx` + `model_q4.onnx_data` + `model_q4.onnx_data_1` — Llama-3.2-3B ONNX shards
-- `tokenizer.json` — BPE tokenizer (11.5 MB)
+```bash
+./gradlew downloadModels
+```
 
-`core-logic/src/main/assets/` contains the embedding model (`snowflake-arctic-embed-xs.onnx`, 23 MB) and `vocab.txt` — these **are** committed.
+| File | Size | Source |
+|---|---|---|
+| `model_q4.onnx` | 259 KB | HuggingFace (Llama repo) |
+| `model_q4.onnx_data` | 2.1 GB | HuggingFace (Llama repo) |
+| `model_q4.onnx_data_1` | 1.3 GB | HuggingFace (Llama repo) |
+| `tokenizer.json` | 11.5 MB | HuggingFace (Llama repo) |
+| `tokenizer_config.json` | 57 KB | HuggingFace (Llama repo) |
+| `config.json` | 1 KB | HuggingFace (Llama repo) |
+| `generation_config.json` | < 1 KB | HuggingFace (Llama repo) |
+
+HuggingFace repos:
+- **Llama model**: `https://huggingface.co/masked-kunsiquat/Llama-3.2-3B-Instruct-Q4`
+- **Embedding model**: `https://huggingface.co/masked-kunsiquat/snowflake-arctic-embed-xs`
+- **Clinical persona seeds (dataset)**: `https://huggingface.co/datasets/masked-kunsiquat/clinical-personas`
+
+`core-logic/src/main/assets/` contains the embedding model (`snowflake-arctic-embed-xs.onnx`, 23 MB) and `vocab.txt` — these **are** committed to git (small enough, needed by `:core-logic` tests without any download step).
 
 ---
 
