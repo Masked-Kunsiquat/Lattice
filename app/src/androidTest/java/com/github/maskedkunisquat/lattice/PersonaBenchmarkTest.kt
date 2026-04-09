@@ -287,14 +287,10 @@ class PersonaBenchmarkTest {
 
         Log.i(TAG_BENCHMARK, "$persona: step 4 — quadrant routing")
         // ── Step 4: Quadrant routing (deterministic) ──────────────────────────
-        val computedStrategy = when {
-            (target.valence ?: 0f) < 0f && (target.arousal ?: 0f) >= 0f ->
-                ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING
-            (target.valence ?: 0f) < 0f && (target.arousal ?: 0f) < 0f  ->
-                ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION
-            else ->
-                ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION
-        }
+        val computedStrategy = ReframingLoop.selectStrategy(
+            valence = target.valence ?: 0f,
+            arousal = target.arousal ?: 0f,
+        )
         assertEquals("$persona quadrant strategy mismatch", expectedStrategy, computedStrategy)
         Log.i(TAG_INFERENCE, "⚖️ $persona quadrant strategy: $computedStrategy ✓")
 

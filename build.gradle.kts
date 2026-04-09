@@ -61,37 +61,42 @@ fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
         val conn = java.net.URI(location).toURL()
             .openConnection() as java.net.HttpURLConnection
         conn.instanceFollowRedirects = false
+        conn.connectTimeout = 30_000
+        conn.readTimeout    = 60_000
         conn.setRequestProperty("User-Agent", "Gradle/Lattice-downloadModels")
-        conn.connect()
-        when (val code = conn.responseCode) {
-            200 -> {
-                val total = conn.contentLengthLong
-                var downloaded = 0L
-                var lastMilestone = 0L
-                val milestone = 200 * 1024 * 1024L // log every 200 MB
-                conn.inputStream.buffered(8 * 1024 * 1024).use { src ->
-                    dest.outputStream().use { out ->
-                        val buf = ByteArray(1024 * 1024)
-                        var n: Int
-                        while (src.read(buf).also { n = it } != -1) {
-                            out.write(buf, 0, n)
-                            downloaded += n
-                            if (total > 0 && downloaded - lastMilestone >= milestone) {
-                                lastMilestone = downloaded
-                                val pct = downloaded * 100 / total
-                                logger.lifecycle("      $pct%  (${downloaded.toHuman()} / ${total.toHuman()})")
+        try {
+            conn.connect()
+            when (val code = conn.responseCode) {
+                200 -> {
+                    val total = conn.contentLengthLong
+                    var downloaded = 0L
+                    var lastMilestone = 0L
+                    val milestone = 200 * 1024 * 1024L // log every 200 MB
+                    conn.inputStream.buffered(8 * 1024 * 1024).use { src ->
+                        dest.outputStream().use { out ->
+                            val buf = ByteArray(1024 * 1024)
+                            var n: Int
+                            while (src.read(buf).also { n = it } != -1) {
+                                out.write(buf, 0, n)
+                                downloaded += n
+                                if (total > 0 && downloaded - lastMilestone >= milestone) {
+                                    lastMilestone = downloaded
+                                    val pct = downloaded * 100 / total
+                                    logger.lifecycle("      $pct%  (${downloaded.toHuman()} / ${total.toHuman()})")
+                                }
                             }
                         }
                     }
+                    return
                 }
-                return
+                301, 302, 303, 307, 308 -> {
+                    location = conn.getHeaderField("Location")
+                        ?: throw GradleException("Redirect $code with no Location header (attempt $attempt) for $url")
+                }
+                else -> throw GradleException("HTTP $code downloading $url")
             }
-            301, 302, 303, 307, 308 -> {
-                location = conn.getHeaderField("Location")
-                    ?: throw GradleException("Redirect $code with no Location header (attempt $attempt) for $url")
-                conn.disconnect()
-            }
-            else -> throw GradleException("HTTP $code downloading $url")
+        } finally {
+            conn.disconnect()
         }
     }
     throw GradleException("Too many redirects for $url")

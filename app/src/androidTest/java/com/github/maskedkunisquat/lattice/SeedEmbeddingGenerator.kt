@@ -83,7 +83,8 @@ class SeedEmbeddingGenerator {
                 ""
             }
             val embedding = runBlocking { provider.generateEmbedding(text) }
-            val bytes = converters.fromFloatArray(embedding)!!
+            val bytes = converters.fromFloatArray(embedding)
+                ?: error("fromFloatArray returned null for entry $i (text length=${text.length})")
             entry.put("embeddingBase64", Base64.encodeToString(bytes, Base64.NO_WRAP))
             count++
             if (count % 10 == 0) Log.i(TAG, "  ... $count embeddings so far")
