@@ -289,7 +289,7 @@ Room.databaseBuilder(context, LatticeDatabase::class.java, "lattice.db")
 **Acceptance criteria:**
 - [ ] App cold-starts and reads/writes entries normally with SQLCipher enabled
 - [ ] DB file opened with SQLite CLI (unencrypted) returns an error
-- [ ] Key survives app restart (generated once, stored in EncryptedSharedPreferences)
+- [x] Key survives app restart (generated once, stored in EncryptedSharedPreferences)
 - [ ] Existing test suite passes (unit tests mock the DAO layer, unaffected by cipher)
 
 > **Note on migration:** Existing installs (unencrypted DB) need a one-time migration on upgrade.
