@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
@@ -91,18 +93,7 @@ fun SettingsScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.exportUri.collect { uri ->
-            context.startActivity(
-                Intent.createChooser(
-                    Intent(Intent.ACTION_SEND).apply {
-                        type = "application/json"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    },
-                    "Export Journal",
-                )
-            )
-        }
+        viewModel.exportShareIntent.collect { intent -> context.startActivity(intent) }
     }
 
     if (showCloudDialog) {
@@ -384,9 +375,12 @@ private fun ApiKeySection(
             visualTransformation = if (keyVisible) VisualTransformation.None
                                    else PasswordVisualTransformation(),
             trailingIcon = {
-                TextButton(onClick = { keyVisible = !keyVisible }) {
-                    Text(if (keyVisible) "Hide" else "Show",
-                        style = MaterialTheme.typography.labelSmall)
+                IconButton(onClick = { keyVisible = !keyVisible }) {
+                    Icon(
+                        imageVector = if (keyVisible) Icons.Default.VisibilityOff
+                                      else Icons.Default.Visibility,
+                        contentDescription = if (keyVisible) "Hide API key" else "Show API key",
+                    )
                 }
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),

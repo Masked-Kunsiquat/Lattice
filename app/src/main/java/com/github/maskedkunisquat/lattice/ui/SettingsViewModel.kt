@@ -3,7 +3,7 @@ package com.github.maskedkunisquat.lattice.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import android.net.Uri
+import android.content.Intent
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
@@ -43,20 +43,20 @@ class SettingsViewModel(
     private val _snackbarMessage = MutableSharedFlow<String>()
     val snackbarMessage = _snackbarMessage.asSharedFlow()
 
-    private val _exportUri = MutableSharedFlow<Uri>()
-    val exportUri = _exportUri.asSharedFlow()
+    private val _exportShareIntent = MutableSharedFlow<Intent>()
+    val exportShareIntent = _exportShareIntent.asSharedFlow()
 
     // API key state: true when a key is stored for the cloud_claude provider
-    private val _apiKeySaved = MutableStateFlow(cloudCredentialStore.hasApiKey("cloud_claude"))
+    private val _apiKeySaved = MutableStateFlow(cloudCredentialStore.hasApiKey(CLOUD_CLAUDE_PROVIDER))
     val apiKeySaved: StateFlow<Boolean> = _apiKeySaved.asStateFlow()
 
     fun setApiKey(key: String) {
-        cloudCredentialStore.setApiKey("cloud_claude", key.trim())
+        cloudCredentialStore.setApiKey(CLOUD_CLAUDE_PROVIDER, key.trim())
         _apiKeySaved.value = true
     }
 
     fun clearApiKey() {
-        cloudCredentialStore.clearApiKey("cloud_claude")
+        cloudCredentialStore.clearApiKey(CLOUD_CLAUDE_PROVIDER)
         _apiKeySaved.value = false
     }
 
@@ -101,7 +101,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 val uri = exportManager.exportToFile()
-                _exportUri.emit(uri)
+                _exportShareIntent.emit(exportManager.buildShareIntent(uri))
             } catch (e: Exception) {
                 _snackbarMessage.emit("Export failed: ${e.message}")
             }
@@ -109,6 +109,8 @@ class SettingsViewModel(
     }
 
     companion object {
+        const val CLOUD_CLAUDE_PROVIDER = "cloud_claude"
+
         fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =

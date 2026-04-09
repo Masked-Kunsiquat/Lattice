@@ -3,9 +3,10 @@ package com.github.maskedkunisquat.lattice.core.logic
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -39,10 +40,11 @@ class SettingsOrchestratorIntegrationTest {
     }
 
     private class FakeTransitEventDao : TransitEventDao {
-        val events = mutableListOf<TransitEvent>()
-        override suspend fun insertEvent(event: TransitEvent) { events.add(event) }
-        override suspend fun getAllEvents(): List<TransitEvent> = events.toList()
-        override fun getEventsFlow(): Flow<List<TransitEvent>> = flowOf(events.toList())
+        private val _events = MutableStateFlow<List<TransitEvent>>(emptyList())
+        val events: List<TransitEvent> get() = _events.value
+        override suspend fun insertEvent(event: TransitEvent) { _events.update { it + event } }
+        override suspend fun getAllEvents(): List<TransitEvent> = _events.value
+        override fun getEventsFlow(): Flow<List<TransitEvent>> = _events
         override suspend fun deleteEventsForEntry(entryId: String) = Unit
     }
 
