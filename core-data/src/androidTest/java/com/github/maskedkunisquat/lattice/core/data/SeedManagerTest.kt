@@ -60,13 +60,21 @@ class SeedManagerTest {
     }
 
     @Test
-    fun parseSeed_optionalFieldsDefaultCorrectly() {
+    fun parseSeed_withProvidedOptionalFields_parsesCorrectly() {
         val seed = seedManager.parseSeed(minimalJson(entryCount = 30))
         val entry = seed.journalEntries[0]
         assertEquals(PERSON_ID, seed.people[0].id)
         assertEquals(ZERO_EMBED, entry.embeddingBase64)
         assertTrue(entry.cognitiveDistortions.isNotEmpty())
         assertEquals(1, entry.mentions.size)
+    }
+
+    @Test
+    fun parseSeed_optionalEntryFieldsAbsent_defaultToEmpty() {
+        val seed = seedManager.parseSeed(minimalJson(entryCount = 30, includeOptionalEntryFields = false))
+        val entry = seed.journalEntries[0]
+        assertEquals(emptyList<String>(), entry.cognitiveDistortions)
+        assertEquals(emptyList<Any>(), entry.mentions)
     }
 
     // ── validateSeed ──────────────────────────────────────────────────────────
@@ -262,9 +270,16 @@ class SeedManagerTest {
         )
 
         /** Builds a minimal JSON string for parseSeed tests. */
-        private fun minimalJson(entryCount: Int, moodLogCount: Int = 0): String {
+        private fun minimalJson(
+            entryCount: Int,
+            moodLogCount: Int = 0,
+            includeOptionalEntryFields: Boolean = true
+        ): String {
             val entries = (1..entryCount).joinToString(",\n") { i ->
-                """{"id":"00000000-0000-0000-0000-${i.toString().padStart(12, '0')}","timestamp":${1700000000000L + i * 1000},"content":"Entry $i alongside [PERSON_$PERSON_ID].","valence":-0.5,"arousal":0.7,"moodLabel":"TENSE","embeddingBase64":"$ZERO_EMBED","cognitiveDistortions":["CATASTROPHIZING"],"mentions":[{"personId":"$PERSON_ID","source":"MANUAL","status":"CONFIRMED"}]}"""
+                val optionals = if (includeOptionalEntryFields)
+                    ""","cognitiveDistortions":["CATASTROPHIZING"],"mentions":[{"personId":"$PERSON_ID","source":"MANUAL","status":"CONFIRMED"}]"""
+                else ""
+                """{"id":"00000000-0000-0000-0000-${i.toString().padStart(12, '0')}","timestamp":${1700000000000L + i * 1000},"content":"Entry $i alongside [PERSON_$PERSON_ID].","valence":-0.5,"arousal":0.7,"moodLabel":"TENSE","embeddingBase64":"$ZERO_EMBED"$optionals}"""
             }
             val moodLogs = (1..moodLogCount).joinToString(",\n") { i ->
                 """{"id":"00000000-0000-0000-0000-1${i.toString().padStart(11, '0')}","timestamp":${1700100000000L + i * 1000},"valence":-0.3,"arousal":-0.4,"moodLabel":"FATIGUED"}"""
