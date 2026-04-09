@@ -156,7 +156,13 @@
       "cognitiveDistortions": [
         "Emotional Reasoning"
       ],
-      "mentions": []
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
     },
     {
       "id": "30000000-0003-0000-0000-000000000010",
@@ -203,7 +209,13 @@
       "cognitiveDistortions": [
         "Emotional Reasoning"
       ],
-      "mentions": []
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
     },
     {
       "id": "30000000-0003-0000-0000-000000000013",
@@ -251,7 +263,13 @@
         "Emotional Reasoning",
         "Catastrophizing"
       ],
-      "mentions": []
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
     },
     {
       "id": "30000000-0003-0000-0000-000000000016",
@@ -311,7 +329,13 @@
       "cognitiveDistortions": [
         "Emotional Reasoning"
       ],
-      "mentions": []
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
     },
     {
       "id": "30000000-0003-0000-0000-000000000020",
@@ -358,7 +382,13 @@
         "Emotional Reasoning",
         "Fortune Telling"
       ],
-      "mentions": []
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
     },
     {
       "id": "30000000-0003-0000-0000-000000000023",
@@ -444,7 +474,13 @@
       "cognitiveDistortions": [
         "Emotional Reasoning"
       ],
-      "mentions": []
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
     },
     {
       "id": "30000000-0003-0000-0000-000000000028",
@@ -458,7 +494,13 @@
         "Emotional Reasoning",
         "Labeling"
       ],
-      "mentions": []
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
     },
     {
       "id": "30000000-0003-0000-0000-000000000029",

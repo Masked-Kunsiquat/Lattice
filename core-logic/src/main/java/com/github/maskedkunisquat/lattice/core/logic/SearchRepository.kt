@@ -76,7 +76,7 @@ class SearchRepository(
     ): Flow<List<JournalEntry>> = flow {
         val candidates = journalDao.getEntriesWithMinValence(minValence)
         val results = candidates
-            .filter { entry -> val c = entry.content; placeholders.isEmpty() || (c != null && placeholders.any { it in c }) }
+            .filter { entry -> val c = entry.content; c != null && (placeholders.isEmpty() || placeholders.any { it in c }) }
             .take(limit)
         emit(results)
     }.flowOn(Dispatchers.Default)
