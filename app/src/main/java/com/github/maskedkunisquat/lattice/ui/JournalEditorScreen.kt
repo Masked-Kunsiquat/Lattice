@@ -2,13 +2,18 @@ package com.github.maskedkunisquat.lattice.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -17,11 +22,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
@@ -37,17 +44,44 @@ fun JournalEditorScreen(
 ) {
     val privacyState by viewModel.privacyState.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    JournalEditorContent(
-        privacyState = privacyState,
-        uiState = uiState,
-        onTextChanged = viewModel::onTextChanged,
-        onMoodChanged = viewModel::onMoodChanged,
-        onSave = viewModel::save,
-        onResetSaved = viewModel::resetSaved,
-        onApplyReframe = viewModel::applyReframe,
-        onDismissReframe = viewModel::dismissReframe,
-        modifier = modifier,
-    )
+    val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
+
+    Box(modifier = modifier.fillMaxSize()) {
+        JournalEditorContent(
+            privacyState = privacyState,
+            uiState = uiState,
+            onTextChanged = viewModel::onTextChanged,
+            onMoodChanged = viewModel::onMoodChanged,
+            onSave = viewModel::save,
+            onResetSaved = viewModel::resetSaved,
+            onApplyReframe = viewModel::applyReframe,
+            onDismissReframe = viewModel::dismissReframe,
+        )
+
+        AnimatedVisibility(
+            visible = modelLoadState == ModelLoadState.COPYING_SHARDS
+                   || modelLoadState == ModelLoadState.LOADING_SESSION,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    text = if (modelLoadState == ModelLoadState.COPYING_SHARDS)
+                        "Preparing local model…"
+                    else
+                        "Loading model session…",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+    }
 }
 
 // Stateless inner composable — all mutable state lives in the ViewModel.

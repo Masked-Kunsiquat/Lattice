@@ -11,6 +11,7 @@ import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
+import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
@@ -47,6 +48,7 @@ class JournalEditorViewModel(
     orchestrator: LlmOrchestrator,
     private val reframingLoop: ReframingLoop,
     private val transitEventDao: TransitEventDao,
+    val modelLoadState: StateFlow<ModelLoadState>,
 ) : ViewModel() {
 
     /** Drives the blue / amber privacy border in the UI. */
@@ -231,6 +233,7 @@ class JournalEditorViewModel(
                     orchestrator      = app.llmOrchestrator,
                     reframingLoop     = app.reframingLoop,
                     transitEventDao   = app.database.transitEventDao(),
+                    modelLoadState    = app.localFallbackProvider.modelLoadState,
                 ) as T
         }
     }

@@ -1,6 +1,6 @@
 # Implementation Roadmap: Seed-Data Engine & Persona-Driven Testing (Schema v8)
 
-> Last updated: 2026-04-09 — §1 complete, §2 complete, §3 complete, §4.1 complete  
+> Last updated: 2026-04-09 — §1–§4 complete  
 > Branch: `chore/seed-data`  
 > Codebase audit performed against current HEAD.
 
@@ -157,20 +157,16 @@ A Compose screen accessible only in `debug` builds. Gated via `BuildConfig.DEBUG
 - Navigation route `"settings/debug/seed"` registered in `AppNavHost`.
 - `SettingsScreen`: `BuildConfig.DEBUG`-gated "Debug › Seed Data" `ListItem` entry point; hidden from release builds.
 
-#### 4.2 ONNX Model Sharding Progress Indicator
+#### 4.2 ONNX Model Sharding Progress Indicator ✓
 
-`LocalFallbackProvider.initialize()` copies three files from assets to `filesDir`:
-- `model_q4.onnx`
-- `model_q4.onnx_data`
-- `model_q4.onnx_data_1`
+`LocalFallbackProvider.initialize()` copies three files from assets to `filesDir` on first launch before opening the ONNX session.
 
-This copy happens on first launch and blocks the ONNX session from opening. Currently there is no UI feedback during this process.
-
-**Implementation:**
-- Expose a `StateFlow<ModelLoadState>` from `LlmOrchestrator` (or `LocalFallbackProvider` directly).
-- `ModelLoadState` enum: `IDLE`, `COPYING_SHARDS`, `LOADING_SESSION`, `READY`, `ERROR`.
-- Show an indeterminate progress indicator in the home screen (or a splash/loading screen) while state is `COPYING_SHARDS` or `LOADING_SESSION`.
-- The `EmbeddingProvider` model (`snowflake-arctic-embed-xs.onnx`) is small and reads directly from assets — no copy needed, no progress indicator required.
+**Implemented:**
+- `ModelLoadState` enum in `LocalFallbackProvider`: `IDLE`, `COPYING_SHARDS`, `LOADING_SESSION`, `READY`, `ERROR`.
+- `LocalFallbackProvider.modelLoadState: StateFlow<ModelLoadState>` — transitions emitted directly inside `initialize()`: `IDLE` → `COPYING_SHARDS` → `LOADING_SESSION` → `READY` (or `ERROR`).
+- `JournalEditorViewModel` receives `modelLoadState` as a constructor parameter (from `app.localFallbackProvider.modelLoadState`) and exposes it as a `StateFlow`.
+- `JournalEditorScreen` collects `modelLoadState` and wraps content in a `Box`; an `AnimatedVisibility` banner (fade in/out) at the top of the screen shows a `LinearProgressIndicator` with descriptive text ("Preparing local model…" / "Loading model session…") while state is `COPYING_SHARDS` or `LOADING_SESSION`. Disappears automatically on `READY` or `ERROR`.
+- `EmbeddingProvider` reads directly from assets — no copy, no progress indicator needed.
 
 ---
 
@@ -190,5 +186,5 @@ This copy happens on first launch and blocks the ONNX session from opening. Curr
 - [x] `SearchRepository.findEvidenceEntries()` returns ≥3 relevant entries for a negative-valence query against seeded Holmes data. (5 counter-evidence entries with `valence` 0.65–0.85; zero-embedding filter removed.)
 - [x] Strategic Pivot correctly routes to BA mode for a Watson-seeded low-arousal entry. (`ReframingLoop.selectStrategy()` `v<0, a<0` → `BEHAVIORAL_ACTIVATION` — correct by construction.)
 - [x] `ReframingLoop` flags `EMOTIONAL_REASONING` in ≥60% of Werther entries. (73% in seed data; runtime LLM detection pending live test.)
-- [ ] `DebugSeedScreen` is inaccessible in release builds (`BuildConfig.DEBUG` gate). — §4.1, not yet started.
-- [ ] ONNX shard copy shows a progress state in the UI; home screen does not hang on first launch. — §4.2, not yet started.
+- [x] `DebugSeedScreen` is inaccessible in release builds (`BuildConfig.DEBUG` gate).
+- [x] ONNX shard copy shows a progress state in the UI; home screen does not hang on first launch.
