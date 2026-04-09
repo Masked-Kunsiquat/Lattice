@@ -30,6 +30,7 @@ import org.junit.runner.RunWith
 private const val TAG_BENCHMARK = "Lattice:Benchmark"
 private const val TAG_INFERENCE = "Lattice:Inference:Logic"
 private const val TAG_TELEMETRY = "Lattice:Hardware:Telemetry"
+private const val TAG_SETUP    = "Lattice:Benchmark:Setup"
 
 /**
  * Clinical Benchmarking Suite — validates the Unified Agent Loop (Llama-3.2-3B) against
@@ -47,13 +48,18 @@ private const val TAG_TELEMETRY = "Lattice:Hardware:Telemetry"
  * - Stage 3 strategy matches the expected quadrant strategy.
  * - Werther Stage 2 flags [CognitiveDistortion.EMOTIONAL_REASONING].
  *
- * The ONNX model shards (model_q4.onnx + data files) are not committed to VCS. When absent,
- * [LocalFallbackProvider.initialize] fails silently and inference stages are skipped with a
- * warning log. Bundle the shards into app/src/main/assets/ to enable full benchmark execution.
+ * The ONNX model shards (model_q4.onnx + data files) are not committed to VCS. The
+ * benchmark does NOT call [LocalFallbackProvider.initialize] in setUp — loading a 3 GB
+ * model synchronously would OOM the test process. Instead, [modelLoaded] reflects
+ * whatever state [LatticeApplication]'s background init thread has reached by the time
+ * the inference block runs. For the CI / no-model path, inference stages are skipped
+ * gracefully and only the deterministic assertions execute.
  *
- * ## NNAPI / NPU
- * [LocalFallbackProvider] requests NNAPI acceleration in its [OrtSession] options by default,
- * targeting the Snapdragon 8 Elite's NPU/GPU when available and falling back to CPU silently.
+ * To enable full inference benchmarking:
+ *   1. Run `./gradlew downloadModels` to fetch model shards into app/src/main/assets/.
+ *   2. Re-run the benchmark. LatticeApplication will load the model in its background
+ *      thread; [modelLoaded] will be true before the inference block is reached
+ *      (provided setUp and seed ingestion give the thread enough lead time).
  */
 @RunWith(AndroidJUnit4::class)
 class PersonaBenchmarkTest {
@@ -68,36 +74,52 @@ class PersonaBenchmarkTest {
     private val seedPrefs
         get() = context.getSharedPreferences("lattice_seed_manager", Context.MODE_PRIVATE)
 
-    /** True only when all ONNX model shards loaded and the session is ready. */
+    /**
+     * True only when all ONNX model shards are loaded and the session is ready.
+     *
+     * The benchmark does NOT call [LocalFallbackProvider.initialize] in setUp — doing so
+     * synchronously on the test thread would attempt to load a 3 GB ONNX model, causing
+     * an OOM kill after ~25 s. Instead this flag reflects whatever the application's
+     * background init thread has already loaded. In CI (no model files) it is always false
+     * and inference assertions are skipped cleanly.
+     */
     private val modelLoaded: Boolean
         get() = localFallbackProvider.modelLoadState.value == ModelLoadState.READY
 
     @Before
     fun setUp() {
+        Log.i(TAG_SETUP, "setUp: start")
         context = ApplicationProvider.getApplicationContext()
+        Log.i(TAG_SETUP, "setUp: context obtained — ${context.javaClass.simpleName}")
+
         seedPrefs.edit().clear().commit()
+        Log.i(TAG_SETUP, "setUp: seedPrefs cleared")
+
         db = Room.inMemoryDatabaseBuilder(context, LatticeDatabase::class.java).build()
+        Log.i(TAG_SETUP, "setUp: in-memory Room DB built")
+
         seedManager = SeedManager(db, context)
+        Log.i(TAG_SETUP, "setUp: SeedManager created")
 
-        // LatticeApplication.onCreate() already called embeddingProvider.initialize() on the
-        // shared application-level EmbeddingProvider. Creating and initialising a *second*
-        // EmbeddingProvider here loads the 23 MB ONNX model a second time into the same native
-        // OrtEnvironment singleton, which causes a native process crash. Since all inference
-        // stages are gated on modelLoaded (always false here — no Llama assets present), the
-        // SearchRepository only needs the zero-vector fallback, so skip initialize().
+        // LatticeApplication.onCreate() already called embeddingProvider.initialize(), loading
+        // the 23 MB snowflake-arctic-embed-xs model into the native OrtEnvironment singleton.
+        // Creating a second session here would crash the process; use the zero-vector fallback.
         val embeddingProvider = EmbeddingProvider()
+        Log.i(TAG_SETUP, "setUp: EmbeddingProvider created (no initialize — zero-vector fallback)")
 
-        // NNAPI acceleration is requested inside LocalFallbackProvider.createSession() —
-        // no explicit configuration needed here. Fails silently to CPU if NNAPI is absent.
+        // Do NOT call localFallbackProvider.initialize() here. Calling it synchronously on the
+        // test thread would block until the 3 GB Llama model is loaded (or fail-fast if shards
+        // are absent). Either path either OOMs the process or is redundant. The application's
+        // background thread handles model loading; modelLoaded reflects that state.
         localFallbackProvider = LocalFallbackProvider(context)
-        localFallbackProvider.initialize()
-        Log.i(TAG_TELEMETRY, "📊 Hardware: modelLoadState=${localFallbackProvider.modelLoadState.value}")
+        Log.i(TAG_SETUP, "setUp: LocalFallbackProvider created — modelLoadState=${localFallbackProvider.modelLoadState.value}")
 
         val searchRepository = SearchRepository(
-            journalDao  = db.journalDao(),
-            personDao   = db.personDao(),
+            journalDao        = db.journalDao(),
+            personDao         = db.personDao(),
             embeddingProvider = embeddingProvider,
         )
+        Log.i(TAG_SETUP, "setUp: SearchRepository created")
 
         // Cloud explicitly disabled — sovereignty contract must hold for the entire run.
         orchestrator = LlmOrchestrator(
@@ -106,17 +128,21 @@ class PersonaBenchmarkTest {
             transitEventDao       = db.transitEventDao(),
             cloudEnabled          = { false },
         )
+        Log.i(TAG_SETUP, "setUp: LlmOrchestrator created — privacyState=${orchestrator.privacyState.value}")
 
         reframingLoop = ReframingLoop(
             orchestrator         = orchestrator,
             activityHierarchyDao = db.activityHierarchyDao(),
             searchRepository     = searchRepository,
         )
+        Log.i(TAG_SETUP, "setUp: ReframingLoop created — modelLoaded=$modelLoaded")
     }
 
     @After
     fun tearDown() {
+        Log.i(TAG_SETUP, "tearDown: closing DB")
         db.close()
+        Log.i(TAG_SETUP, "tearDown: done")
     }
 
     // ── Persona benchmarks ────────────────────────────────────────────────────
@@ -165,23 +191,23 @@ class PersonaBenchmarkTest {
     @Test
     fun benchmarkWerther_Stage2_EmotionalReasoning() {
         runBlocking {
-        Log.i(TAG_BENCHMARK, "🚀 Werther benchmark — Q2 SOCRATIC_REALITY_TESTING + EMOTIONAL_REASONING DoT")
-        runPersonaBenchmark(
-            persona          = SeedPersona.WERTHER,
-            expectedStrategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
-        ) { stage2 ->
-            if (stage2 != null) {
-                val distortions = stage2.distortions.map { it.label }
-                Log.i(TAG_INFERENCE, "🧠 Werther Stage 2 distortions: $distortions")
-                val flagged = stage2.distortions.contains(CognitiveDistortion.EMOTIONAL_REASONING)
-                Log.i(TAG_INFERENCE, "⚖️ EMOTIONAL_REASONING flagged: $flagged")
-                assertTrue(
-                    "Stage 2 must flag EMOTIONAL_REASONING for Werther — got: $distortions",
-                    flagged
-                )
+            Log.i(TAG_BENCHMARK, "🚀 Werther benchmark — Q2 SOCRATIC_REALITY_TESTING + EMOTIONAL_REASONING DoT")
+            runPersonaBenchmark(
+                persona          = SeedPersona.WERTHER,
+                expectedStrategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
+            ) { stage2 ->
+                if (stage2 != null) {
+                    val distortions = stage2.distortions.map { it.label }
+                    Log.i(TAG_INFERENCE, "🧠 Werther Stage 2 distortions: $distortions")
+                    val flagged = stage2.distortions.contains(CognitiveDistortion.EMOTIONAL_REASONING)
+                    Log.i(TAG_INFERENCE, "⚖️ EMOTIONAL_REASONING flagged: $flagged")
+                    assertTrue(
+                        "Stage 2 must flag EMOTIONAL_REASONING for Werther — got: $distortions",
+                        flagged
+                    )
+                }
             }
-        }
-        Log.i(TAG_BENCHMARK, "✅ Werther benchmark complete")
+            Log.i(TAG_BENCHMARK, "✅ Werther benchmark complete")
         }
     }
 
@@ -207,10 +233,12 @@ class PersonaBenchmarkTest {
         expectedStrategy: ReframingLoop.ReframeStrategy,
         personaCheck: (suspend (stage2: ReframingLoop.DiagnosisResult?) -> Unit)? = null,
     ) {
+        Log.i(TAG_BENCHMARK, "$persona: step 1 — semantic isolation")
         // ── Step 1: Semantic isolation ────────────────────────────────────────
         db.clearAllTables()
         seedPrefs.edit().clear().commit()
 
+        Log.i(TAG_BENCHMARK, "$persona: step 2 — data ingestion")
         // ── Step 2: Data ingestion from bundled asset ─────────────────────────
         // seedPersona(persona) validates Rule of 30, placeholder resolution, and
         // PII-name absence before writing to the DB.
@@ -219,18 +247,24 @@ class PersonaBenchmarkTest {
         assertTrue("Rule of 30 not met for $persona: $count entries seeded", count >= 30)
         Log.i(TAG_BENCHMARK, "$persona seeded: $count entries ✓")
 
+        Log.i(TAG_BENCHMARK, "$persona: step 3 — target selection + PII guard")
         // ── Step 3: Target selection + PII masking guard ──────────────────────
         val allEntries = db.journalDao().getAllEntries()
+        Log.i(TAG_BENCHMARK, "$persona: getAllEntries returned ${allEntries.size} rows")
         val target = requireNotNull(allEntries.firstOrNull { (it.valence ?: 0f) < 0f }) {
             "No negative-valence entry found for $persona — check seed file valence values"
         }
         val maskedText = requireNotNull(target.content) {
             "Target entry has no text content for $persona"
         }
+        Log.i(TAG_BENCHMARK, "$persona: target entry id=${target.id} v=${target.valence} a=${target.arousal}")
+
         // Belt-and-suspenders: confirm the DB content contains no raw name variants.
         // Hard enforcement happens in SeedManager.validateSeed() at seed time; this
         // catches any regression where content bypasses masking before reaching the LLM.
+        Log.i(TAG_BENCHMARK, "$persona: querying persons for PII guard")
         val persons = db.personDao().getPersons().first()
+        Log.i(TAG_BENCHMARK, "$persona: PII guard — ${persons.size} person(s) in DB")
         val rawNames = persons.flatMap { p ->
             listOfNotNull(
                 p.lastName?.let { "${p.firstName} $it" },
@@ -239,14 +273,16 @@ class PersonaBenchmarkTest {
                 p.nickname,
             )
         }
+        Log.i(TAG_BENCHMARK, "$persona: PII guard — checking ${rawNames.size} name variant(s): $rawNames")
         rawNames.forEach { name ->
             assertFalse(
                 "$persona: raw name '$name' found unmasked in entry content — PII leak",
                 maskedText.contains(name, ignoreCase = true)
             )
         }
-        Log.i(TAG_INFERENCE, "🧠 $persona target entry: v=${target.valence} a=${target.arousal}")
+        Log.i(TAG_INFERENCE, "🧠 $persona PII guard passed — no raw names in target content")
 
+        Log.i(TAG_BENCHMARK, "$persona: step 4 — quadrant routing")
         // ── Step 4: Quadrant routing (deterministic) ──────────────────────────
         val computedStrategy = when {
             (target.valence ?: 0f) < 0f && (target.arousal ?: 0f) >= 0f ->
@@ -259,6 +295,7 @@ class PersonaBenchmarkTest {
         assertEquals("$persona quadrant strategy mismatch", expectedStrategy, computedStrategy)
         Log.i(TAG_INFERENCE, "⚖️ $persona quadrant strategy: $computedStrategy ✓")
 
+        Log.i(TAG_BENCHMARK, "$persona: step 5 — inference (modelLoaded=$modelLoaded)")
         // ── Step 5: Inference (gated on model availability) ───────────────────
         var stage2Result: ReframingLoop.DiagnosisResult? = null
 
@@ -288,9 +325,9 @@ class PersonaBenchmarkTest {
 
             // Stage 3 — Strategic Pivot
             val stage3 = reframingLoop.runStage3Intervention(
-                maskedText     = maskedText,
-                affectiveMap   = stage1.getOrThrow(),
-                diagnosis      = stage2.getOrThrow(),
+                maskedText   = maskedText,
+                affectiveMap = stage1.getOrThrow(),
+                diagnosis    = stage2.getOrThrow(),
             )
             val totalMs = System.currentTimeMillis() - t1
             assertTrue(
@@ -309,14 +346,16 @@ class PersonaBenchmarkTest {
         } else {
             Log.w(
                 TAG_BENCHMARK,
-                "$persona — Llama ONNX model not loaded; inference stages skipped. " +
-                "Bundle model_q4.onnx + data shards into app/src/main/assets/ to run full benchmark."
+                "$persona — Llama ONNX model not loaded (modelLoadState=${localFallbackProvider.modelLoadState.value}); " +
+                "inference stages skipped. Bundle model_q4.onnx + data shards into " +
+                "app/src/main/assets/ and re-run to enable full benchmark execution."
             )
         }
 
         // ── Persona-specific extra assertions ─────────────────────────────────
         personaCheck?.invoke(stage2Result)
 
+        Log.i(TAG_BENCHMARK, "$persona: step 6 — sovereignty check")
         // ── Step 6: Sovereignty check — 0% cloud transit ─────────────────────
         assertEquals(
             "$persona: privacyState must be LocalOnly (no cloud routing occurred)",
@@ -331,11 +370,13 @@ class PersonaBenchmarkTest {
         )
         Log.i(TAG_BENCHMARK, "$persona sovereignty: LocalOnly ✓, cloud transit events=${cloudEvents.size}")
 
+        Log.i(TAG_BENCHMARK, "$persona: step 7 — cleanup")
         // ── Step 7: Cleanup ───────────────────────────────────────────────────
         seedManager.clearPersona(persona)
         assertEquals(
             "$persona manifest must be cleared after benchmark",
             0, seedManager.getSeededEntryCount(persona)
         )
+        Log.i(TAG_BENCHMARK, "$persona: benchmark sequence complete ✓")
     }
 }
