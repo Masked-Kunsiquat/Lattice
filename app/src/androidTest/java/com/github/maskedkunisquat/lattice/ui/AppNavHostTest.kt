@@ -1,8 +1,12 @@
 package com.github.maskedkunisquat.lattice.ui
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -31,6 +35,8 @@ class AppNavHostTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
+    private val isTab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
+
     // ── Criterion 1: correct start destination ────────────────────────────────
 
     @Test
@@ -50,7 +56,7 @@ class AppNavHostTest {
         composeRule.onNodeWithText("History").performClick()
 
         composeRule.onNodeWithTag("screen:history").assertIsDisplayed()
-        composeRule.onNodeWithText("History").assertIsSelected()
+        composeRule.onNode(hasText("History") and isTab).assertIsSelected()
         composeRule.onNodeWithText("Journal").assertIsNotSelected()
     }
 
@@ -59,7 +65,7 @@ class AppNavHostTest {
         composeRule.onNodeWithText("Settings").performClick()
 
         composeRule.onNodeWithTag("screen:settings").assertIsDisplayed()
-        composeRule.onNodeWithText("Settings").assertIsSelected()
+        composeRule.onNode(hasText("Settings") and isTab).assertIsSelected()
         composeRule.onNodeWithText("Journal").assertIsNotSelected()
     }
 
