@@ -66,7 +66,11 @@ class SettingsViewModel(
     }
 
     fun updateActivity(activity: ActivityHierarchy) {
-        viewModelScope.launch { activityDao.updateActivity(activity) }
+        val normalized = activity.copy(
+            taskName = activity.taskName.trim(),
+            valueCategory = activity.valueCategory.trim(),
+        )
+        viewModelScope.launch { activityDao.updateActivity(normalized) }
     }
 
     fun deleteActivity(activity: ActivityHierarchy) {

@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -56,7 +57,7 @@ class AuditTrailViewModel(app: LatticeApplication) : ViewModel() {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-private val timestampFmt = SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault())
+// SimpleDateFormat is mutable; create per-composable via remember to avoid shared state.
 
 private fun formatProvider(raw: String) = when (raw) {
     "cloud_claude"      -> "Claude (Cloud)"
@@ -110,10 +111,11 @@ fun AuditTrailScreen(
 
 @Composable
 private fun TransitEventRow(event: TransitEvent) {
+    val fmt = remember { SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault()) }
     ListItem(
         overlineContent = {
             Text(
-                timestampFmt.format(Date(event.timestamp)),
+                fmt.format(Date(event.timestamp)),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

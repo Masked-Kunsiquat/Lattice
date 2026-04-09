@@ -40,8 +40,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-private val timestampFmt = SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault())
-
 @Composable
 fun JournalHistoryScreen(
     viewModel: JournalHistoryViewModel,
@@ -104,6 +102,7 @@ private fun EntryCard(
     onTap: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val fmt = remember { SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault()) }
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) { onDelete(); true } else false
@@ -132,7 +131,7 @@ private fun EntryCard(
             ListItem(
                 overlineContent = {
                     Text(
-                        "${timestampFmt.format(Date(entry.timestamp))}  ·  ${entry.moodLabel.lowercase().replaceFirstChar { it.uppercase() }}",
+                        "${fmt.format(Date(entry.timestamp))}  ·  ${entry.moodLabel.lowercase().replaceFirstChar { it.uppercase() }}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
