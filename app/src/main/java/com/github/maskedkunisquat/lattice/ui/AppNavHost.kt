@@ -88,12 +88,21 @@ fun AppNavHost(app: LatticeApplication) {
                 }
             }
 
-            // TODO(6.7): replace with JournalHistoryScreen
             composable("history") {
-                PlaceholderScreen("History", Modifier.testTag("screen:history"))
+                val vm: JournalHistoryViewModel = viewModel(
+                    factory = JournalHistoryViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:history")) {
+                    JournalHistoryScreen(
+                        viewModel = vm,
+                        onOpenEntry = { entryId ->
+                            navController.navigate("history/$entryId")
+                        },
+                    )
+                }
             }
 
-            // TODO(6.7): load entry by id, open editor in edit mode
+            // TODO: pre-populate editor from entryId (edit mode)
             composable("history/{entryId}") {
                 val vm: JournalEditorViewModel = viewModel(
                     factory = JournalEditorViewModel.factory(app),

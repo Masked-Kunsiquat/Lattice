@@ -184,9 +184,9 @@ suspend fun setTransitRetentionDays(days: Int)
 - Tap → navigates to `history/{entryId}` (editor in edit mode)
 
 **Acceptance criteria:**
-- [ ] List updates reactively via `JournalRepository.getEntries()` Flow
-- [ ] Swipe-delete triggers full `deleteEntry` cleanup (Task 6.2)
-- [ ] Undo within Snackbar window re-inserts the entry
+- [x] List updates reactively via `JournalRepository.getEntries()` Flow
+- [x] Swipe-delete triggers full `deleteEntry` cleanup (Task 6.2)
+- [x] Undo within Snackbar window re-inserts the entry
 
 ---
 
