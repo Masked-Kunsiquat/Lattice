@@ -102,6 +102,50 @@ class SearchRepositoryTest {
     }
 
     @Test
+    fun `findEvidenceEntries - limit caps results`() = runTest {
+        val personId = UUID.randomUUID()
+        val placeholder = "[PERSON_$personId]"
+
+        // Three entries all above the valence threshold and containing the placeholder.
+        // makeRepo sorts by valence DESC, so the order is deterministic.
+        val highest = entry(valence = 0.95f, content = "Amazing day with $placeholder.")
+        val middle  = entry(valence = 0.85f, content = "Good day with $placeholder.")
+        val lowest  = entry(valence = 0.75f, content = "Nice day with $placeholder.")
+
+        val repo = makeRepo(listOf(highest, middle, lowest))
+        val results = repo.findEvidenceEntries(
+            placeholders = setOf(placeholder),
+            minValence = 0.5f,
+            limit = 2,
+        ).first()
+
+        assertEquals("limit=2 must cap results to 2 entries", 2, results.size)
+        assertEquals(highest.id, results[0].id)
+        assertEquals(middle.id, results[1].id)
+    }
+
+    @Test
+    fun `findEvidenceEntries - empty placeholders returns all high-valence entries`() = runTest {
+        val personId = UUID.randomUUID()
+        val placeholder = "[PERSON_$personId]"
+
+        val withPlaceholder    = entry(valence = 0.9f, content = "Great day with $placeholder.")
+        val withoutPlaceholder = entry(valence = 0.8f, content = "Great solo hike today.")
+        val belowThreshold     = entry(valence = 0.3f, content = "Rough day alone.")
+
+        val repo = makeRepo(listOf(withPlaceholder, withoutPlaceholder, belowThreshold))
+        val results = repo.findEvidenceEntries(
+            placeholders = emptySet(),
+            minValence = 0.5f,
+        ).first()
+
+        assertEquals("Empty placeholder set must return all high-valence entries", 2, results.size)
+        val ids = results.map { it.id }.toSet()
+        assertTrue(withPlaceholder.id in ids)
+        assertTrue(withoutPlaceholder.id in ids)
+    }
+
+    @Test
     fun `findEvidenceEntries - placeholder match required`() = runTest {
         val personA = UUID.randomUUID()
         val personB = UUID.randomUUID()

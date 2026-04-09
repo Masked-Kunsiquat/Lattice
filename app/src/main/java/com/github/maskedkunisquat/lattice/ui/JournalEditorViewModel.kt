@@ -142,10 +142,13 @@ class JournalEditorViewModel(
      *
      * On success:
      *   - Updates mood coordinates from Stage 1's affective map.
-     *   - Exposes the Stage 3 reframe in [EditorUiState.reframeResult].
+     *   - Transitions [EditorUiState.reframeState] to [ReframeState.Done] with the
+     *     Stage 3 reframe streamed token-by-token through [ReframeState.Streaming].
      *   - Writes a [TransitEvent] audit entry (local provider, no data left the device).
      *
-     * On failure: surfaces the exception message in [EditorUiState.error].
+     * On failure: transitions [EditorUiState.reframeState] to [ReframeState.Error].
+     * On cancellation (user typed again): re-throws [CancellationException] — state
+     * was already reset to [ReframeState.Idle] by [onTextChanged].
      */
     private fun triggerReframe(text: String) {
         if (text.isBlank()) return

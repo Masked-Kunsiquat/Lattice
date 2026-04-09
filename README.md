@@ -16,7 +16,7 @@ Lattice lets you log journal entries with a mood coordinate (valence × arousal 
 
 All inference is local by default. The orchestrator routes requests through a strict priority chain:
 
-```
+```text
 Gemini Nano (AICore, API 35+)
   → Llama-3.2-3B via ONNX Runtime (all API levels)
     → Cloud API (disabled by default, requires explicit opt-in)
@@ -33,7 +33,7 @@ PII masking is enforced at every boundary:
 
 ## Architecture
 
-```
+```text
 app/                    Compose UI, ViewModel, DI wiring (LatticeApplication)
 core-logic/             Business logic — no Android framework dependencies
   EmbeddingProvider     Snowflake Arctic Embed XS (384-dim, ONNX)
@@ -77,7 +77,7 @@ Quadrant-aware intervention generation:
 Stage 3 is streamed token-by-token into a `ReframeBottomSheet`. If past positive entries mention the same people, they are injected as RAG evidence via `SearchRepository.findEvidenceEntries()`.
 
 **ReframeState lifecycle:**
-```
+```text
 Idle → Loading → Streaming(partial) → Done(text)
                                     → Error(msg)
 ```
