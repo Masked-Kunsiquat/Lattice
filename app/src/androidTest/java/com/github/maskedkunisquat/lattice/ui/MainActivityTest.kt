@@ -25,4 +25,18 @@ abstract class MainActivityTest {
         }
         composeRule.waitForIdle()
     }
+
+    /**
+     * Dispatches a back press through [android.window.OnBackInvokedDispatcher] /
+     * [androidx.activity.OnBackPressedDispatcher] without requiring window focus.
+     * Use this instead of [androidx.test.espresso.Espresso.pressBack], which throws
+     * [androidx.test.espresso.base.RootViewPicker.RootViewWithoutFocusException] when
+     * the activity window hasn't regained focus after the biometric-bypass unlock.
+     */
+    fun pressBack() {
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.waitForIdle()
+    }
 }

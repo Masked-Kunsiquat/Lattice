@@ -10,7 +10,6 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -81,7 +80,7 @@ class AppNavHostTest : MainActivityTest() {
         composeRule.onNodeWithText("History").performClick()
         composeRule.onNodeWithTag("screen:history").assertIsDisplayed()
 
-        Espresso.pressBack()
+        pressBack()
 
         composeRule.onNodeWithTag("screen:editor").assertIsDisplayed()
         composeRule.onNodeWithText("Journal").assertIsSelected()
@@ -92,7 +91,7 @@ class AppNavHostTest : MainActivityTest() {
         composeRule.onNodeWithText("Settings").performClick()
         composeRule.onNodeWithTag("screen:settings").assertIsDisplayed()
 
-        Espresso.pressBack()
+        pressBack()
 
         composeRule.onNodeWithTag("screen:editor").assertIsDisplayed()
         composeRule.onNodeWithText("Journal").assertIsSelected()
