@@ -200,15 +200,17 @@ class SeedManagerTest {
     }
 
     @Test
-    fun clearPersona_manifestAbsentCountIsZero() = runBlocking {
-        // Seed, then wipe the manifest directly (simulates app reinstall / prefs clear).
+    fun getSeededEntryCount_returnsZero_whenManifestKeyAbsent() = runBlocking {
+        // Seed, then wipe the manifest key directly (simulates app reinstall / prefs clear).
         seedManager.seedPersona(SeedPersona.HOLMES, minimalSeed(30))
         context.getSharedPreferences("lattice_seed_manager", Context.MODE_PRIVATE)
             .edit().remove(SeedPersona.HOLMES.name).commit()
 
-        // clearPersona falls back to re-parsing; since no asset is available in core-data
-        // tests we verify the manifest-absent path by confirming getSeededEntryCount is 0.
+        // getSeededEntryCount reads the manifest key; absent key must return 0.
         assertEquals(0, seedManager.getSeededEntryCount(SeedPersona.HOLMES))
+        // Note: the clearPersona fallback path (re-parsing the seed asset when the manifest
+        // is missing) cannot be exercised here because core-data test assets do not bundle
+        // the production seed files. That path is covered in :app instrumented tests.
     }
 
     @Test
