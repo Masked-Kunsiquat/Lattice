@@ -16,6 +16,7 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.NanoProvider
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import com.github.maskedkunisquat.lattice.core.logic.SearchRepository
+import com.github.maskedkunisquat.lattice.core.data.seed.SeedManager
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 import kotlinx.coroutines.flow.first
 import net.sqlcipher.database.SQLiteDatabase
@@ -44,6 +45,8 @@ class LatticeApplication : Application() {
             )
             .build()
     }
+
+    val seedManager by lazy { SeedManager(database, this) }
 
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
 

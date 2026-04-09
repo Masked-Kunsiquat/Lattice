@@ -120,6 +120,7 @@ fun AppNavHost(app: LatticeApplication) {
                     SettingsScreen(
                         viewModel = vm,
                         onNavigateToAudit = { navController.navigate("settings/audit") },
+                        onNavigateToDebugSeed = { navController.navigate("settings/debug/seed") },
                     )
                 }
             }
@@ -136,6 +137,15 @@ fun AppNavHost(app: LatticeApplication) {
             // TODO(6.5): replace with ActivityHierarchyScreen
             composable("settings/activities") {
                 PlaceholderScreen("Behavioral Activation", Modifier.testTag("screen:activities"))
+            }
+
+            composable("settings/debug/seed") {
+                val vm: DebugSeedViewModel = viewModel(
+                    factory = DebugSeedViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:debug-seed")) {
+                    DebugSeedScreen(viewModel = vm)
+                }
             }
         }
     }

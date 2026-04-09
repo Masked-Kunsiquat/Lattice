@@ -132,6 +132,15 @@ class SeedManager(
     }
 
     /**
+     * Returns the number of journal/mood-log entries currently seeded for [persona],
+     * or 0 if the persona has not been seeded (or the manifest has been cleared).
+     *
+     * Reads synchronously from SharedPreferences — safe to call from a ViewModel.
+     */
+    fun getSeededEntryCount(persona: SeedPersona): Int =
+        loadManifest(persona)?.entryIds?.size ?: 0
+
+    /**
      * Removes all entities seeded for [persona] from the database.
      *
      * Uses the [SeedManifest] persisted at seed time (via [persistManifest]) so deletion
