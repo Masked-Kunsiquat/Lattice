@@ -238,4 +238,21 @@ class JournalEditorViewModelTest {
             vm.uiState.value.reframeState is ReframeState.Done
         )
     }
+
+    @Test
+    fun `typing after !reframe cancels the in-flight pipeline and resets state to Idle`() = runTest {
+        val dao = FakeJournalDao()
+        val vm = makeViewModel(
+            journalDao = dao,
+            providerTokens = listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "All good."),
+        )
+
+        // Trigger the pipeline then immediately type normal text (simulates user editing
+        // after issuing !reframe — the job must not resurface Done after cancellation).
+        vm.onTextChanged("!reframe I feel stuck today.")
+        vm.onTextChanged("I feel stuck today.")  // normal keystroke — cancels the job
+
+        assertEquals("reframeState must be Idle after normal typing", ReframeState.Idle, vm.uiState.value.reframeState)
+        assertEquals("text must reflect the last typed value", "I feel stuck today.", vm.uiState.value.text)
+    }
 }

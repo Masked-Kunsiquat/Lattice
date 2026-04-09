@@ -68,6 +68,7 @@ class JournalEditorViewModel(
             _uiState.update { it.copy(text = stripped) }
             triggerReframe(stripped)
         } else {
+            reframeJob?.cancel()
             _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
         }
     }

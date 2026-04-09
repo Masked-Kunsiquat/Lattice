@@ -235,7 +235,7 @@ DONE — commit ccd7e10
   proceeds without BA block), activity injected into prompt string.
 ```
 
-### 🟢 Task 5.3: Memory-Augmented Socratic Dialogue
+### ✅ Task 5.3: Memory-Augmented Socratic Dialogue
 ```
 NOTE: !reframe detection, triggerReframe(), and TransitEvent logging were pulled
 forward into Task 5.1 (commit 370e2ee). Remaining work split into three chunks:
