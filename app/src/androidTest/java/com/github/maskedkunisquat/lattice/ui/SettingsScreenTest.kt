@@ -51,7 +51,16 @@ class SettingsScreenTest {
             .onAllNodesWithText("Data may leave this device")
             .fetchSemanticsNodes()
             .isNotEmpty()
-        if (cloudOn) composeRule.onNode(isSwitch).performClick()
+        if (cloudOn) {
+            composeRule.onNode(isSwitch).performClick()
+            // DataStore write is async; wait for the StateFlow to propagate so the
+            // switch is visually off before the test clicks it again.
+            composeRule.waitUntil(timeoutMillis = 3_000) {
+                composeRule.onAllNodesWithText("Data may leave this device")
+                    .fetchSemanticsNodes()
+                    .isEmpty()
+            }
+        }
     }
 
     // ── Criterion 1: sections render ─────────────────────────────────────────
