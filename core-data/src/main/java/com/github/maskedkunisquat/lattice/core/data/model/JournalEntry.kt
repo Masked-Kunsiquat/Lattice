@@ -12,7 +12,7 @@ import java.util.UUID
 data class JournalEntry(
     @PrimaryKey val id: UUID,
     val timestamp: Long,
-    val content: String,
+    val content: String?,
     val valence: Float,
     val arousal: Float,
     val moodLabel: String,
@@ -43,7 +43,7 @@ data class JournalEntry(
     override fun hashCode(): Int {
         var result = id.hashCode()
         result = 31 * result + timestamp.hashCode()
-        result = 31 * result + content.hashCode()
+        result = 31 * result + (content?.hashCode() ?: 0)
         result = 31 * result + valence.hashCode()
         result = 31 * result + arousal.hashCode()
         result = 31 * result + moodLabel.hashCode()

@@ -28,7 +28,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         TransitEvent::class,
         ActivityHierarchy::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -96,6 +96,40 @@ abstract class LatticeDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE transit_events ADD COLUMN entryId TEXT")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_transit_events_entryId ON transit_events(entryId)")
+            }
+        }
+
+        /**
+         * Makes `content` nullable in `journal_entries` to support mood-log entries
+         * (valid valence/arousal coordinates with no text). SQLite cannot alter column
+         * nullability in-place, so the table is recreated. Existing rows are preserved;
+         * all previously stored content values remain unchanged (non-null strings stay
+         * non-null in the new schema — NULL is now permitted but not forced).
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS journal_entries_new (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        timestamp INTEGER NOT NULL,
+                        content TEXT,
+                        valence REAL NOT NULL,
+                        arousal REAL NOT NULL,
+                        moodLabel TEXT NOT NULL,
+                        embedding BLOB NOT NULL,
+                        cognitiveDistortions TEXT NOT NULL DEFAULT '[]',
+                        reframedContent TEXT
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    INSERT INTO journal_entries_new
+                    SELECT id, timestamp, content, valence, arousal, moodLabel,
+                           embedding, cognitiveDistortions, reframedContent
+                    FROM journal_entries
+                """.trimIndent())
+                db.execSQL("DROP TABLE journal_entries")
+                db.execSQL("ALTER TABLE journal_entries_new RENAME TO journal_entries")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_journal_entries_timestamp ON journal_entries (timestamp)")
             }
         }
 

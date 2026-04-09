@@ -46,7 +46,7 @@ class SearchRepository(
             .filter { (_, score) -> score.isFinite() && score > 0f }
             .sortedByDescending { (_, score) -> score }
             .take(limit)
-            .map { (entry, _) -> entry.copy(content = PiiShield.unmask(entry.content, people)) }
+            .map { (entry, _) -> entry.copy(content = entry.content?.let { PiiShield.unmask(it, people) }) }
 
         emit(results)
     }.flowOn(Dispatchers.Default)
@@ -78,7 +78,7 @@ class SearchRepository(
         val candidates = journalDao.getEntriesWithMinValence(minValence)
         val results = candidates
             .filter { entry -> entry.embedding.any { it != 0f } }
-            .filter { entry -> placeholders.isEmpty() || placeholders.any { it in entry.content } }
+            .filter { entry -> placeholders.isEmpty() || (entry.content != null && placeholders.any { it in entry.content }) }
             .take(limit)
         emit(results)
     }.flowOn(Dispatchers.Default)

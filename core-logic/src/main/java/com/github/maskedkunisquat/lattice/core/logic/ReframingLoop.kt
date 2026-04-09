@@ -258,15 +258,15 @@ class ReframingLoop(
             )
         }
 
-        val evidenceBlock = if (evidenceEntries.isNotEmpty()) {
+        val evidenceBullets = evidenceEntries.mapNotNull { entry ->
+            val snippet = entry.content?.takeIf { it.isNotBlank() }?.let {
+                if (it.length > 200) it.take(200) + "…" else it
+            } ?: return@mapNotNull null
+            "- $snippet"
+        }
+        val evidenceBlock = if (evidenceBullets.isNotEmpty()) {
             "\n\nEvidence for the Contrary (from past journal entries):\n" +
-                evidenceEntries.joinToString("\n") { entry ->
-                    val snippet = if (entry.content.length > 200)
-                        entry.content.take(200) + "…"
-                    else
-                        entry.content
-                    "- $snippet"
-                }
+                evidenceBullets.joinToString("\n")
         } else ""
 
         return "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +

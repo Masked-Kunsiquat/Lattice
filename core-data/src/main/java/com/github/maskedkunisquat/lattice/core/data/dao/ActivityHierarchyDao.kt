@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 
 @Dao
 interface ActivityHierarchyDao {
@@ -34,4 +35,7 @@ interface ActivityHierarchyDao {
      */
     @Query("SELECT * FROM activity_hierarchy WHERE difficulty <= :max ORDER BY difficulty ASC")
     suspend fun getActivitiesByMaxDifficulty(max: Int): List<ActivityHierarchy>
+
+    @Query("DELETE FROM activity_hierarchy WHERE id = :id")
+    suspend fun deleteActivityById(id: UUID)
 }
