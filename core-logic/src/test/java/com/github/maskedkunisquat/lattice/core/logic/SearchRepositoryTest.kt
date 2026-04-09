@@ -84,6 +84,24 @@ class SearchRepositoryTest {
     }
 
     @Test
+    fun `findEvidenceEntries - zero-vector entries excluded`() = runTest {
+        val personId = UUID.randomUUID()
+        val placeholder = "[PERSON_$personId]"
+
+        val withEmbedding    = entry(valence = 0.9f, content = "Great day with $placeholder.", hasEmbedding = true)
+        val withoutEmbedding = entry(valence = 0.9f, content = "Also good with $placeholder.", hasEmbedding = false)
+
+        val repo = makeRepo(listOf(withEmbedding, withoutEmbedding))
+        val results = repo.findEvidenceEntries(
+            placeholders = setOf(placeholder),
+            minValence = 0.5f,
+        ).first()
+
+        assertEquals("Zero-vector entries must be excluded", 1, results.size)
+        assertEquals(withEmbedding.id, results[0].id)
+    }
+
+    @Test
     fun `findEvidenceEntries - placeholder match required`() = runTest {
         val personA = UUID.randomUUID()
         val personB = UUID.randomUUID()

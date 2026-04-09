@@ -222,3 +222,15 @@ private fun PreviewDone() {
         )
     }
 }
+
+@Preview(name = "Error", showBackground = true, backgroundColor = 0xFF1C1B1F)
+@Composable
+private fun PreviewError() {
+    LatticeTheme(darkTheme = true, dynamicColor = false) {
+        ReframeBottomSheet(
+            reframeState = ReframeState.Error("Unable to generate reframe. Please try again."),
+            onApply = {},
+            onDismiss = {},
+        )
+    }
+}

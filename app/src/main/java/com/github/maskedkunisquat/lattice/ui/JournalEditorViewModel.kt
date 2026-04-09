@@ -14,6 +14,7 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -109,10 +110,11 @@ class JournalEditorViewModel(
     }
 
     /**
-     * Persists the accepted reframe to the already-saved entry and clears the result card.
-     * Should only be called when [EditorUiState.reframeResult] is non-null and the entry
-     * has been saved (i.e. [savedEntryId] is set). No new [TransitEvent] is logged here —
-     * one was already written by the pipeline at generation time.
+     * Persists the accepted reframe to the already-saved entry and transitions
+     * [EditorUiState.reframeState] back to [ReframeState.Idle].
+     * No-op when [reframeState] is not [ReframeState.Done] or [savedEntryId] is unset.
+     * No new [TransitEvent] is logged here — one was already written by the pipeline at
+     * generation time.
      */
     fun applyReframe() {
         val entryId = savedEntryId ?: return
@@ -202,6 +204,8 @@ class JournalEditorViewModel(
                         operationType = REFRAME_OPERATION,
                     )
                 )
+            } catch (e: CancellationException) {
+                throw e  // job was cancelled by the user — do not surface as an error
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(reframeState = ReframeState.Error(e.message ?: "Reframe failed"))
