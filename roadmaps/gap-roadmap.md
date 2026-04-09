@@ -165,8 +165,8 @@ suspend fun setTransitRetentionDays(days: Int)
 - Reached via `settings/audit` route
 
 **Acceptance criteria:**
-- [ ] Displays all `TransitEvent` rows from `TransitEventDao.getEventsFlow()`
-- [ ] Local-only sessions show empty state message
+- [x] Displays all `TransitEvent` rows from `TransitEventDao.getEventsFlow()`
+- [x] Local-only sessions show empty state message
 
 ---
 

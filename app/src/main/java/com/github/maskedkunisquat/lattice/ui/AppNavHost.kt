@@ -124,9 +124,13 @@ fun AppNavHost(app: LatticeApplication) {
                 }
             }
 
-            // TODO(6.6): replace with AuditTrailScreen
             composable("settings/audit") {
-                PlaceholderScreen("Audit Trail", Modifier.testTag("screen:audit"))
+                val vm: AuditTrailViewModel = viewModel(
+                    factory = AuditTrailViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:audit")) {
+                    AuditTrailScreen(viewModel = vm)
+                }
             }
 
             // TODO(6.5): replace with ActivityHierarchyScreen
