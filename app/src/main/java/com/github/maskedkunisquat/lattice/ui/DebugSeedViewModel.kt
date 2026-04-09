@@ -63,12 +63,13 @@ class DebugSeedViewModel(private val seedManager: SeedManager) : ViewModel() {
         if (_uiState.value.loadingPersona != null) return
         viewModelScope.launch {
             _uiState.update { it.copy(errorMessage = null) }
-            SeedPersona.entries.forEach { persona ->
+            for (persona in SeedPersona.entries) {
                 _uiState.update { it.copy(loadingPersona = persona) }
                 try {
                     seedManager.clearPersona(persona)
                 } catch (e: Exception) {
                     _uiState.update { it.copy(errorMessage = e.message ?: "Clear failed for ${persona.name}") }
+                    break
                 }
             }
             refreshCounts()

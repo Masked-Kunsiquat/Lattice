@@ -154,7 +154,7 @@ A Compose screen accessible only in `debug` builds. Gated via `BuildConfig.DEBUG
 - `DebugSeedScreen`: `PersonaSeedRow` per persona showing name, clinical target subtitle, entry count, Seed/Clear `OutlinedButton`s, `CircularProgressIndicator` while loading. Red "Clear All Seeds" `Button` disabled when nothing is seeded.
 - `SeedManager.getSeededEntryCount(persona)`: public non-suspend accessor returning manifest `entryIds.size` or 0.
 - `LatticeApplication.seedManager`: lazy property.
-- Navigation route `"settings/debug/seed"` registered in `AppNavHost`.
+- Navigation route `"settings/debug/seed"` registered in `AppNavHost` inside a `if (BuildConfig.DEBUG)` guard — route does not exist in release builds.
 - `SettingsScreen`: `BuildConfig.DEBUG`-gated "Debug › Seed Data" `ListItem` entry point; hidden from release builds.
 
 #### 4.2 ONNX Model Sharding Progress Indicator ✓
@@ -186,5 +186,5 @@ A Compose screen accessible only in `debug` builds. Gated via `BuildConfig.DEBUG
 - [x] `SearchRepository.findEvidenceEntries()` returns ≥3 relevant entries for a negative-valence query against seeded Holmes data. (5 counter-evidence entries with `valence` 0.65–0.85; zero-embedding filter removed.)
 - [x] Strategic Pivot correctly routes to BA mode for a Watson-seeded low-arousal entry. (`ReframingLoop.selectStrategy()` `v<0, a<0` → `BEHAVIORAL_ACTIVATION` — correct by construction.)
 - [x] `ReframingLoop` flags `EMOTIONAL_REASONING` in ≥60% of Werther entries. (73% in seed data; runtime LLM detection pending live test.)
-- [x] `DebugSeedScreen` is inaccessible in release builds (`BuildConfig.DEBUG` gate).
+- [x] `DebugSeedScreen` is inaccessible in release builds — both the `SettingsScreen` entry point and the nav route `"settings/debug/seed"` are gated on `BuildConfig.DEBUG`.
 - [x] ONNX shard copy shows a progress state in the UI; home screen does not hang on first launch.

@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.github.maskedkunisquat.lattice.BuildConfig
 import com.github.maskedkunisquat.lattice.LatticeApplication
 
 private sealed class BottomNavDest(
@@ -139,12 +140,14 @@ fun AppNavHost(app: LatticeApplication) {
                 PlaceholderScreen("Behavioral Activation", Modifier.testTag("screen:activities"))
             }
 
-            composable("settings/debug/seed") {
-                val vm: DebugSeedViewModel = viewModel(
-                    factory = DebugSeedViewModel.factory(app),
-                )
-                Box(Modifier.fillMaxSize().testTag("screen:debug-seed")) {
-                    DebugSeedScreen(viewModel = vm)
+            if (BuildConfig.DEBUG) {
+                composable("settings/debug/seed") {
+                    val vm: DebugSeedViewModel = viewModel(
+                        factory = DebugSeedViewModel.factory(app),
+                    )
+                    Box(Modifier.fillMaxSize().testTag("screen:debug-seed")) {
+                        DebugSeedScreen(viewModel = vm)
+                    }
                 }
             }
         }
