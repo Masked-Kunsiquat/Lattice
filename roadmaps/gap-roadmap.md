@@ -87,8 +87,8 @@ fun getAllActivities(): Flow<List<ActivityHierarchy>>
 ```
 
 **Acceptance criteria:**
-- [ ] All four CRUD operations available on the DAO
-- [ ] `getAllActivities()` returns a reactive `Flow` for Settings screen binding
+- [x] All four CRUD operations available on the DAO
+- [x] `getAllActivities()` returns a reactive `Flow` for Settings screen binding
 
 ---
 
