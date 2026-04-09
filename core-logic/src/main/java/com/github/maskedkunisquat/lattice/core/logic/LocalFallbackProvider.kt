@@ -84,7 +84,6 @@ class LocalFallbackProvider(
                 copyAssetsToFilesDir()
                 val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
                 val newSession = createSession(modelPath)
-                logSessionInfo()
                 try {
                     tokenizer.initialize()
                 } catch (e: Exception) {
@@ -96,6 +95,8 @@ class LocalFallbackProvider(
                 // Assign only after both session AND tokenizer are ready;
                 // isAvailable() correctly returns false until this line executes.
                 session = newSession
+                // Log after assignment so session?.let inside logSessionInfo() sees the session.
+                logSessionInfo()
             } catch (e: Exception) {
                 initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
