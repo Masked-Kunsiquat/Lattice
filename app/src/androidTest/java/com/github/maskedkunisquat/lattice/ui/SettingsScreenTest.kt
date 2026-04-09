@@ -80,7 +80,7 @@ class SettingsScreenTest {
     // ── Criterion 4: confirming warning enables cloud ─────────────────────────
 
     @Test
-    fun cloudToggleDialog_enable_showsProviderDropdown() {
+    fun cloudToggleDialog_enable_showsCloudWarningText() {
         navigateToSettings()
         composeRule.onNode(isSwitch).performClick()
         composeRule.onNodeWithText("Enable cloud processing?").assertIsDisplayed()
@@ -88,7 +88,8 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Enable").performClick()
 
         composeRule.onAllNodesWithText("Enable cloud processing?").assertCountEquals(0)
-        composeRule.onNodeWithText("Provider").assertIsDisplayed()
+        // Amber warning text visible directly under the toggle confirms cloud is now on
+        composeRule.onNodeWithText("Data may leave this device").assertIsDisplayed()
     }
 
     // ── Criterion 5: add-activity dialog ─────────────────────────────────────
