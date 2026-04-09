@@ -138,7 +138,7 @@ private fun EntryCard(
                 },
                 headlineContent = {
                     Text(
-                        entry.content.take(80).let { if (entry.content.length > 80) "$it…" else it },
+                        entry.content?.let { if (it.length > 80) "${it.take(80)}…" else it } ?: "",
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )

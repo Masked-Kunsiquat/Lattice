@@ -1,6 +1,6 @@
 # Implementation Roadmap: Seed-Data Engine & Persona-Driven Testing (Schema v7)
 
-> Last updated: 2026-04-09 — §1.1 complete  
+> Last updated: 2026-04-09 — §1.1, §1.2 complete  
 > Branch: `chore/seed-data`  
 > Codebase audit performed against current HEAD.
 
@@ -53,14 +53,11 @@ data class RawSeed(
 - `valence: Float`, `arousal: Float` — coordinates for `CircumplexMapper`.
 - `mentions: List<String>` — list of person UUIDs for `Mention` insertion.
 
-#### 1.2 Mood Logs — Schema Gap
+#### 1.2 Mood Logs — Schema Gap ✓
 
 The roadmap calls for mood-only entries (null content, valid valence/arousal). Currently `JournalEntry.content: String` is **non-nullable**. Two options:
 
-- **Option A (Preferred):** Make `content` nullable in a v8 migration. This is a one-line schema change and aligns with the "pure mood check-in" UX.
-- **Option B:** Use an empty string sentinel (`""`) for mood-log entries — no migration needed but semantically messy.
-
-**Decision required before implementation.**
+Option A implemented: `JournalEntry.content` is now `String?` (schema v8, `MIGRATION_7_8`). All callsites in `JournalRepository`, `SearchRepository`, `ReframingLoop`, and `JournalHistoryScreen` updated with null-safe handling.
 
 #### 1.3 `SeedManager` in `:core-data`
 
@@ -95,7 +92,7 @@ Each persona is a self-contained seed set: a `people` block, a `journal_entries`
 - **Mood profile:** High arousal, negative valence (upper-left circumplex — `TENSE`/`ANGRY` labels).
 - **Content pattern:** Catastrophising journal entries ("This is a disaster") paired with reframed versions showing evidence-contrary reasoning.
 - **Social graph:** Watson (`[PERSON_<watson_uuid>]`) as the primary mention. `vibeScore` anchored near +0.8.
-- **Embedding requirement:** Pre-compute via `EmbeddingProvider` against masked text. **Note:** `snowflake-arctic-embed-xs.onnx` and `vocab.txt` are missing from the checked-in source tree (only present in build intermediates). These must be committed to `app/src/main/assets/` before pre-computation is possible.
+- **Embedding requirement:** Pre-compute via `EmbeddingProvider` against masked text. Models are present at `core-logic/src/main/assets/`.
 - **`ActivityHierarchy`:** Not required for this persona.
 - **Success check:** `SearchRepository.findEvidenceEntries()` returns ≥3 relevant entries for a negative-valence query.
 
@@ -179,7 +176,7 @@ This copy happens on first launch and blocks the ONNX session from opening. Curr
 
 | Blocker | Impact | Resolution |
 |---|---|---|
-| `snowflake-arctic-embed-xs.onnx` and `vocab.txt` not committed to source | Cannot pre-compute embeddings for seed files; `EmbeddingProvider` falls back to zero-vectors | Commit model + vocab to `app/src/main/assets/` |
+| ~~`snowflake-arctic-embed-xs.onnx` and `vocab.txt` not committed to source~~ | ~~Cannot pre-compute embeddings for seed files~~ | **Resolved** — models live in `core-logic/src/main/assets/` |
 | `JournalEntry.content` non-nullable | Cannot represent mood-log entries (null content) | Decide Option A (v8 migration) or Option B (empty string); implement before seed JSON authoring |
 | `schema-v7.md` does not exist | Roadmap references it but `SPEC.md` (`schema_version: "lattice-v2"`) is the actual reference | Either rename/update `SPEC.md` to `schema-v7.md` or update all references to point at `SPEC.md` |
 

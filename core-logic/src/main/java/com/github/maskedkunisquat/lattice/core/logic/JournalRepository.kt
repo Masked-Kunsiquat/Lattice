@@ -28,7 +28,7 @@ class JournalRepository(
             journalDao.getEntries(),
             personDao.getPersons()
         ) { entries, people ->
-            entries.map { it.copy(content = PiiShield.unmask(it.content, people)) }
+            entries.map { it.copy(content = it.content?.let { c -> PiiShield.unmask(c, people) }) }
         }
     }
 
@@ -40,7 +40,7 @@ class JournalRepository(
             journalDao.getEntryById(id),
             personDao.getPersons()
         ) { entry, people ->
-            entry?.copy(content = PiiShield.unmask(entry.content, people))
+            entry?.copy(content = entry.content?.let { PiiShield.unmask(it, people) })
         }
     }
 
@@ -55,9 +55,9 @@ class JournalRepository(
         // Ensure the mood label matches the scientific model
         val calculatedLabel = CircumplexMapper.getLabel(entry.valence, entry.arousal).name
         
-        val maskedContent = PiiShield.mask(entry.content, people)
-        val distortions = CbtLogic.detectDistortions(maskedContent)
-        val embedding = embeddingProvider.generateEmbedding(maskedContent)
+        val maskedContent = entry.content?.let { PiiShield.mask(it, people) }
+        val distortions = if (maskedContent != null) CbtLogic.detectDistortions(maskedContent) else emptyList()
+        val embedding = if (maskedContent != null) embeddingProvider.generateEmbedding(maskedContent) else FloatArray(384)
 
         val entryToSave = entry.copy(
             content = maskedContent,
@@ -71,10 +71,11 @@ class JournalRepository(
         // Vibe Evolution: Update vibe scores for mentioned persons
         // Extract UUIDs from [PERSON_UUID] placeholders
         val regex = Regex("\\[PERSON_([a-fA-F0-9-]{36})\\]")
-        val mentions = regex.findAll(maskedContent)
-            .map { it.groupValues[1] }
-            .distinct()
-            .map { UUID.fromString(it) }
+        val mentions = maskedContent?.let { regex.findAll(it) }
+            ?.map { it.groupValues[1] }
+            ?.distinct()
+            ?.map { UUID.fromString(it) }
+            ?: emptySequence()
 
         val delta = entry.valence * 0.1f
         mentions.forEach { personId ->

@@ -261,10 +261,9 @@ class ReframingLoop(
         val evidenceBlock = if (evidenceEntries.isNotEmpty()) {
             "\n\nEvidence for the Contrary (from past journal entries):\n" +
                 evidenceEntries.joinToString("\n") { entry ->
-                    val snippet = if (entry.content.length > 200)
-                        entry.content.take(200) + "…"
-                    else
-                        entry.content
+                    val snippet = entry.content?.let {
+                        if (it.length > 200) it.take(200) + "…" else it
+                    } ?: ""
                     "- $snippet"
                 }
         } else ""

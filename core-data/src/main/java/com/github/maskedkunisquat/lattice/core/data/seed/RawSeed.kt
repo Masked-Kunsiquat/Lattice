@@ -65,9 +65,9 @@ data class RawJournalEntry(
 /**
  * Mood-only log entry — valid (valence, arousal) coordinates with no text content.
  *
- * NOTE: [com.github.maskedkunisquat.lattice.core.data.model.JournalEntry.content] is currently
- * non-nullable (schema v7). SeedManager maps these to JournalEntry using an empty string
- * sentinel until the v8 migration decision (Option A: nullable content) is resolved.
+ * Maps to a [com.github.maskedkunisquat.lattice.core.data.model.JournalEntry] with null [content].
+ * Requires schema v8 — [com.github.maskedkunisquat.lattice.core.data.model.JournalEntry.content]
+ * is nullable as of the MIGRATION_7_8 table recreation.
  */
 data class RawMoodLog(
     val id: String,
