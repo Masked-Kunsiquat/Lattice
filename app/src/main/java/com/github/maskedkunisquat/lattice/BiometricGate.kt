@@ -67,8 +67,8 @@ class BiometricGate(private val activity: FragmentActivity) {
         // NOTE: setNegativeButtonText must NOT be called when DEVICE_CREDENTIAL is included
         // in allowedAuthenticators — the system provides its own cancel / switch-to-PIN UI.
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock Lattice")
-            .setSubtitle("Use your fingerprint or device credential")
+            .setTitle(activity.getString(R.string.biometric_unlock_title))
+            .setSubtitle(activity.getString(R.string.biometric_unlock_subtitle))
             .setAllowedAuthenticators(authenticators)
             .build()
 

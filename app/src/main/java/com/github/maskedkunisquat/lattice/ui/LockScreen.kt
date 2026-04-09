@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,7 +32,10 @@ import androidx.compose.ui.unit.dp
  * The Unlock button allows re-triggering the prompt after a user-initiated cancel.
  */
 @Composable
-fun LockScreen(onUnlockClick: () -> Unit) {
+fun LockScreen(
+    authError: String? = null,
+    onUnlockClick: () -> Unit,
+) {
     // Auto-trigger the system prompt as soon as the lock screen enters composition.
     // If the user cancels, the screen stays and they can tap Unlock to try again.
     LaunchedEffect(Unit) { onUnlockClick() }
@@ -65,6 +69,16 @@ fun LockScreen(onUnlockClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
+
+                if (authError != null) {
+                    Text(
+                        text = authError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
 
                 Spacer(Modifier.size(8.dp))
 

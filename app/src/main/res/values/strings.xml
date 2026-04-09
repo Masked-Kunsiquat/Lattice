@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Lattice</string>
+    <string name="biometric_unlock_title">Unlock Lattice</string>
+    <string name="biometric_unlock_subtitle">Use your fingerprint or device credential</string>
 </resources>
