@@ -32,4 +32,7 @@ interface JournalDao {
 
     @Query("UPDATE journal_entries SET reframedContent = :content WHERE id = :entryId")
     suspend fun updateReframedContent(entryId: String, content: String)
+
+    @Query("SELECT * FROM journal_entries WHERE valence > :minValence ORDER BY valence DESC")
+    suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry>
 }
