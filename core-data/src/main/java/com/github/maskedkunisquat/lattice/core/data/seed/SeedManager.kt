@@ -60,8 +60,16 @@ class SeedManager(
         check(db.openHelper.readableDatabase.version == 8) {
             "SeedManager requires schema v8 — found v${db.openHelper.readableDatabase.version}"
         }
+        seedPersona(persona, loadSeed(persona))
+    }
 
-        val seed = loadSeed(persona)
+    /**
+     * Validates and inserts a pre-parsed [seed] for [persona].
+     *
+     * Bypasses asset loading — intended for tests that supply [RawSeed] directly so
+     * the test module does not need to bundle a copy of the production seed files.
+     */
+    internal suspend fun seedPersona(persona: SeedPersona, seed: RawSeed) {
         validateSeed(seed)
 
         val manifest = SeedManifest(
@@ -189,7 +197,7 @@ class SeedManager(
 
     // --- Validation ---
 
-    private fun validateSeed(seed: RawSeed) {
+    internal fun validateSeed(seed: RawSeed) {
         require(seed.journalEntries.size >= RULE_OF_30) {
             "Persona seed has ${seed.journalEntries.size} journal entries — minimum $RULE_OF_30 required for RAG baseline"
         }
@@ -235,7 +243,7 @@ class SeedManager(
 
     // --- JSON parsing ---
 
-    private fun parseSeed(json: String): RawSeed {
+    internal fun parseSeed(json: String): RawSeed {
         val root = JSONObject(json)
         return RawSeed(
             people = root.getJSONArray("people").parseList { parseRawPerson(it) },
