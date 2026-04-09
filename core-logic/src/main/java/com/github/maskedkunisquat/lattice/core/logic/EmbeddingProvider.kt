@@ -86,14 +86,24 @@ open class EmbeddingProvider(
         val (inputIdsArr, attentionMaskArr) = tokenizer.encode(text)
         val seqLen = inputIdsArr.size.toLong()
         val shape = longArrayOf(1L, seqLen)
+        // BERT-based models require token_type_ids (segment IDs). For single-sequence
+        // inference these are always all-zeros — only multi-sequence tasks (e.g. QA)
+        // use non-zero values to distinguish sentence A from sentence B.
+        val tokenTypeIds = LongArray(inputIdsArr.size)
 
         return OnnxTensor.createTensor(env, LongBuffer.wrap(inputIdsArr), shape).use { inputIdsTensor ->
             OnnxTensor.createTensor(env, LongBuffer.wrap(attentionMaskArr), shape).use { attentionMaskTensor ->
-                val inputs = mapOf("input_ids" to inputIdsTensor, "attention_mask" to attentionMaskTensor)
-                session.run(inputs).use { result ->
-                    @Suppress("UNCHECKED_CAST")
-                    val raw = (result[0].value as Array<Array<FloatArray>>)[0]
-                    meanPool(raw)
+                OnnxTensor.createTensor(env, LongBuffer.wrap(tokenTypeIds), shape).use { tokenTypeIdsTensor ->
+                    val inputs = mapOf(
+                        "input_ids"      to inputIdsTensor,
+                        "attention_mask" to attentionMaskTensor,
+                        "token_type_ids" to tokenTypeIdsTensor,
+                    )
+                    session.run(inputs).use { result ->
+                        @Suppress("UNCHECKED_CAST")
+                        val raw = (result[0].value as Array<Array<FloatArray>>)[0]
+                        meanPool(raw)
+                    }
                 }
             }
         }
