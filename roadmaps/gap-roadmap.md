@@ -68,7 +68,7 @@ suspend fun deleteEntry(entry: JournalEntry) = withContext(Dispatchers.IO) {
 - [x] Deleting an entry with 2 mentions decrements both persons' vibe scores
 - [x] `transit_events` rows for that `entryId` are removed
 - [x] `Mention` rows are removed via existing CASCADE FK (no extra code)
-- [ ] Unit test: delete entry → verify vibe rollback + transit pruning
+- [x] Unit test: delete entry → verify vibe rollback + transit pruning
 
 ---
 
@@ -123,7 +123,7 @@ suspend fun setTransitRetentionDays(days: Int)
 **Acceptance criteria:**
 - [x] `cloudEnabled` persists across process restarts
 - [x] `LlmOrchestrator` reads `cloudEnabled` from `SettingsRepository`, not a constructor param
-- [ ] Unit test: toggle cloud → orchestrator routes accordingly
+- [x] Unit test: toggle cloud → orchestrator routes accordingly
 
 ---
 

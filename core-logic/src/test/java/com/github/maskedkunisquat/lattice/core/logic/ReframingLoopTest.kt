@@ -428,6 +428,10 @@ class ReframingLoopTest {
         var lastMaxDifficulty: Int? = null
 
         override suspend fun insertActivity(activity: ActivityHierarchy) = Unit
+        override suspend fun updateActivity(activity: ActivityHierarchy) = Unit
+        override suspend fun deleteActivity(activity: ActivityHierarchy) = Unit
+        override fun getAllActivities(): kotlinx.coroutines.flow.Flow<List<ActivityHierarchy>> =
+            kotlinx.coroutines.flow.flowOf(activities)
 
         override suspend fun getActivitiesByMaxDifficulty(max: Int): List<ActivityHierarchy> {
             lastMaxDifficulty = max
