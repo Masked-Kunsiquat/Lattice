@@ -327,11 +327,10 @@ class LlamaTokenizer(private val context: Context) {
 
         /**
          * Llama-3 pre-tokenisation regex (from tokenizer.json pre_tokenizer.Split.pattern).
-         * Compiled with [Pattern.UNICODE_CHARACTER_CLASS] for proper \p{L}/\p{N} support.
+         * Android's ICU-backed regex engine supports \p{L}/\p{N} natively; no extra flags needed.
          */
         private val PRE_TOKENIZER_PATTERN: Pattern = Pattern.compile(
-            """(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+""",
-            Pattern.UNICODE_CHARACTER_CLASS
+            """(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"""
         )
     }
 }
