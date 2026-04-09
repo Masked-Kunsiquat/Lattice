@@ -10,6 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -17,6 +20,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
+
+enum class ModelLoadState { IDLE, COPYING_SHARDS, LOADING_SESSION, READY, ERROR }
 
 /**
  * LLM provider backed by the locally-bundled Llama-3.2-3B-Instruct ONNX model (Q4).
@@ -68,6 +73,9 @@ class LocalFallbackProvider(
     @Volatile private var initFailureReason: String? = null
     private val initLock = Any()
 
+    private val _modelLoadState = MutableStateFlow(ModelLoadState.IDLE)
+    val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
+
     /**
      * Copies the model shards from assets to internal storage (if needed) then
      * opens an [OrtSession] with NNAPI acceleration and initialises the tokenizer.
@@ -81,7 +89,9 @@ class LocalFallbackProvider(
             initAttempted = true
             try {
                 loadArchConfig()
+                _modelLoadState.value = ModelLoadState.COPYING_SHARDS
                 copyAssetsToFilesDir()
+                _modelLoadState.value = ModelLoadState.LOADING_SESSION
                 val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
                 val newSession = createSession(modelPath)
                 try {
@@ -95,9 +105,11 @@ class LocalFallbackProvider(
                 // Assign only after both session AND tokenizer are ready;
                 // isAvailable() correctly returns false until this line executes.
                 session = newSession
+                _modelLoadState.value = ModelLoadState.READY
                 // Log after assignment so session?.let inside logSessionInfo() sees the session.
                 logSessionInfo()
             } catch (e: Exception) {
+                _modelLoadState.value = ModelLoadState.ERROR
                 initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
             }

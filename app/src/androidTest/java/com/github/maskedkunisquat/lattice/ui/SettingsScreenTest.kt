@@ -5,15 +5,12 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.maskedkunisquat.lattice.MainActivity
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -29,10 +26,7 @@ import org.junit.runner.RunWith
  *   6. Audit Trail row is present and navigates correctly.
  */
 @RunWith(AndroidJUnit4::class)
-class SettingsScreenTest {
-
-    @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+class SettingsScreenTest : MainActivityTest() {
 
     private val isSwitch = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch)
 

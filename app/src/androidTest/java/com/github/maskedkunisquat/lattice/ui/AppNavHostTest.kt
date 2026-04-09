@@ -7,14 +7,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.maskedkunisquat.lattice.MainActivity
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -30,10 +26,7 @@ import org.junit.runner.RunWith
  * Or via Android Studio → right-click the class → Run
  */
 @RunWith(AndroidJUnit4::class)
-class AppNavHostTest {
-
-    @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+class AppNavHostTest : MainActivityTest() {
 
     private val isTab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
 
@@ -87,7 +80,7 @@ class AppNavHostTest {
         composeRule.onNodeWithText("History").performClick()
         composeRule.onNodeWithTag("screen:history").assertIsDisplayed()
 
-        Espresso.pressBack()
+        pressBack()
 
         composeRule.onNodeWithTag("screen:editor").assertIsDisplayed()
         composeRule.onNodeWithText("Journal").assertIsSelected()
@@ -98,7 +91,7 @@ class AppNavHostTest {
         composeRule.onNodeWithText("Settings").performClick()
         composeRule.onNodeWithTag("screen:settings").assertIsDisplayed()
 
-        Espresso.pressBack()
+        pressBack()
 
         composeRule.onNodeWithTag("screen:editor").assertIsDisplayed()
         composeRule.onNodeWithText("Journal").assertIsSelected()

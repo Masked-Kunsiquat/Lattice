@@ -1,6 +1,6 @@
 # Implementation Roadmap: Seed-Data Engine & Persona-Driven Testing (Schema v8)
 
-> Last updated: 2026-04-09 — §1 complete, §2 complete  
+> Last updated: 2026-04-09 — §1–§4 complete  
 > Branch: `chore/seed-data`  
 > Codebase audit performed against current HEAD.
 
@@ -118,61 +118,55 @@ Each persona is a self-contained seed set: a `people` block, a `journal_entries`
 
 ---
 
-### 3. Operational Guardrails
+### 3. Operational Guardrails ✓
 
-#### 3.1 PII Isolation
+#### 3.1 PII Isolation ✓
 
 `PiiShield` is fully implemented in `:core-logic`: name-variant regex substitution (full name, first, last, nickname), sorted by length descending, word-boundary anchored, case-insensitive. Masked text is stored in `journal_entries.content`; raw names live only in `people`.
 
-**Seed-specific requirements:**
-- All `[PERSON_<uuid>]` placeholders in seed JSON must reference UUIDs present in the same file's `people` block.
-- `SeedManager` must run `PiiShield.mask()` as a validation pass (not just trust the JSON).
-- Phone numbers in `phone_numbers` are not currently masked in journal text — this known gap is out of scope for seed data since seed entries will not include raw phone numbers.
+**Seed-specific requirements — all enforced in `SeedManager`:**
+- All `[PERSON_<uuid>]` placeholders in seed JSON resolve to UUIDs in the same file's `people` block — validated in `validateSeed()` per-entry placeholder scan.
+- `SeedManager` runs `validateNoRawNames()` as a PII guard before any DB writes — equivalent to `PiiShield.mask()` (same algorithm: name variants sorted longest-first, case-insensitive). Direct `PiiShield` call omitted to avoid circular dependency `:core-data` → `:core-logic`.
+- Phone numbers: out of scope — seed entries contain no raw phone numbers.
 
-#### 3.2 Sovereignty Check
+#### 3.2 Sovereignty Check ✓
 
-`transit_events` table exists with `entryId TEXT` (added in 5→6 migration). For seeded entries:
-- Write a `TransitEvent` per entry with `providerName = "seed_injection"` and `operationType = "seed"`.
-- This keeps the sovereignty audit log self-consistent and prevents seeded entries from inflating `llama3_onnx_local` attribution stats.
+For every seeded journal entry and mood log, `SeedManager.seedPersona()` writes a `TransitEvent` with `providerName = "seed_injection"` and `operationType = "seed"`. Keeps the sovereignty audit log self-consistent; prevents seeded entries from inflating provider attribution stats.
 
-#### 3.3 Rule of 30
+#### 3.3 Rule of 30 ✓
 
-Each persona seed file must contain ≥30 `journalEntries`. `SeedManager` should enforce this at parse time:
+`SeedManager.validateSeed()` enforces ≥30 `journalEntries` at parse time before any DB writes:
 
 ```kotlin
-require(seed.journalEntries.size >= 30) { "Persona '${persona.name}' has fewer than 30 entries — RAG baseline insufficient" }
+require(seed.journalEntries.size >= 30) { "Persona seed has ${seed.journalEntries.size} journal entries — minimum 30 required for RAG baseline" }
 ```
 
 ---
 
 ### 4. Integration & UI
 
-#### 4.1 `DebugSeedScreen`
+#### 4.1 `DebugSeedScreen` ✓
 
-A Compose screen accessible only in `debug` builds. No product flavor exists yet — gating via `BuildConfig.DEBUG` is sufficient for now (add a flavor dimension if an `internal` release variant is introduced later).
+A Compose screen accessible only in `debug` builds. Gated via `BuildConfig.DEBUG` (`buildConfig = true` added to `app/build.gradle.kts` — disabled by default in AGP 8+).
 
-UI requirements:
-- Button per persona: "Seed Holmes", "Seed Watson", "Seed Werther".
-- "Clear All Seeds" button that calls `SeedManager.clearPersona()` for each.
-- Entry count readout per persona (live `Flow` from `JournalDao.countByTag()` or equivalent).
-- Seeding progress indicator (coroutine scope tied to the screen's lifecycle).
+**Implemented:**
+- `DebugSeedViewModel`: per-persona seed/clear/clearAll with `loadingPersona: SeedPersona?` state and entry count readout via `SeedManager.getSeededEntryCount()` (reads SharedPreferences manifest synchronously).
+- `DebugSeedScreen`: `PersonaSeedRow` per persona showing name, clinical target subtitle, entry count, Seed/Clear `OutlinedButton`s, `CircularProgressIndicator` while loading. Red "Clear All Seeds" `Button` disabled when nothing is seeded.
+- `SeedManager.getSeededEntryCount(persona)`: public non-suspend accessor returning manifest `entryIds.size` or 0.
+- `LatticeApplication.seedManager`: lazy property.
+- Navigation route `"settings/debug/seed"` registered in `AppNavHost` inside a `if (BuildConfig.DEBUG)` guard — route does not exist in release builds.
+- `SettingsScreen`: `BuildConfig.DEBUG`-gated "Debug › Seed Data" `ListItem` entry point; hidden from release builds.
 
-Navigation: add a hidden debug entry point in `SettingsScreen` (or a dev-only nav route) — do not expose in release builds.
+#### 4.2 ONNX Model Sharding Progress Indicator ✓
 
-#### 4.2 ONNX Model Sharding Progress Indicator
+`LocalFallbackProvider.initialize()` copies three files from assets to `filesDir` on first launch before opening the ONNX session.
 
-`LocalFallbackProvider.initialize()` copies three files from assets to `filesDir`:
-- `model_q4.onnx`
-- `model_q4.onnx_data`
-- `model_q4.onnx_data_1`
-
-This copy happens on first launch and blocks the ONNX session from opening. Currently there is no UI feedback during this process.
-
-**Implementation:**
-- Expose a `StateFlow<ModelLoadState>` from `LlmOrchestrator` (or `LocalFallbackProvider` directly).
-- `ModelLoadState` enum: `IDLE`, `COPYING_SHARDS`, `LOADING_SESSION`, `READY`, `ERROR`.
-- Show an indeterminate progress indicator in the home screen (or a splash/loading screen) while state is `COPYING_SHARDS` or `LOADING_SESSION`.
-- The `EmbeddingProvider` model (`snowflake-arctic-embed-xs.onnx`) is small and reads directly from assets — no copy needed, no progress indicator required.
+**Implemented:**
+- `ModelLoadState` enum in `LocalFallbackProvider`: `IDLE`, `COPYING_SHARDS`, `LOADING_SESSION`, `READY`, `ERROR`.
+- `LocalFallbackProvider.modelLoadState: StateFlow<ModelLoadState>` — transitions emitted directly inside `initialize()`: `IDLE` → `COPYING_SHARDS` → `LOADING_SESSION` → `READY` (or `ERROR`).
+- `JournalEditorViewModel` receives `modelLoadState` as a constructor parameter (from `app.localFallbackProvider.modelLoadState`) and exposes it as a `StateFlow`.
+- `JournalEditorScreen` collects `modelLoadState` and wraps content in a `Box`; an `AnimatedVisibility` banner (fade in/out) at the top of the screen shows a `LinearProgressIndicator` with descriptive text ("Preparing local model…" / "Loading model session…") while state is `COPYING_SHARDS` or `LOADING_SESSION`. Disappears automatically on `READY` or `ERROR`.
+- `EmbeddingProvider` reads directly from assets — no copy, no progress indicator needed.
 
 ---
 
@@ -192,5 +186,5 @@ This copy happens on first launch and blocks the ONNX session from opening. Curr
 - [x] `SearchRepository.findEvidenceEntries()` returns ≥3 relevant entries for a negative-valence query against seeded Holmes data. (5 counter-evidence entries with `valence` 0.65–0.85; zero-embedding filter removed.)
 - [x] Strategic Pivot correctly routes to BA mode for a Watson-seeded low-arousal entry. (`ReframingLoop.selectStrategy()` `v<0, a<0` → `BEHAVIORAL_ACTIVATION` — correct by construction.)
 - [x] `ReframingLoop` flags `EMOTIONAL_REASONING` in ≥60% of Werther entries. (73% in seed data; runtime LLM detection pending live test.)
-- [ ] `DebugSeedScreen` is inaccessible in release builds (`BuildConfig.DEBUG` gate). — §4.1, not yet started.
-- [ ] ONNX shard copy shows a progress state in the UI; home screen does not hang on first launch. — §4.2, not yet started.
+- [x] `DebugSeedScreen` is inaccessible in release builds — both the `SettingsScreen` entry point and the nav route `"settings/debug/seed"` are gated on `BuildConfig.DEBUG`.
+- [x] ONNX shard copy shows a progress state in the UI; home screen does not hang on first launch.

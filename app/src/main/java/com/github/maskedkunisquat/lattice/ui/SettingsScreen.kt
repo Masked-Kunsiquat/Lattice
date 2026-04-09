@@ -51,6 +51,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.util.Log
+import com.github.maskedkunisquat.lattice.BuildConfig
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -82,6 +83,7 @@ private val CLOUD_PROVIDERS = listOf(
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onNavigateToAudit: () -> Unit,
+    onNavigateToDebugSeed: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val activities by viewModel.activities.collectAsStateWithLifecycle()
@@ -222,6 +224,21 @@ fun SettingsScreen(
                     Icon(Icons.Default.Download, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Export Journal")
+                }
+            }
+
+            // ── Debug (debug builds only) ────────────────────────────────────
+            if (BuildConfig.DEBUG) {
+                item { SectionHeader("Debug") }
+                item {
+                    ListItem(
+                        headlineContent = { Text("Seed Data") },
+                        supportingContent = { Text("Inject and clear persona datasets") },
+                        trailingContent = {
+                            Icon(Icons.Default.ChevronRight, contentDescription = null)
+                        },
+                        modifier = Modifier.clickable(onClick = onNavigateToDebugSeed),
+                    )
                 }
             }
 
