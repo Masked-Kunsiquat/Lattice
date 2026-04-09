@@ -235,7 +235,11 @@ class SeedManager(
             .sortedByDescending { it.length }
 
         for (name in names) {
-            require(!content.contains(name, ignoreCase = true)) {
+            // Use a word-boundary anchor so short surnames like "H." don't produce false
+            // positives on sentence endings ("reach.", "each.", …). Regex.escape handles
+            // the literal dot in abbreviated names such as "H." or "B.".
+            val pattern = Regex("(?i)\\b${Regex.escape(name)}")
+            require(!pattern.containsMatchIn(content)) {
                 "Seed content contains raw name '$name' — use a [PERSON_<uuid>] placeholder instead"
             }
         }

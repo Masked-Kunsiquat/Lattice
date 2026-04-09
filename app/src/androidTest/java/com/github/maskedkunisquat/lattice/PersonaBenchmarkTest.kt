@@ -275,9 +275,12 @@ class PersonaBenchmarkTest {
         }
         Log.i(TAG_BENCHMARK, "$persona: PII guard — checking ${rawNames.size} name variant(s): $rawNames")
         rawNames.forEach { name ->
+            // Mirror SeedManager.validateNoRawNames: word-boundary anchor prevents
+            // short surnames like "H." from matching mid-word (e.g. "reach.", "each.").
+            val pattern = Regex("(?i)\\b${Regex.escape(name)}")
             assertFalse(
                 "$persona: raw name '$name' found unmasked in entry content — PII leak",
-                maskedText.contains(name, ignoreCase = true)
+                pattern.containsMatchIn(maskedText)
             )
         }
         Log.i(TAG_INFERENCE, "🧠 $persona PII guard passed — no raw names in target content")
