@@ -4,8 +4,10 @@ import android.app.Application
 import android.util.Log
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
+import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.KeyProvider
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
+import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
@@ -44,8 +46,13 @@ class LatticeApplication : Application() {
 
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
 
+    val cloudCredentialStore by lazy { CloudCredentialStore(this) }
+
+    val cloudProvider by lazy { CloudProvider(credentialStore = cloudCredentialStore) }
+
     val exportManager by lazy {
         ExportManager(
+            context = this,
             journalDao = database.journalDao(),
             personDao = database.personDao(),
             transitEventDao = database.transitEventDao(),
@@ -82,8 +89,12 @@ class LatticeApplication : Application() {
         LlmOrchestrator(
             nanoProvider = NanoProvider(this),
             localFallbackProvider = localFallbackProvider,
+            cloudProvider = cloudProvider,
             transitEventDao = database.transitEventDao(),
             cloudEnabled = { settingsRepository.settings.first().cloudEnabled },
+            // All content is masked by JournalRepository.saveEntry before reaching the
+            // orchestrator; PII never enters a prompt in raw form. See PiiShield.mask().
+            piiDetector = { false },
         )
     }
 

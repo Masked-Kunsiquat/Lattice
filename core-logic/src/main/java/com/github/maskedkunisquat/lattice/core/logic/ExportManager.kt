@@ -1,5 +1,10 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import androidx.core.content.FileProvider
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
@@ -11,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,9 +38,10 @@ import java.util.TimeZone
  * See `SPEC.md` in the project root for the full schema definition.
  */
 class ExportManager(
+    private val context: Context,
     private val journalDao: JournalDao,
     private val personDao: PersonDao,
-    private val transitEventDao: TransitEventDao
+    private val transitEventDao: TransitEventDao,
 ) {
     /**
      * Generates the full export manifest as a pretty-printed JSON string.
@@ -60,6 +67,38 @@ class ExportManager(
 
         manifest.toString(2)
     }
+
+    /**
+     * Writes the export manifest to `Documents/lattice_export_<timestamp>.json`
+     * in the app's external files directory and returns a [FileProvider] URI
+     * suitable for sharing via an Android share sheet.
+     *
+     * The file is scoped to the app's external storage — no `MANAGE_EXTERNAL_STORAGE`
+     * permission required.
+     */
+    suspend fun exportToFile(): Uri = withContext(Dispatchers.IO) {
+        val json = generateManifest()
+        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+            ?: error("External files directory unavailable")
+        val file = File(dir, "lattice_export_${System.currentTimeMillis()}.json")
+        file.writeText(json)
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file,
+        )
+    }
+
+    /** Returns a pre-configured [Intent.ACTION_SEND] share intent for [uri]. */
+    fun buildShareIntent(uri: Uri): Intent =
+        Intent.createChooser(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            },
+            "Export Journal",
+        )
 
     private fun buildModelSpec() = JSONObject().apply {
         put("embedding_model", "snowflake-arctic-embed-xs")

@@ -78,6 +78,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.moshi.kotlin)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.biometric)
     implementation(libs.material)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

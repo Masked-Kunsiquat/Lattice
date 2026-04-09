@@ -3,7 +3,9 @@ package com.github.maskedkunisquat.lattice.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import android.content.Intent
 import com.github.maskedkunisquat.lattice.LatticeApplication
+import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
@@ -24,6 +26,7 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val activityDao: ActivityHierarchyDao,
     private val exportManager: ExportManager,
+    private val cloudCredentialStore: CloudCredentialStore,
 ) : ViewModel() {
 
     val settings: StateFlow<LatticeSettings> = settingsRepository.settings.stateIn(
@@ -39,6 +42,25 @@ class SettingsViewModel(
 
     private val _snackbarMessage = MutableSharedFlow<String>()
     val snackbarMessage = _snackbarMessage.asSharedFlow()
+
+    private val _exportShareIntent = MutableSharedFlow<Intent>()
+    val exportShareIntent = _exportShareIntent.asSharedFlow()
+
+    // API key state: true when a key is stored for the cloud_claude provider
+    private val _apiKeySaved = MutableStateFlow(cloudCredentialStore.hasApiKey(CLOUD_CLAUDE_PROVIDER))
+    val apiKeySaved: StateFlow<Boolean> = _apiKeySaved.asStateFlow()
+
+    fun setApiKey(key: String) {
+        val trimmed = key.trim()
+        if (trimmed.isEmpty()) return
+        cloudCredentialStore.setApiKey(CLOUD_CLAUDE_PROVIDER, trimmed)
+        _apiKeySaved.value = true
+    }
+
+    fun clearApiKey() {
+        cloudCredentialStore.clearApiKey(CLOUD_CLAUDE_PROVIDER)
+        _apiKeySaved.value = false
+    }
 
     fun requestCloudEnable() { _showCloudEnableDialog.update { true } }
 
@@ -80,9 +102,8 @@ class SettingsViewModel(
     fun exportJournal() {
         viewModelScope.launch {
             try {
-                exportManager.generateManifest()
-                // TODO(6.8): replace with exportToFile() + share intent
-                _snackbarMessage.emit("Export validated — file write wired in Task 6.8")
+                val uri = exportManager.exportToFile()
+                _exportShareIntent.emit(exportManager.buildShareIntent(uri))
             } catch (e: Exception) {
                 _snackbarMessage.emit("Export failed: ${e.message}")
             }
@@ -90,6 +111,9 @@ class SettingsViewModel(
     }
 
     companion object {
+        const val CLOUD_CLAUDE_PROVIDER = "cloud_claude"
+        const val CLOUD_NONE_PROVIDER = "none"
+
         fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -97,6 +121,7 @@ class SettingsViewModel(
                     settingsRepository = app.settingsRepository,
                     activityDao = app.database.activityHierarchyDao(),
                     exportManager = app.exportManager,
+                    cloudCredentialStore = app.cloudCredentialStore,
                 ) as T
         }
     }
