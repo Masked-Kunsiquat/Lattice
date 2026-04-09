@@ -288,10 +288,10 @@ Room.databaseBuilder(context, LatticeDatabase::class.java, "lattice.db")
 - Key material never appears in plaintext outside the Keystore
 
 **Acceptance criteria:**
-- [ ] App cold-starts and reads/writes entries normally with SQLCipher enabled
-- [ ] DB file opened with SQLite CLI (unencrypted) returns an error
+- [x] App cold-starts and reads/writes entries normally with SQLCipher enabled (proven by full instrumented test suite passing against encrypted DB)
+- [ ] DB file opened with SQLite CLI (unencrypted) returns an error *(manual spot-check — cannot be automated)*
 - [x] Key survives app restart (generated once, stored in EncryptedSharedPreferences)
-- [ ] Existing test suite passes (unit tests mock the DAO layer, unaffected by cipher)
+- [x] Existing test suite passes (unit tests mock the DAO layer, unaffected by cipher)
 
 > **Note on migration:** Existing installs (unencrypted DB) need a one-time migration on upgrade.
 > Approach: on first launch after update, open DB unencrypted, `ATTACH DATABASE ... KEY '...'`,
