@@ -235,39 +235,40 @@ DONE — commit ccd7e10
   proceeds without BA block), activity injected into prompt string.
 ```
 
-### 🟢 Task 5.3: Memory-Augmented Socratic Dialogue
-```
+### ✅ Task 5.3: Memory-Augmented Socratic Dialogue
+```markdown
 NOTE: !reframe detection, triggerReframe(), and TransitEvent logging were pulled
 forward into Task 5.1 (commit 370e2ee). Remaining work split into three chunks:
 ```
 
-#### 5.3-A: RAG Evidence Layer (core-data + core-logic)
-- [ ] `JournalDao`: add `getEntriesWithMinValence(minValence: Float): List<JournalEntry>` (suspend, one-shot)
-- [ ] `SearchRepository.findEvidenceEntries(placeholders, minValence=0.5f, limit=5)`: Flow<List<JournalEntry>>
-  - Reuses Snowflake Arctic XS cosine logic from `findSimilarEntries`
+#### ✅ 5.3-A: RAG Evidence Layer (core-data + core-logic) — commit 452bb66
+- [x] `JournalDao`: add `getEntriesWithMinValence(minValence: Float): List<JournalEntry>` (suspend, one-shot)
+- [x] `SearchRepository.findEvidenceEntries(placeholders, minValence=0.5f, limit=5)`: Flow<List<JournalEntry>>
   - Filters to `valence > minValence` (positive quadrant only)
   - Keeps only entries whose `maskedContent` contains ≥ 1 placeholder from the set (cross-entry anchoring)
   - Excludes zero-vector entries
-- [ ] `ReframingLoop` Stage 3: inject top evidence entries as an "Evidence for the Contrary" block into Q2 and Q3 prompts
-- [ ] Unit tests (3): valence gate enforced, placeholder match required, evidence block present in prompt string
+- [x] `ReframingLoop` Stage 3: fetches evidence for Q2+Q3 (valence < 0); injects "Evidence for the Contrary" block into both prompts via `PLACEHOLDER_REGEX` extraction + `fetchEvidenceEntries()`
+- [x] Unit tests (3): valence gate enforced, placeholder match required, evidence block present in prompt string
 
-#### 5.3-B: Streaming UiState (ViewModel)
+#### ✅ 5.3-B: Streaming UiState (ViewModel)
 - [x] `onTextChanged()`: `!reframe` detection, stripping, `triggerReframe()` dispatch — commit 370e2ee
 - [x] `triggerReframe()`: fail-fast 3-stage pipeline + `TransitEvent` audit logging — commit 370e2ee
 - [x] `applyReframe()`: persists accepted reframe via `updateReframedContent()` — commit cb0240d
 - [x] `dismissReframe()`: clears `reframeResult` (state-only, no DB write) — commit cb0240d
-- [ ] Replace `EditorUiState.isReframing: Boolean` + `reframeResult: String?` with sealed `ReframeState`:
+- [x] Replace `EditorUiState.isReframing: Boolean` + `reframeResult: String?` with sealed `ReframeState`:
   `Idle | Loading | Streaming(partial: String) | Done(text: String) | Error(msg: String)`
-- [ ] Upgrade `triggerReframe()`: emit `Loading` on start; collect `LlmResult.Token` into `Streaming(partial)`; seal to `Done` on `LlmResult.Complete`
-- [ ] Adapt `applyReframe()` / `dismissReframe()` to consume `ReframeState` instead of `reframeResult: String?`
-- [ ] Unit tests (2): `Streaming → Done` state transition, cloud provider never invoked
+- [x] Upgrade `triggerReframe()`: emit `Loading` on start; collect `LlmResult.Token` into `Streaming(partial)`; seal to `Done` on `LlmResult.Complete`
+  - `ReframingLoop.streamStage3Intervention()` added: runs BA/evidence prep then returns raw `Flow<LlmResult>`
+- [x] Adapt `applyReframe()` / `dismissReframe()` to consume `ReframeState` instead of `reframeResult: String?`
+- [x] Unit tests (2): `Done.text` accumulates Stage 3 tokens, cloud provider never invoked
 
-#### 5.3-C: ReframeBottomSheet UI (app)
-- [ ] `ReframeBottomSheet.kt`: modal bottom sheet consuming `reframeState`
-  - Skeleton shimmer while `Loading`
+#### ✅ 5.3-C: ReframeBottomSheet UI (app)
+- [x] `ReframeBottomSheet.kt`: modal bottom sheet consuming `reframeState`
+  - Skeleton shimmer (`InfiniteTransition` + `Brush.linearGradient`) while `Loading`
   - Token-by-token text append while `Streaming`
   - "Apply": calls `applyReframe()` (persists via `updateReframedContent`, clears sheet)
   - "Dismiss": calls `dismissReframe()` (resets state to `Idle`, no DB write)
+  - `JournalEditorScreen` wired: bottom sheet shown when `reframeState !is Idle`; inline result card + spinner removed
 
 ### ✅ Task 5.4: Room Schema Update & Audit Trail
 ```markdown

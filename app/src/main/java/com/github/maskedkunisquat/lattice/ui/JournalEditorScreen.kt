@@ -3,22 +3,12 @@ package com.github.maskedkunisquat.lattice.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -27,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,6 +44,7 @@ fun JournalEditorScreen(
         onMoodChanged = viewModel::onMoodChanged,
         onSave = viewModel::save,
         onResetSaved = viewModel::resetSaved,
+        onApplyReframe = viewModel::applyReframe,
         onDismissReframe = viewModel::dismissReframe,
         modifier = modifier,
     )
@@ -70,6 +60,7 @@ private fun JournalEditorContent(
     onMoodChanged: (Float, Float, MoodLabel) -> Unit,
     onSave: () -> Unit,
     onResetSaved: () -> Unit,
+    onApplyReframe: () -> Unit,
     onDismissReframe: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -136,54 +127,7 @@ private fun JournalEditorContent(
             ),
         )
 
-        // Reframe: loading indicator
-        if (uiState.isReframing) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-        }
-
-        // Reframe: result card
-        uiState.reframeResult?.let { reframe ->
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "Reframe",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        IconButton(onClick = onDismissReframe) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Dismiss reframe",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            )
-                        }
-                    }
-                    Box(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        Text(
-                            text = reframe,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                }
-            }
-        }
-
-        // Reframe: error
+        // Save error (non-reframe failures)
         uiState.error?.let { err ->
             Text(
                 text = err,
@@ -192,13 +136,25 @@ private fun JournalEditorContent(
             )
         }
 
+        val canSave = uiState.text.isNotBlank() && uiState.moodSelected &&
+            uiState.reframeState !is ReframeState.Loading &&
+            uiState.reframeState !is ReframeState.Streaming
         Button(
             onClick = onSave,
             modifier = Modifier.fillMaxWidth(),
-            enabled = uiState.text.isNotBlank() && uiState.moodSelected && !uiState.isReframing,
+            enabled = canSave,
         ) {
             Text("Save Entry")
         }
+    }
+
+    // Reframe bottom sheet — shown whenever there is active reframe state
+    if (uiState.reframeState !is ReframeState.Idle) {
+        ReframeBottomSheet(
+            reframeState = uiState.reframeState,
+            onApply = onApplyReframe,
+            onDismiss = onDismissReframe,
+        )
     }
 }
 
@@ -213,6 +169,7 @@ private fun EditorLocalPreview() {
             onMoodChanged = { _, _, _ -> },
             onSave = {},
             onResetSaved = {},
+            onApplyReframe = {},
             onDismissReframe = {},
         )
     }
@@ -232,6 +189,7 @@ private fun EditorCloudPreview() {
             onMoodChanged = { _, _, _ -> },
             onSave = {},
             onResetSaved = {},
+            onApplyReframe = {},
             onDismissReframe = {},
         )
     }

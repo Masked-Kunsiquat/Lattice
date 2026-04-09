@@ -3,9 +3,11 @@ package com.github.maskedkunisquat.lattice.core.logic
 import android.util.Log
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
+import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
@@ -23,10 +25,14 @@ import kotlinx.coroutines.withContext
  *   and Stage 3 selects [ReframeStrategy.BEHAVIORAL_ACTIVATION], the lowest-difficulty
  *   activity (up to difficulty [BA_MAX_DIFFICULTY]) whose [ActivityHierarchy.valueCategory]
  *   aligns with the entry context is injected into the prompt as a concrete first step.
+ * @param searchRepository Optional repository for RAG evidence retrieval. When provided,
+ *   Stage 3 fetches positive past entries anchored to the same entities and injects them
+ *   as an "Evidence for the Contrary" block in both Q2 and Q3 prompts.
  */
 class ReframingLoop(
     private val orchestrator: LlmOrchestrator,
     private val activityHierarchyDao: ActivityHierarchyDao? = null,
+    private val searchRepository: SearchRepository? = null,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
 
@@ -108,9 +114,17 @@ class ReframingLoop(
                 pickBaActivity(maskedText)
             } else null
 
+            // For Q2 and Q3 (negative valence), fetch positive past entries anchored to the
+            // same entities as concrete "Evidence for the Contrary".
+            val evidenceEntries = if (affectiveMap.valence < 0f) {
+                fetchEvidenceEntries(maskedText)
+            } else emptyList()
+
             val reframe = collectTokens(
                 orchestrator.process(
-                    buildInterventionPrompt(maskedText, strategy, diagnosis.distortions, baActivity),
+                    buildInterventionPrompt(
+                        maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                    ),
                     "intervention"
                 )
             )
@@ -132,6 +146,19 @@ class ReframingLoop(
         val tokens = maskedText.lowercase().split(Regex("\\W+")).filter { it.isNotBlank() }.toSet()
         return candidates.firstOrNull { it.valueCategory.lowercase() in tokens }
             ?: candidates.first()
+    }
+
+    /**
+     * Extracts `[PERSON_UUID]` placeholders from [maskedText] and queries
+     * [searchRepository] for positive past entries anchored to those same entities.
+     * Returns an empty list when [searchRepository] is null or no evidence is found.
+     */
+    private suspend fun fetchEvidenceEntries(maskedText: String): List<JournalEntry> {
+        val repo = searchRepository ?: return emptyList()
+        val placeholders = PLACEHOLDER_REGEX.findAll(maskedText)
+            .map { it.value }
+            .toSet()
+        return repo.findEvidenceEntries(placeholders).first()
     }
 
     // ── Prompt builders ──────────────────────────────────────────────────────
@@ -185,6 +212,7 @@ class ReframingLoop(
         strategy: ReframeStrategy,
         distortions: List<CognitiveDistortion>,
         baActivity: ActivityHierarchy? = null,
+        evidenceEntries: List<JournalEntry> = emptyList(),
     ): String {
         val distortionContext = if (distortions.isEmpty())
             "No specific cognitive distortions were identified."
@@ -230,11 +258,23 @@ class ReframingLoop(
             )
         }
 
+        val evidenceBlock = if (evidenceEntries.isNotEmpty()) {
+            "\n\nEvidence for the Contrary (from past journal entries):\n" +
+                evidenceEntries.joinToString("\n") { entry ->
+                    val snippet = if (entry.content.length > 200)
+                        entry.content.take(200) + "…"
+                    else
+                        entry.content
+                    "- $snippet"
+                }
+        } else ""
+
         return "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
             systemMsg +
             "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
             "The client wrote:\n\"$maskedText\"\n\n" +
-            "$distortionContext\n\n" +
+            "$distortionContext" +
+            "$evidenceBlock\n\n" +
             "$techniqueBlock\n\n" +
             "Address the client directly and warmly. Do not name the techniques." +
             "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
@@ -287,6 +327,42 @@ class ReframingLoop(
         }
         return DiagnosisResult(distortions = recognized, reasoning = raw)
     }
+
+    /**
+     * Prepares the Stage 3 intervention and returns the raw [LlmResult] flow for
+     * token-by-token streaming in the ViewModel. The caller is responsible for collecting
+     * the flow and sealing to [Done][com.github.maskedkunisquat.lattice.ui.ReframeState.Done]
+     * on [LlmResult.Complete].
+     *
+     * All prep work (strategy selection, BA activity lookup, evidence fetch) runs inside
+     * [dispatcher] before the cold flow is returned.
+     *
+     * @return [Result.success] with the selected [ReframeStrategy] and the token flow,
+     *   or [Result.failure] if prep fails (DAO error, no evidence source, etc.).
+     */
+    suspend fun streamStage3Intervention(
+        maskedText: String,
+        affectiveMap: AffectiveMapResult,
+        diagnosis: DiagnosisResult,
+    ): Result<Pair<ReframeStrategy, kotlinx.coroutines.flow.Flow<LlmResult>>> =
+        withContext(dispatcher) {
+            runCatching {
+                val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
+                val baActivity = if (strategy == ReframeStrategy.BEHAVIORAL_ACTIVATION) {
+                    pickBaActivity(maskedText)
+                } else null
+                val evidenceEntries = if (affectiveMap.valence < 0f) {
+                    fetchEvidenceEntries(maskedText)
+                } else emptyList()
+                val flow = orchestrator.process(
+                    buildInterventionPrompt(
+                        maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                    ),
+                    "intervention"
+                )
+                Pair(strategy, flow)
+            }
+        }
 
     // ── Token stream collector ───────────────────────────────────────────────
 
@@ -355,5 +431,7 @@ class ReframingLoop(
         // Both regexes tolerate optional spaces around `=` and an optional leading `-`.
         private val V_REGEX = Regex("""v\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
         private val A_REGEX = Regex("""a\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+        /** Matches [PERSON_UUID] placeholders produced by PiiShield. */
+        private val PLACEHOLDER_REGEX = Regex("""\[PERSON_[a-fA-F0-9\-]{36}\]""")
     }
 }

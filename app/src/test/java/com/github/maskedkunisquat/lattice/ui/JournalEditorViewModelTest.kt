@@ -17,13 +17,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.UUID
@@ -53,6 +56,7 @@ class JournalEditorViewModelTest {
         override suspend fun updateReframedContent(entryId: String, content: String) {
             updatedReframes.add(entryId to content)
         }
+        override suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry> = emptyList()
     }
 
     private class FakeTransitEventDao : TransitEventDao {
@@ -123,38 +127,170 @@ class JournalEditorViewModelTest {
             providerTokens = listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "You are doing well."),
         )
 
-        // Trigger the full pipeline so reframeResult becomes non-null.
+        // Trigger the full pipeline so reframeState becomes Done.
         vm.onTextChanged("!reframe I feel stuck today.")
         // UnconfinedTestDispatcher runs coroutines eagerly, so the pipeline is already done.
-        val reframeResult = vm.uiState.value.reframeResult
-        org.junit.Assert.assertNotNull(
-            "Pipeline must have produced a reframeResult before dismissReframe() is tested",
-            reframeResult
+        val reframeState = vm.uiState.value.reframeState
+        assertTrue(
+            "Pipeline must have produced a Done state before dismissReframe() is tested, got: $reframeState",
+            reframeState is ReframeState.Done
         )
 
         // No DAO writes should have happened yet (triggerReframe only writes a TransitEvent,
         // not a reframedContent — applyReframe() is the only writer).
         assertEquals(0, dao.updatedReframes.size)
 
-        // Dismiss — must clear reframeResult without writing to the DAO.
+        // Dismiss — must reset reframeState to Idle without writing to the DAO.
         vm.dismissReframe()
 
-        assertNull("reframeResult must be null after dismiss", vm.uiState.value.reframeResult)
+        assertEquals("reframeState must be Idle after dismiss", ReframeState.Idle, vm.uiState.value.reframeState)
         assertEquals("dismissReframe must not call updateReframedContent", 0, dao.updatedReframes.size)
     }
 
     @Test
-    fun `applyReframe is a no-op when reframeResult is null`() = runTest {
+    fun `applyReframe is a no-op when reframeState is Idle`() = runTest {
         val dao = FakeJournalDao()
         val vm = makeViewModel(dao)
 
-        // No reframeResult is set — applyReframe() must short-circuit without writing.
+        // reframeState is Idle (no Done) — applyReframe() must short-circuit without writing.
         vm.applyReframe()
 
         assertEquals(
-            "applyReframe with no reframeResult must not write to the DAO",
+            "applyReframe with Idle state must not write to the DAO",
             0,
             dao.updatedReframes.size
         )
+    }
+
+    @Test
+    fun `triggerReframe accumulates tokens and seals to Done`() = runTest {
+        val dao = FakeJournalDao()
+        // Each process() call gets the same token list. Stage 1 + 2 drain all tokens via
+        // collectTokens(). Stage 3 streams them token-by-token via streamStage3Intervention,
+        // accumulating into the Done text.
+        val vm = makeViewModel(
+            journalDao = dao,
+            providerTokens = listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "All good."),
+        )
+
+        vm.onTextChanged("!reframe I feel stuck today.")
+
+        val finalState = vm.uiState.value.reframeState
+        assertTrue(
+            "Expected Done state after pipeline, got: $finalState",
+            finalState is ReframeState.Done
+        )
+        // Done.text is the trimmed accumulation of all Stage 3 tokens, proving streaming ran.
+        val doneText = (finalState as ReframeState.Done).text
+        assertTrue(
+            "Done.text must contain Stage 3 token content; got: \"$doneText\"",
+            "All good." in doneText
+        )
+    }
+
+    @Test
+    fun `cloud provider is never invoked during reframe even when cloud is enabled`() = runTest {
+        var cloudCallCount = 0
+        val fakeCloud = object : LlmProvider {
+            override val id = "fake_cloud"
+            override suspend fun isAvailable() = true
+            override fun process(prompt: String): Flow<LlmResult> {
+                cloudCallCount++
+                return flowOf(LlmResult.Complete)
+            }
+        }
+        val fakeLocal = object : LlmProvider {
+            override val id = "fake_local"
+            override suspend fun isAvailable() = true
+            override fun process(prompt: String): Flow<LlmResult> =
+                (listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "All good.")
+                    .map { LlmResult.Token(it) } + LlmResult.Complete).asFlow()
+        }
+        val dao = FakeJournalDao()
+        val repo = JournalRepository(
+            journalDao = dao,
+            personDao = FakePersonDao(),
+            embeddingProvider = object : EmbeddingProvider() {
+                override suspend fun generateEmbedding(text: String) = FloatArray(384)
+            }
+        )
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "none"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = fakeLocal,
+            cloudProvider = fakeCloud,
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = true,
+            piiDetector = { false },
+        )
+        val vm = JournalEditorViewModel(
+            journalRepository = repo,
+            orchestrator = orchestrator,
+            reframingLoop = ReframingLoop(orchestrator, dispatcher = testDispatcher),
+            transitEventDao = FakeTransitEventDao(),
+        )
+
+        vm.onTextChanged("!reframe I feel stuck today.")
+
+        assertEquals("Cloud provider must not be called during reframe", 0, cloudCallCount)
+        assertTrue(
+            "reframeState must be Done after successful local reframe",
+            vm.uiState.value.reframeState is ReframeState.Done
+        )
+    }
+
+    @Test
+    fun `typing after !reframe cancels the in-flight pipeline and resets state to Idle`() = runTest {
+        val dao = FakeJournalDao()
+        // Use a StandardTestDispatcher that shares the runTest scheduler so
+        // withContext(reframingDispatcher) suspends instead of running eagerly.
+        // This keeps the pipeline genuinely in-flight between the two onTextChanged calls.
+        val reframingDispatcher = StandardTestDispatcher(testScheduler)
+
+        val repo = JournalRepository(
+            journalDao = dao,
+            personDao = FakePersonDao(),
+            embeddingProvider = object : EmbeddingProvider() {
+                override suspend fun generateEmbedding(text: String) = FloatArray(384)
+            }
+        )
+        val fakeLocal = object : LlmProvider {
+            override val id = "fake_local"
+            override suspend fun isAvailable() = true
+            override fun process(prompt: String): Flow<LlmResult> =
+                (listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "All good.")
+                    .map { LlmResult.Token(it) } + LlmResult.Complete).asFlow()
+        }
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "none"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = fakeLocal,
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = false,
+        )
+        val vm = JournalEditorViewModel(
+            journalRepository = repo,
+            orchestrator = orchestrator,
+            // StandardTestDispatcher: the first withContext(reframingDispatcher) suspends,
+            // leaving the job in-flight so the second onTextChanged can cancel it.
+            reframingLoop = ReframingLoop(orchestrator, dispatcher = reframingDispatcher),
+            transitEventDao = FakeTransitEventDao(),
+        )
+
+        // Start the pipeline — suspends at the first withContext(reframingDispatcher).
+        vm.onTextChanged("!reframe I feel stuck today.")
+        // Pipeline is suspended. Cancel it by typing normal text.
+        vm.onTextChanged("I feel stuck today.")
+        // Drain the scheduler — cancelled coroutine cleans up, no further state changes.
+        advanceUntilIdle()
+
+        assertEquals("reframeState must be Idle after cancellation", ReframeState.Idle, vm.uiState.value.reframeState)
+        assertEquals("text must reflect the last typed value", "I feel stuck today.", vm.uiState.value.text)
     }
 }

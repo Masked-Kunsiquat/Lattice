@@ -9,6 +9,7 @@ import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.NanoProvider
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
+import com.github.maskedkunisquat.lattice.core.logic.SearchRepository
 
 class LatticeApplication : Application() {
 
@@ -35,8 +36,16 @@ class LatticeApplication : Application() {
         )
     }
 
+    val searchRepository by lazy {
+        SearchRepository(
+            journalDao = database.journalDao(),
+            personDao = database.personDao(),
+            embeddingProvider = embeddingProvider,
+        )
+    }
+
     val reframingLoop by lazy {
-        ReframingLoop(llmOrchestrator, database.activityHierarchyDao())
+        ReframingLoop(llmOrchestrator, database.activityHierarchyDao(), searchRepository)
     }
 
     val llmOrchestrator by lazy {
