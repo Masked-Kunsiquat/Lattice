@@ -7,6 +7,7 @@ import androidx.room.Room
 import com.github.maskedkunisquat.lattice.core.data.KeyProvider
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
+import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
@@ -42,6 +43,14 @@ class LatticeApplication : Application() {
     }
 
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
+
+    val exportManager by lazy {
+        ExportManager(
+            journalDao = database.journalDao(),
+            personDao = database.personDao(),
+            transitEventDao = database.transitEventDao(),
+        )
+    }
 
     val embeddingProvider by lazy { EmbeddingProvider() }
 

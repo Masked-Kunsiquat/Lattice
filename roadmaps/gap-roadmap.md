@@ -29,9 +29,9 @@ settings/activities      → ActivityHierarchyScreen
 **Bottom nav destinations:** Editor · History · Settings (Material 3 `NavigationBar`)
 
 **Acceptance criteria:**
-- [ ] `NavHost` renders with correct start destination
-- [ ] Back press from any secondary screen returns to correct parent
-- [ ] `androidx.navigation.compose` (already in `app/build.gradle.kts:58`) is the only nav dependency required — no new dep needed
+- [x] `NavHost` renders with correct start destination
+- [x] Back press from any secondary screen returns to correct parent
+- [x] `androidx.navigation.compose` (already in `app/build.gradle.kts:58`) is the only nav dependency required — no new dep needed
 
 ---
 

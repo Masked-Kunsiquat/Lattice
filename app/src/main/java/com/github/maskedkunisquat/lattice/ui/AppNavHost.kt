@@ -103,9 +103,16 @@ fun AppNavHost(app: LatticeApplication) {
                 }
             }
 
-            // TODO(6.5): replace with SettingsScreen
             composable("settings") {
-                PlaceholderScreen("Settings", Modifier.testTag("screen:settings"))
+                val vm: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:settings")) {
+                    SettingsScreen(
+                        viewModel = vm,
+                        onNavigateToAudit = { navController.navigate("settings/audit") },
+                    )
+                }
             }
 
             // TODO(6.6): replace with AuditTrailScreen
