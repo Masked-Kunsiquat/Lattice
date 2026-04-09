@@ -1,13 +1,10 @@
 package com.github.maskedkunisquat.lattice.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.maskedkunisquat.lattice.MainActivity
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -19,10 +16,7 @@ import org.junit.runner.RunWith
  *   2. Empty state shows "No data has left this device" for local-only sessions.
  */
 @RunWith(AndroidJUnit4::class)
-class AuditTrailScreenTest {
-
-    @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+class AuditTrailScreenTest : MainActivityTest() {
 
     private fun navigateToAudit() {
         composeRule.onNodeWithText("Settings").performClick()
