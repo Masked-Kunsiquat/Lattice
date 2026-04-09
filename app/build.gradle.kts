@@ -46,7 +46,7 @@ android {
 dependencies {
     implementation(project(":core-data"))
     implementation(project(":core-logic"))
-    implementation(libs.sqlcipher.android)
+    implementation(libs.android.database.sqlcipher)
     implementation(libs.androidx.sqlite.ktx)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
