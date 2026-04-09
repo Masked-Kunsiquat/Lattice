@@ -20,6 +20,7 @@ class LatticeApplication : Application() {
                 LatticeDatabase.MIGRATION_2_3,
                 LatticeDatabase.MIGRATION_3_4,
                 LatticeDatabase.MIGRATION_4_5,
+                LatticeDatabase.MIGRATION_5_6,
             )
             .build()
     }
@@ -32,6 +33,8 @@ class LatticeApplication : Application() {
         JournalRepository(
             journalDao = database.journalDao(),
             personDao = database.personDao(),
+            mentionDao = database.mentionDao(),
+            transitEventDao = database.transitEventDao(),
             embeddingProvider = embeddingProvider,
         )
     }

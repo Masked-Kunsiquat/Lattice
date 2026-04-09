@@ -19,4 +19,7 @@ interface TransitEventDao {
     /** Reactive stream for the audit log UI. */
     @Query("SELECT * FROM transit_events ORDER BY timestamp DESC")
     fun getEventsFlow(): Flow<List<TransitEvent>>
+
+    @Query("DELETE FROM transit_events WHERE entryId = :entryId")
+    suspend fun deleteEventsForEntry(entryId: String)
 }

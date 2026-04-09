@@ -34,6 +34,7 @@ class LlmOrchestratorTest {
         override suspend fun insertEvent(event: TransitEvent) { insertedEvents.add(event) }
         override suspend fun getAllEvents() = insertedEvents.toList()
         override fun getEventsFlow(): Flow<List<TransitEvent>> = flowOf(insertedEvents.toList())
+        override suspend fun deleteEventsForEntry(entryId: String) = Unit
     }
 
     private fun orchestrator(

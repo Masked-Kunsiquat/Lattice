@@ -30,6 +30,7 @@ class ReframingLoopTest {
         override suspend fun insertEvent(event: TransitEvent) = Unit
         override suspend fun getAllEvents(): List<TransitEvent> = emptyList()
         override fun getEventsFlow(): Flow<List<TransitEvent>> = flowOf(emptyList())
+        override suspend fun deleteEventsForEntry(entryId: String) = Unit
     }
 
     private fun loopWithResponse(vararg tokens: String): ReframingLoop {

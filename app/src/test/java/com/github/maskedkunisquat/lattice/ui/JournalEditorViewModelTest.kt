@@ -1,9 +1,11 @@
 package com.github.maskedkunisquat.lattice.ui
 
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
+import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.Mention
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
@@ -63,6 +65,16 @@ class JournalEditorViewModelTest {
         override suspend fun insertEvent(event: TransitEvent) = Unit
         override suspend fun getAllEvents(): List<TransitEvent> = emptyList()
         override fun getEventsFlow(): Flow<List<TransitEvent>> = flowOf(emptyList())
+        override suspend fun deleteEventsForEntry(entryId: String) = Unit
+    }
+
+    private class FakeMentionDao : MentionDao {
+        override suspend fun insertMention(mention: Mention) = Unit
+        override suspend fun updateMention(mention: Mention) = Unit
+        override suspend fun deleteMention(mention: Mention) = Unit
+        override fun getMentionsForEntry(entryId: UUID): Flow<List<Mention>> = flowOf(emptyList())
+        override suspend fun getMentionsByEntry(entryId: UUID): List<Mention> = emptyList()
+        override fun getMentionsForPerson(personId: UUID): Flow<List<Mention>> = flowOf(emptyList())
     }
 
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -82,6 +94,8 @@ class JournalEditorViewModelTest {
         val repo = JournalRepository(
             journalDao = journalDao,
             personDao = FakePersonDao(),
+            mentionDao = FakeMentionDao(),
+            transitEventDao = FakeTransitEventDao(),
             embeddingProvider = object : EmbeddingProvider() {
                 override suspend fun generateEmbedding(text: String) = FloatArray(384)
             }

@@ -28,7 +28,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         TransitEvent::class,
         ActivityHierarchy::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -89,6 +89,13 @@ abstract class LatticeDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE journal_entries ADD COLUMN reframedContent TEXT"
                 )
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transit_events ADD COLUMN entryId TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transit_events_entryId ON transit_events(entryId)")
             }
         }
     }
