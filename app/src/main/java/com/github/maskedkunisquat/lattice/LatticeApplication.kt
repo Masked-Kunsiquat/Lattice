@@ -117,13 +117,13 @@ class LatticeApplication : Application() {
 
             val db = SQLiteDatabase.openDatabase(
                 dbFile.absolutePath,
-                ByteArray(0),   // empty passphrase = open as plaintext
+                CharArray(0),   // empty passphrase = open as plaintext
                 null,
                 SQLiteDatabase.OPEN_READWRITE
             )
-            db.rawExecSQL("ATTACH DATABASE '${tempFile.absolutePath}' AS encrypted KEY \"x'$hex'\";")
-            db.rawExecSQL("SELECT sqlcipher_export('encrypted');")
-            db.rawExecSQL("DETACH DATABASE encrypted;")
+            db.execSQL("ATTACH DATABASE '${tempFile.absolutePath}' AS encrypted KEY \"x'$hex'\";")
+            db.execSQL("SELECT sqlcipher_export('encrypted');")
+            db.execSQL("DETACH DATABASE encrypted;")
             db.close()
 
             // Replace plaintext original with the encrypted copy.
