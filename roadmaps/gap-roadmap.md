@@ -146,9 +146,9 @@ suspend fun setTransitRetentionDays(days: Int)
 | **About** | App version, schema version, embedding model name |
 
 **Acceptance criteria:**
-- [ ] Cloud toggle shows amber warning before enabling; disabling requires confirmation
-- [ ] Activity list reflects DB state reactively via `getAllActivities()` Flow
-- [ ] Export button produces a valid `lattice_export_<timestamp>.json` file
+- [x] Cloud toggle shows amber warning before enabling; disabling requires confirmation
+- [x] Activity list reflects DB state reactively via `getAllActivities()` Flow
+- [ ] Export button produces a valid `lattice_export_<timestamp>.json` file (wired in 6.8)
 
 ---
 
