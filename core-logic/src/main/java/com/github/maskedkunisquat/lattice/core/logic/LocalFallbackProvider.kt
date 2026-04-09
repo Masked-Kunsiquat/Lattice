@@ -65,6 +65,7 @@ class LocalFallbackProvider(
     private var headDim    = HEAD_DIM_DEFAULT
 
     @Volatile private var initAttempted = false
+    @Volatile private var initFailureReason: String? = null
     private val initLock = Any()
 
     /**
@@ -90,6 +91,7 @@ class LocalFallbackProvider(
                 // isAvailable() correctly returns false.
                 session = newSession
             } catch (e: Exception) {
+                initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
             }
         }
@@ -110,15 +112,11 @@ class LocalFallbackProvider(
     override fun process(prompt: String): Flow<LlmResult> = flow {
         val sess = session
         if (sess == null) {
-            emit(
-                LlmResult.Error(
-                    IllegalStateException(
-                        "Llama-3.2-3B model not loaded. Ensure $MODEL_ASSET and its " +
-                        "data shards are in app/src/main/assets/ and call " +
-                        "LocalFallbackProvider.initialize() at app startup."
-                    )
-                )
-            )
+            val reason = initFailureReason
+                ?.let { " Init failed with: $it" }
+                ?: " Ensure $MODEL_ASSET and its data shards are in app/src/main/assets/" +
+                   " and call LocalFallbackProvider.initialize() at app startup."
+            emit(LlmResult.Error(IllegalStateException("Llama-3.2-3B model not loaded.$reason")))
             return@flow
         }
 
