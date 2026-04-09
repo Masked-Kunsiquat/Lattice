@@ -44,7 +44,7 @@ class LlmOrchestratorTest {
         dao: TransitEventDao = FakeTransitEventDao()
     ): Triple<LlmOrchestrator, FakeProvider, FakeProvider> {
         val nano = FakeProvider("gemini_nano", nanoAvailable)
-        val local = FakeProvider("qwen_onnx_local", localAvailable, listOf(LlmResult.Complete))
+        val local = FakeProvider("llama3_onnx_local", localAvailable, listOf(LlmResult.Complete))
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         val orch = LlmOrchestrator(nano, local, cloud, dao,
             cloudEnabled = { cloudEnabled },
@@ -89,7 +89,7 @@ class LlmOrchestratorTest {
     fun `flips state to CloudTransit when cloud provider is invoked`() = runTest {
         val dao = FakeTransitEventDao()
         val nano = FakeProvider("gemini_nano", false)
-        val local = FakeProvider("qwen_onnx_local", false)
+        val local = FakeProvider("llama3_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         // piiDetector = { false }: prompts in this test are pre-masked; PII checking intentionally skipped.
         val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = { true }, piiDetector = { false })
@@ -106,7 +106,7 @@ class LlmOrchestratorTest {
     fun `logs transit event to DAO when cloud is used`() = runTest {
         val dao = FakeTransitEventDao()
         val nano = FakeProvider("gemini_nano", false)
-        val local = FakeProvider("qwen_onnx_local", false)
+        val local = FakeProvider("llama3_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         // piiDetector = { false }: prompts in this test are pre-masked; PII checking intentionally skipped.
         val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = { true }, piiDetector = { false })
@@ -133,7 +133,7 @@ class LlmOrchestratorTest {
     fun `cloud dispatch is blocked and error emitted when raw PII is detected`() = runTest {
         val dao = FakeTransitEventDao()
         val nano = FakeProvider("gemini_nano", false)
-        val local = FakeProvider("qwen_onnx_local", false)
+        val local = FakeProvider("llama3_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         // Detector: simulates a prompt that still contains a raw name (no [PERSON_uuid] placeholder)
         val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = { true },
@@ -152,7 +152,7 @@ class LlmOrchestratorTest {
     fun `cloud dispatch proceeds when prompt contains only PII placeholders`() = runTest {
         val dao = FakeTransitEventDao()
         val nano = FakeProvider("gemini_nano", false)
-        val local = FakeProvider("qwen_onnx_local", false)
+        val local = FakeProvider("llama3_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         // Detector: raw name absent — prompt is already masked
         val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = { true },

@@ -29,9 +29,9 @@ settings/activities      → ActivityHierarchyScreen
 **Bottom nav destinations:** Editor · History · Settings (Material 3 `NavigationBar`)
 
 **Acceptance criteria:**
-- [ ] `NavHost` renders with correct start destination
-- [ ] Back press from any secondary screen returns to correct parent
-- [ ] `androidx.navigation.compose` (already in `app/build.gradle.kts:58`) is the only nav dependency required — no new dep needed
+- [x] `NavHost` renders with correct start destination
+- [x] Back press from any secondary screen returns to correct parent
+- [x] `androidx.navigation.compose` (already in `app/build.gradle.kts:58`) is the only nav dependency required — no new dep needed
 
 ---
 
@@ -146,9 +146,9 @@ suspend fun setTransitRetentionDays(days: Int)
 | **About** | App version, schema version, embedding model name |
 
 **Acceptance criteria:**
-- [ ] Cloud toggle shows amber warning before enabling; disabling requires confirmation
-- [ ] Activity list reflects DB state reactively via `getAllActivities()` Flow
-- [ ] Export button produces a valid `lattice_export_<timestamp>.json` file
+- [x] Cloud toggle shows amber warning before enabling; disabling requires confirmation
+- [x] Activity list reflects DB state reactively via `getAllActivities()` Flow
+- [ ] Export button produces a valid `lattice_export_<timestamp>.json` file (wired in 6.8)
 
 ---
 
@@ -165,8 +165,8 @@ suspend fun setTransitRetentionDays(days: Int)
 - Reached via `settings/audit` route
 
 **Acceptance criteria:**
-- [ ] Displays all `TransitEvent` rows from `TransitEventDao.getEventsFlow()`
-- [ ] Local-only sessions show empty state message
+- [x] Displays all `TransitEvent` rows from `TransitEventDao.getEventsFlow()`
+- [x] Local-only sessions show empty state message
 
 ---
 
@@ -184,9 +184,9 @@ suspend fun setTransitRetentionDays(days: Int)
 - Tap → navigates to `history/{entryId}` (editor in edit mode)
 
 **Acceptance criteria:**
-- [ ] List updates reactively via `JournalRepository.getEntries()` Flow
-- [ ] Swipe-delete triggers full `deleteEntry` cleanup (Task 6.2)
-- [ ] Undo within Snackbar window re-inserts the entry
+- [x] List updates reactively via `JournalRepository.getEntries()` Flow
+- [x] Swipe-delete triggers full `deleteEntry` cleanup (Task 6.2)
+- [x] Undo within Snackbar window re-inserts the entry
 
 ---
 
@@ -288,10 +288,10 @@ Room.databaseBuilder(context, LatticeDatabase::class.java, "lattice.db")
 - Key material never appears in plaintext outside the Keystore
 
 **Acceptance criteria:**
-- [ ] App cold-starts and reads/writes entries normally with SQLCipher enabled
-- [ ] DB file opened with SQLite CLI (unencrypted) returns an error
+- [x] App cold-starts and reads/writes entries normally with SQLCipher enabled (proven by full instrumented test suite passing against encrypted DB)
+- [ ] DB file opened with SQLite CLI (unencrypted) returns an error *(manual spot-check — cannot be automated)*
 - [x] Key survives app restart (generated once, stored in EncryptedSharedPreferences)
-- [ ] Existing test suite passes (unit tests mock the DAO layer, unaffected by cipher)
+- [x] Existing test suite passes (unit tests mock the DAO layer, unaffected by cipher)
 
 > **Note on migration:** Existing installs (unencrypted DB) need a one-time migration on upgrade.
 > Approach: on first launch after update, open DB unencrypted, `ATTACH DATABASE ... KEY '...'`,
