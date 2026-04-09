@@ -65,6 +65,7 @@ class LocalFallbackProvider(
     private var headDim    = HEAD_DIM_DEFAULT
 
     @Volatile private var initAttempted = false
+    @Volatile private var initFailureReason: String? = null
     private val initLock = Any()
 
     /**
@@ -82,10 +83,22 @@ class LocalFallbackProvider(
                 loadArchConfig()
                 copyAssetsToFilesDir()
                 val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
-                session = createSession(modelPath)
+                val newSession = createSession(modelPath)
+                try {
+                    tokenizer.initialize()
+                } catch (e: Exception) {
+                    // Close the newly created OrtSession before re-throwing so we don't
+                    // leak a native resource when tokenizer init fails.
+                    newSession.close()
+                    throw e
+                }
+                // Assign only after both session AND tokenizer are ready;
+                // isAvailable() correctly returns false until this line executes.
+                session = newSession
+                // Log after assignment so session?.let inside logSessionInfo() sees the session.
                 logSessionInfo()
-                tokenizer.initialize()
             } catch (e: Exception) {
+                initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
             }
         }
@@ -106,15 +119,11 @@ class LocalFallbackProvider(
     override fun process(prompt: String): Flow<LlmResult> = flow {
         val sess = session
         if (sess == null) {
-            emit(
-                LlmResult.Error(
-                    IllegalStateException(
-                        "Llama-3.2-3B model not loaded. Ensure $MODEL_ASSET and its " +
-                        "data shards are in app/src/main/assets/ and call " +
-                        "LocalFallbackProvider.initialize() at app startup."
-                    )
-                )
-            )
+            val reason = initFailureReason
+                ?.let { " Init failed with: $it" }
+                ?: " Ensure $MODEL_ASSET and its data shards are in app/src/main/assets/" +
+                   " and call LocalFallbackProvider.initialize() at app startup."
+            emit(LlmResult.Error(IllegalStateException("Llama-3.2-3B model not loaded.$reason")))
             return@flow
         }
 

@@ -36,6 +36,7 @@ android {
 dependencies {
     implementation(project(":core-data"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.androidx.room.ktx)
     implementation(libs.onnxruntime.android)

@@ -30,6 +30,7 @@ class ReframingLoopTest {
         override suspend fun insertEvent(event: TransitEvent) = Unit
         override suspend fun getAllEvents(): List<TransitEvent> = emptyList()
         override fun getEventsFlow(): Flow<List<TransitEvent>> = flowOf(emptyList())
+        override suspend fun deleteEventsForEntry(entryId: String) = Unit
     }
 
     private fun loopWithResponse(vararg tokens: String): ReframingLoop {
@@ -43,7 +44,7 @@ class ReframingLoopTest {
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = false,
+            cloudEnabled = { false },
         )
         return ReframingLoop(orchestrator)
     }
@@ -59,7 +60,7 @@ class ReframingLoopTest {
             },
             localFallbackProvider = FakeProvider("local", listOf(LlmResult.Complete)),
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = false,
+            cloudEnabled = { false },
         )
     )
 
@@ -153,7 +154,7 @@ class ReframingLoopTest {
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = false,
+            cloudEnabled = { false },
         )
         val result = ReframingLoop(orchestrator).runStage1AffectiveMap("test")
         assertTrue(result.isFailure)
@@ -279,7 +280,7 @@ class ReframingLoopTest {
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = false,
+            cloudEnabled = { false },
         )
         val result = ReframingLoop(orchestrator).runStage2DiagnosisOfThought("test")
         assertTrue(result.isFailure)
@@ -410,7 +411,7 @@ class ReframingLoopTest {
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = false,
+            cloudEnabled = { false },
         )
         val affectiveMap = ReframingLoop.AffectiveMapResult(-0.5f, 0.5f, MoodLabel.ANGRY)
         val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "")
@@ -448,7 +449,7 @@ class ReframingLoopTest {
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = false,
+            cloudEnabled = { false },
         )
         return ReframingLoop(orchestrator, dao)
     }
