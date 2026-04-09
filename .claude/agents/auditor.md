@@ -71,7 +71,7 @@ You will perform rigorous, systematic audits across four security domains:
 
 Always structure your audit report as follows:
 
-```
+```text
 ## Security & Privacy Audit Report
 **Date**: [date]
 **Scope**: [files/components audited]

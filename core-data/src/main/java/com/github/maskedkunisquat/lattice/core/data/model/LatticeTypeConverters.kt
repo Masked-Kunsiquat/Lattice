@@ -1,6 +1,8 @@
 package com.github.maskedkunisquat.lattice.core.data.model
 
 import androidx.room.TypeConverter
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.UUID
 
 class LatticeTypeConverters {
@@ -28,13 +30,26 @@ class LatticeTypeConverters {
     @TypeConverter
     fun toMentionStatus(value: String?): MentionStatus? = value?.let { enumValueOf<MentionStatus>(it) }
 
+    /**
+     * Serialises [FloatArray] to [ByteArray] using IEEE 754 float32 little-endian byte order.
+     * Each float occupies exactly 4 bytes; a 384-dim embedding produces a 1536-byte BLOB.
+     */
     @TypeConverter
-    fun fromFloatArray(array: FloatArray?): String? = array?.joinToString(",")
+    fun fromFloatArray(array: FloatArray?): ByteArray? {
+        array ?: return null
+        val buf = ByteBuffer.allocate(array.size * Float.SIZE_BYTES).order(ByteOrder.LITTLE_ENDIAN)
+        buf.asFloatBuffer().put(array)
+        return buf.array()
+    }
 
+    /**
+     * Deserialises [ByteArray] (IEEE 754 float32 little-endian) back to [FloatArray].
+     */
     @TypeConverter
-    fun toFloatArray(value: String?): FloatArray? = value?.let {
-        if (it.isEmpty()) floatArrayOf()
-        else it.split(",").map { s -> s.toFloat() }.toFloatArray()
+    fun toFloatArray(bytes: ByteArray?): FloatArray? {
+        bytes ?: return null
+        val floatBuf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+        return FloatArray(floatBuf.remaining()) { floatBuf.get() }
     }
 
     @TypeConverter
