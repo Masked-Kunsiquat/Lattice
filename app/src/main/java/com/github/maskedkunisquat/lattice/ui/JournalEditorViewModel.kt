@@ -10,6 +10,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
+import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
@@ -21,6 +22,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+sealed class ReframeState {
+    object Idle                              : ReframeState()
+    object Loading                           : ReframeState()
+    data class Streaming(val partial: String): ReframeState()
+    data class Done(val text: String)        : ReframeState()
+    data class Error(val msg: String)        : ReframeState()
+}
+
 data class EditorUiState(
     val text: String = "",
     val valence: Float = 0f,
@@ -29,10 +38,7 @@ data class EditorUiState(
     val moodSelected: Boolean = false,
     val saved: Boolean = false,
     val error: String? = null,
-    /** True while the three-stage reframe pipeline is running. */
-    val isReframing: Boolean = false,
-    /** Non-null when the pipeline has produced a reframe to display. */
-    val reframeResult: String? = null,
+    val reframeState: ReframeState = ReframeState.Idle,
 )
 
 class JournalEditorViewModel(
@@ -62,7 +68,7 @@ class JournalEditorViewModel(
             _uiState.update { it.copy(text = stripped) }
             triggerReframe(stripped)
         } else {
-            _uiState.update { it.copy(text = newText, reframeResult = null) }
+            _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
         }
     }
 
@@ -109,20 +115,20 @@ class JournalEditorViewModel(
      */
     fun applyReframe() {
         val entryId = savedEntryId ?: return
-        val reframe = _uiState.value.reframeResult ?: return
+        val reframe = (_uiState.value.reframeState as? ReframeState.Done)?.text ?: return
         viewModelScope.launch {
             try {
                 journalRepository.updateReframedContent(entryId.toString(), reframe)
-                _uiState.update { it.copy(reframeResult = null) }
+                _uiState.update { it.copy(reframeState = ReframeState.Idle) }
             } catch (e: Throwable) {
                 _uiState.update { it.copy(error = "Failed to save reframe: ${e.message}") }
             }
         }
     }
 
-    /** Clears a displayed reframe result without discarding the journal text. */
+    /** Resets the reframe state to [ReframeState.Idle] without writing to the DB. */
     fun dismissReframe() {
-        _uiState.update { it.copy(reframeResult = null, error = null) }
+        _uiState.update { it.copy(reframeState = ReframeState.Idle) }
     }
 
     // ── Reframe pipeline ──────────────────────────────────────────────────────
@@ -142,7 +148,7 @@ class JournalEditorViewModel(
         if (text.isBlank()) return
         reframeJob?.cancel()
         reframeJob = viewModelScope.launch {
-            _uiState.update { it.copy(isReframing = true, reframeResult = null, error = null) }
+            _uiState.update { it.copy(reframeState = ReframeState.Loading, error = null) }
             try {
                 // Mask PII before any text reaches the LLM
                 val maskedText = journalRepository.maskText(text)
@@ -157,15 +163,28 @@ class JournalEditorViewModel(
                     .runStage2DiagnosisOfThought(maskedText)
                     .getOrThrow()
 
-                // Stage 3 — Strategic Pivot (quadrant-aware intervention)
-                val intervention = reframingLoop
-                    .runStage3Intervention(maskedText, affectiveMap, diagnosis)
+                // Stage 3 — Stream tokens into Streaming state, seal to Done on Complete
+                val (_, tokenFlow) = reframingLoop
+                    .streamStage3Intervention(maskedText, affectiveMap, diagnosis)
                     .getOrThrow()
+
+                var partial = ""
+                tokenFlow.collect { result ->
+                    when (result) {
+                        is LlmResult.Token -> {
+                            partial += result.text
+                            _uiState.update { it.copy(reframeState = ReframeState.Streaming(partial)) }
+                        }
+                        is LlmResult.Complete -> Unit
+                        is LlmResult.Error    -> throw result.cause
+                    }
+                }
+
+                if (partial.isBlank()) throw IllegalStateException("Model returned an empty reframe.")
 
                 _uiState.update {
                     it.copy(
-                        isReframing  = false,
-                        reframeResult = intervention.reframe,
+                        reframeState = ReframeState.Done(partial.trim()),
                         valence      = affectiveMap.valence,
                         arousal      = affectiveMap.arousal,
                         label        = affectiveMap.label,
@@ -184,10 +203,7 @@ class JournalEditorViewModel(
                 )
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(
-                        isReframing = false,
-                        error = "Reframe failed: ${e.message}",
-                    )
+                    it.copy(reframeState = ReframeState.Error(e.message ?: "Reframe failed"))
                 }
             }
         }

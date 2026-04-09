@@ -322,6 +322,42 @@ class ReframingLoop(
         return DiagnosisResult(distortions = recognized, reasoning = raw)
     }
 
+    /**
+     * Prepares the Stage 3 intervention and returns the raw [LlmResult] flow for
+     * token-by-token streaming in the ViewModel. The caller is responsible for collecting
+     * the flow and sealing to [Done][com.github.maskedkunisquat.lattice.ui.ReframeState.Done]
+     * on [LlmResult.Complete].
+     *
+     * All prep work (strategy selection, BA activity lookup, evidence fetch) runs inside
+     * [dispatcher] before the cold flow is returned.
+     *
+     * @return [Result.success] with the selected [ReframeStrategy] and the token flow,
+     *   or [Result.failure] if prep fails (DAO error, no evidence source, etc.).
+     */
+    suspend fun streamStage3Intervention(
+        maskedText: String,
+        affectiveMap: AffectiveMapResult,
+        diagnosis: DiagnosisResult,
+    ): Result<Pair<ReframeStrategy, kotlinx.coroutines.flow.Flow<LlmResult>>> =
+        withContext(dispatcher) {
+            runCatching {
+                val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
+                val baActivity = if (strategy == ReframeStrategy.BEHAVIORAL_ACTIVATION) {
+                    pickBaActivity(maskedText)
+                } else null
+                val evidenceEntries = if (affectiveMap.valence < 0f) {
+                    fetchEvidenceEntries(maskedText)
+                } else emptyList()
+                val flow = orchestrator.process(
+                    buildInterventionPrompt(
+                        maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                    ),
+                    "intervention"
+                )
+                Pair(strategy, flow)
+            }
+        }
+
     // ── Token stream collector ───────────────────────────────────────────────
 
     private suspend fun collectTokens(flow: Flow<LlmResult>): String {
