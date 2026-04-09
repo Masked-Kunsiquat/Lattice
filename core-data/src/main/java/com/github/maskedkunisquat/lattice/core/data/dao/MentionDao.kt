@@ -24,6 +24,9 @@ interface MentionDao {
     @Query("SELECT * FROM mentions WHERE entryId = :entryId")
     fun getMentionsForEntry(entryId: UUID): Flow<List<Mention>>
 
+    @Query("SELECT * FROM mentions WHERE entryId = :entryId")
+    suspend fun getMentionsByEntry(entryId: UUID): List<Mention>
+
     @Query("SELECT * FROM mentions WHERE personId = :personId")
     fun getMentionsForPerson(personId: UUID): Flow<List<Mention>>
 }

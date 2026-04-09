@@ -28,7 +28,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         TransitEvent::class,
         ActivityHierarchy::class,
     ],
-    version = 5,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -89,6 +89,48 @@ abstract class LatticeDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE journal_entries ADD COLUMN reframedContent TEXT"
                 )
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transit_events ADD COLUMN entryId TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transit_events_entryId ON transit_events(entryId)")
+            }
+        }
+
+        /**
+         * Migrates the `embedding` column in `journal_entries` from TEXT (CSV floats) to
+         * BLOB (IEEE 754 float32 little-endian), matching the updated [LatticeTypeConverters].
+         * SQLite cannot change a column type in-place, so we recreate the table.
+         * Existing embeddings are replaced with zeroblob(1536) — 384 × 4 bytes of zeros.
+         * Zero-vector entries are already excluded from semantic search results by
+         * [SearchRepository], so this is a safe lossy migration during development.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS journal_entries_new (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        timestamp INTEGER NOT NULL,
+                        content TEXT NOT NULL,
+                        valence REAL NOT NULL,
+                        arousal REAL NOT NULL,
+                        moodLabel TEXT NOT NULL,
+                        embedding BLOB NOT NULL,
+                        cognitiveDistortions TEXT NOT NULL DEFAULT '[]',
+                        reframedContent TEXT
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    INSERT INTO journal_entries_new
+                    SELECT id, timestamp, content, valence, arousal, moodLabel,
+                           zeroblob(1536), cognitiveDistortions, reframedContent
+                    FROM journal_entries
+                """.trimIndent())
+                db.execSQL("DROP TABLE journal_entries")
+                db.execSQL("ALTER TABLE journal_entries_new RENAME TO journal_entries")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_journal_entries_timestamp ON journal_entries (timestamp)")
             }
         }
     }

@@ -14,11 +14,12 @@ import java.util.UUID
  */
 @Entity(
     tableName = "transit_events",
-    indices = [Index(value = ["timestamp"])]
+    indices = [Index(value = ["timestamp"]), Index(value = ["entryId"])]
 )
 data class TransitEvent(
     @PrimaryKey val id: UUID,
     val timestamp: Long,
     val providerName: String,   // e.g. "cloud_claude", "cloud_gemini_pro"
-    val operationType: String   // e.g. "reframe", "summarize"
+    val operationType: String,  // e.g. "reframe", "summarize"
+    val entryId: String? = null
 )

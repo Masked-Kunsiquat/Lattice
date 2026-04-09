@@ -1,16 +1,22 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
+import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class JournalRepository(
     private val journalDao: JournalDao,
     private val personDao: PersonDao,
+    private val mentionDao: MentionDao,
+    private val transitEventDao: TransitEventDao,
     private val embeddingProvider: EmbeddingProvider
 ) {
     /**
@@ -76,8 +82,15 @@ class JournalRepository(
         }
     }
 
-    suspend fun deleteEntry(entry: JournalEntry) {
+    suspend fun deleteEntry(entry: JournalEntry) = withContext(Dispatchers.IO) {
+        // 1. Reverse vibe score increments for all mentioned persons
+        val mentions = mentionDao.getMentionsByEntry(entry.id)
+        val delta = -(entry.valence * 0.1f)
+        mentions.forEach { personDao.incrementVibeScore(it.personId, delta) }
+        // 2. Delete entry — CASCADE removes Mentions via FK
         journalDao.deleteEntry(entry)
+        // 3. Prune orphaned TransitEvents
+        transitEventDao.deleteEventsForEntry(entry.id.toString())
     }
 
     /**
