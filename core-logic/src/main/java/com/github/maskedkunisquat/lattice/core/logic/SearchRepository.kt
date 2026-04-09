@@ -59,7 +59,6 @@ class SearchRepository(
      * 1. `valence > [minValence]` — positive quadrant only.
      * 2. `maskedContent` contains at least one placeholder from [placeholders] — anchors
      *    the evidence to the same people/entities referenced in the current entry.
-     * 3. Non-zero embedding vector — entries with no embedding are excluded.
      *
      * Results are ordered by valence descending (most positive first) and capped at [limit].
      * Content is returned masked (callers receive the stored masked form; this is intentional
@@ -77,8 +76,7 @@ class SearchRepository(
     ): Flow<List<JournalEntry>> = flow {
         val candidates = journalDao.getEntriesWithMinValence(minValence)
         val results = candidates
-            .filter { entry -> entry.embedding.any { it != 0f } }
-            .filter { entry -> placeholders.isEmpty() || (entry.content != null && placeholders.any { it in entry.content }) }
+            .filter { entry -> val c = entry.content; placeholders.isEmpty() || (c != null && placeholders.any { it in c }) }
             .take(limit)
         emit(results)
     }.flowOn(Dispatchers.Default)
