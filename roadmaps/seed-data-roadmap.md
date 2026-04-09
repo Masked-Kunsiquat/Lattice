@@ -1,6 +1,6 @@
 # Implementation Roadmap: Seed-Data Engine & Persona-Driven Testing (Schema v7)
 
-> Last updated: 2026-04-09 — §1.1, §1.2, §1.3 complete  
+> Last updated: 2026-04-09 — §1 complete  
 > Branch: `chore/seed-data`  
 > Codebase audit performed against current HEAD.
 
@@ -10,7 +10,7 @@
 
 Phase 5 development has pivoted to a **Unified Agent loop** on Llama-3.2-3B. To validate the Strategic Pivot logic (Socratic vs. BA), we need a robust seeding mechanism that allows us to inject clinical benchmarks and literary datasets into the air-gapped environment.
 
-The Room schema is already at **version 7** (`LatticeDatabase`, `:core-data`). All six migrations (v1→v7) are defined and verified. The pivot to `embedding BLOB` (FloatArray, 384-dim, 1536 bytes IEEE-754 LE) landed in the 6→7 migration. No seed infrastructure exists yet.
+The Room schema is at **version 8** (`LatticeDatabase`, `:core-data`). All seven migrations (v1→v8) are defined and verified. The pivot to `embedding BLOB` (FloatArray, 384-dim, 1536 bytes IEEE-754 LE) landed in the 6→7 migration; `JournalEntry.content` was made nullable in the 7→8 migration to support mood-log entries. The seed infrastructure (§1) is complete.
 
 ---
 
@@ -70,15 +70,15 @@ Responsibilities:
 
 **Guardrail:** `SeedManager` must call `PiiShield.mask()` as a validation pass even on pre-masked seed content, to catch any raw name leakage in the JSON files before insertion.
 
-#### 1.4 Migration Path Verification
+#### 1.4 Migration Path Verification ✓
 
-`LatticeDatabase` is at v7 with all migrations present. The `SeedManager` should assert the DB version at runtime before seeding:
+`SeedManager.seedPersona()` asserts schema v8 at runtime before any writes:
 
 ```kotlin
-require(db.openHelper.readableDatabase.version == 7) { "Unexpected schema version" }
+check(db.openHelper.readableDatabase.version == 8) {
+    "SeedManager requires schema v8 — found v${db.openHelper.readableDatabase.version}"
+}
 ```
-
-If a v8 migration is introduced for nullable `content` (§1.2 Option A), this assertion must be updated.
 
 ---
 
@@ -128,7 +128,7 @@ Each persona is a self-contained seed set: a `people` block, a `journal_entries`
 #### 3.2 Sovereignty Check
 
 `transit_events` table exists with `entryId TEXT` (added in 5→6 migration). For seeded entries:
-- Write a `TransitEvent` per entry with `model = "seed_injection"` and `provider = "local"`.
+- Write a `TransitEvent` per entry with `providerName = "seed_injection"` and `operationType = "seed"`.
 - This keeps the sovereignty audit log self-consistent and prevents seeded entries from inflating `llama3_onnx_local` attribution stats.
 
 #### 3.3 Rule of 30
@@ -177,7 +177,7 @@ This copy happens on first launch and blocks the ONNX session from opening. Curr
 | Blocker | Impact | Resolution |
 |---|---|---|
 | ~~`snowflake-arctic-embed-xs.onnx` and `vocab.txt` not committed to source~~ | ~~Cannot pre-compute embeddings for seed files~~ | **Resolved** — models live in `core-logic/src/main/assets/` |
-| `JournalEntry.content` non-nullable | Cannot represent mood-log entries (null content) | Decide Option A (v8 migration) or Option B (empty string); implement before seed JSON authoring |
+| ~~`JournalEntry.content` non-nullable~~ | ~~Cannot represent mood-log entries~~ | **Resolved** — nullable via `MIGRATION_7_8` (schema v8) |
 | `schema-v7.md` does not exist | Roadmap references it but `SPEC.md` (`schema_version: "lattice-v2"`) is the actual reference | Either rename/update `SPEC.md` to `schema-v7.md` or update all references to point at `SPEC.md` |
 
 ---
