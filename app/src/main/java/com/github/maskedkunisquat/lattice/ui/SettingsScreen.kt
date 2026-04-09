@@ -20,7 +20,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -52,6 +54,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -76,6 +81,7 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val activities by viewModel.activities.collectAsStateWithLifecycle()
     val showCloudDialog by viewModel.showCloudEnableDialog.collectAsStateWithLifecycle()
+    val apiKeySaved by viewModel.apiKeySaved.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -142,10 +148,13 @@ fun SettingsScreen(
                 SovereigntySection(
                     cloudEnabled = settings.cloudEnabled,
                     cloudProvider = settings.cloudProvider,
+                    apiKeySaved = apiKeySaved,
                     onCloudToggle = { enabled ->
                         if (enabled) viewModel.requestCloudEnable() else viewModel.setCloudDisabled()
                     },
                     onProviderChange = viewModel::setCloudProvider,
+                    onApiKeySave = viewModel::setApiKey,
+                    onApiKeyClear = viewModel::clearApiKey,
                 )
             }
 
@@ -260,8 +269,11 @@ private fun AboutRow(label: String, value: String) {
 private fun SovereigntySection(
     cloudEnabled: Boolean,
     cloudProvider: String,
+    apiKeySaved: Boolean,
     onCloudToggle: (Boolean) -> Unit,
     onProviderChange: (String) -> Unit,
+    onApiKeySave: (String) -> Unit,
+    onApiKeyClear: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Row(
@@ -310,7 +322,86 @@ private fun SovereigntySection(
                     }
                 }
             }
+
+            if (cloudProvider != "none") {
+                Spacer(Modifier.height(12.dp))
+                ApiKeySection(
+                    apiKeySaved = apiKeySaved,
+                    onSave = onApiKeySave,
+                    onClear = onApiKeyClear,
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun ApiKeySection(
+    apiKeySaved: Boolean,
+    onSave: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    var keyInput by remember { mutableStateOf("") }
+    var keyVisible by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Key,
+                    contentDescription = null,
+                    tint = if (apiKeySaved) MaterialTheme.colorScheme.primary
+                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (apiKeySaved) "API key saved" else "No API key set",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (apiKeySaved) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (apiKeySaved) {
+                TextButton(
+                    onClick = onClear,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text("Clear") }
+            }
+        }
+
+        OutlinedTextField(
+            value = keyInput,
+            onValueChange = { keyInput = it },
+            label = { Text(if (apiKeySaved) "Replace API key" else "Enter API key") },
+            placeholder = { Text("sk-…") },
+            singleLine = true,
+            visualTransformation = if (keyVisible) VisualTransformation.None
+                                   else PasswordVisualTransformation(),
+            trailingIcon = {
+                TextButton(onClick = { keyVisible = !keyVisible }) {
+                    Text(if (keyVisible) "Hide" else "Show",
+                        style = MaterialTheme.typography.labelSmall)
+                }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Button(
+            onClick = {
+                onSave(keyInput)
+                keyInput = ""
+                keyVisible = false
+            },
+            enabled = keyInput.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Save key") }
     }
 }
 

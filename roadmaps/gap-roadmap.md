@@ -328,9 +328,9 @@ class CloudCredentialStore(context: Context) {
 ```
 
 **Acceptance criteria:**
-- [ ] API key never written to logcat or unencrypted preferences
-- [ ] Key survives app restart
-- [ ] Clearing the key in Settings prevents cloud routing until re-entered
+- [x] API key never written to logcat or unencrypted preferences
+- [x] Key survives app restart
+- [x] Clearing the key in Settings prevents cloud routing until re-entered
 
 ---
 

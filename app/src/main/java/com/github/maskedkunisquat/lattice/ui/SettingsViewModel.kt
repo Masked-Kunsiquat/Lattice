@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import android.net.Uri
 import com.github.maskedkunisquat.lattice.LatticeApplication
+import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
@@ -25,6 +26,7 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val activityDao: ActivityHierarchyDao,
     private val exportManager: ExportManager,
+    private val cloudCredentialStore: CloudCredentialStore,
 ) : ViewModel() {
 
     val settings: StateFlow<LatticeSettings> = settingsRepository.settings.stateIn(
@@ -43,6 +45,20 @@ class SettingsViewModel(
 
     private val _exportUri = MutableSharedFlow<Uri>()
     val exportUri = _exportUri.asSharedFlow()
+
+    // API key state: true when a key is stored for the cloud_claude provider
+    private val _apiKeySaved = MutableStateFlow(cloudCredentialStore.hasApiKey("cloud_claude"))
+    val apiKeySaved: StateFlow<Boolean> = _apiKeySaved.asStateFlow()
+
+    fun setApiKey(key: String) {
+        cloudCredentialStore.setApiKey("cloud_claude", key.trim())
+        _apiKeySaved.value = true
+    }
+
+    fun clearApiKey() {
+        cloudCredentialStore.clearApiKey("cloud_claude")
+        _apiKeySaved.value = false
+    }
 
     fun requestCloudEnable() { _showCloudEnableDialog.update { true } }
 
@@ -100,6 +116,7 @@ class SettingsViewModel(
                     settingsRepository = app.settingsRepository,
                     activityDao = app.database.activityHierarchyDao(),
                     exportManager = app.exportManager,
+                    cloudCredentialStore = app.cloudCredentialStore,
                 ) as T
         }
     }
