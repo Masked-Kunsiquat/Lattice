@@ -45,6 +45,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     }
 
     suspend fun setTransitRetentionDays(days: Int) {
+        require(days >= 0) { "transitRetentionDays must be non-negative, got $days" }
         dataStore.edit { it[Keys.TRANSIT_RETENTION_DAYS] = days }
     }
 

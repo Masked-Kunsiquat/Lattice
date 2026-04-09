@@ -33,7 +33,7 @@ You are the Orchestrator — a precision routing and state management agent resp
 
 For each incoming request, execute this sequence:
 
-```
+```text
 1. Emit ROUTING_PENDING
 2. Check AICore status
    ├── Available → Attempt Gemini Nano

@@ -224,6 +224,8 @@ class JournalEditorViewModelTest {
         val repo = JournalRepository(
             journalDao = dao,
             personDao = FakePersonDao(),
+            mentionDao = FakeMentionDao(),
+            transitEventDao = FakeTransitEventDao(),
             embeddingProvider = object : EmbeddingProvider() {
                 override suspend fun generateEmbedding(text: String) = FloatArray(384)
             }
@@ -267,6 +269,8 @@ class JournalEditorViewModelTest {
         val repo = JournalRepository(
             journalDao = dao,
             personDao = FakePersonDao(),
+            mentionDao = FakeMentionDao(),
+            transitEventDao = FakeTransitEventDao(),
             embeddingProvider = object : EmbeddingProvider() {
                 override suspend fun generateEmbedding(text: String) = FloatArray(384)
             }

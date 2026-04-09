@@ -46,9 +46,12 @@ object KeyProvider {
             ?.let { Base64.decode(it, Base64.DEFAULT) }
             ?: ByteArray(32).also { key ->
                 SecureRandom().nextBytes(key)
-                prefs.edit()
+                val committed = prefs.edit()
                     .putString(KEY_ALIAS, Base64.encodeToString(key, Base64.DEFAULT))
-                    .apply()
+                    .commit()
+                if (!committed) {
+                    throw IllegalStateException("KeyProvider: failed to persist DB encryption key to EncryptedSharedPreferences")
+                }
             }
     }
 }

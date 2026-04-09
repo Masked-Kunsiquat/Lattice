@@ -85,10 +85,16 @@ class LocalFallbackProvider(
                 val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
                 val newSession = createSession(modelPath)
                 logSessionInfo()
-                tokenizer.initialize()
+                try {
+                    tokenizer.initialize()
+                } catch (e: Exception) {
+                    // Close the newly created OrtSession before re-throwing so we don't
+                    // leak a native resource when tokenizer init fails.
+                    newSession.close()
+                    throw e
+                }
                 // Assign only after both session AND tokenizer are ready;
-                // if tokenizer.initialize() throws, session stays null and
-                // isAvailable() correctly returns false.
+                // isAvailable() correctly returns false until this line executes.
                 session = newSession
             } catch (e: Exception) {
                 initFailureReason = "${e::class.simpleName}: ${e.message}"

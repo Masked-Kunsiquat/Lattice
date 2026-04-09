@@ -126,15 +126,24 @@ class LatticeApplication : Application() {
             db.close()
 
             // Replace plaintext original with the encrypted copy.
-            dbFile.delete()
-            tempFile.renameTo(dbFile)
+            if (!tempFile.renameTo(dbFile)) {
+                // rename() can fail on cross-filesystem moves (e.g., some Android OEMs mount
+                // internal storage on a different fs than the DB dir). Fall back to a safe
+                // copy-then-delete so the original is never lost if the copy fails.
+                Log.i(TAG, "rename failed, falling back to copy-then-delete")
+                tempFile.copyTo(dbFile, overwrite = true)
+                tempFile.delete()
+            }
             Log.i(TAG, "Encrypted DB migration complete.")
+            prefs.edit().putBoolean(PREF_ENCRYPTION_DONE, true).apply()
         } catch (e: Exception) {
             // Either already encrypted, or migration failed. Either way, clean up temp
             // and let Room open the file — if it's already encrypted it will work fine.
             tempFile.delete()
             Log.w(TAG, "Encrypted DB migration skipped or failed (may already be encrypted)", e)
-        } finally {
+            // Mark done to avoid retrying on every launch. If the DB is already encrypted
+            // Room will open it correctly. Retrying on genuine failures would risk
+            // infinite-crash loops at startup.
             prefs.edit().putBoolean(PREF_ENCRYPTION_DONE, true).apply()
         }
     }

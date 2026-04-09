@@ -55,11 +55,12 @@ CREATE INDEX IF NOT EXISTS index_transit_events_entryId ON transit_events(entryI
 suspend fun deleteEntry(entry: JournalEntry) = withContext(Dispatchers.IO) {
     // 1. Reverse vibe score increments for all mentioned persons
     val mentions = mentionDao.getMentionsByEntry(entry.id)
-    mentions.forEach { personDao.decrementVibeScore(it.personId, it.sentimentContribution) }
+    val delta = -(entry.valence * 0.1f)
+    mentions.forEach { personDao.incrementVibeScore(it.personId, delta) }
     // 2. Delete entry — CASCADE removes Mentions via FK
     journalDao.deleteEntry(entry)
     // 3. Prune orphaned TransitEvents
-    transitEventDao.deleteEventsForEntry(entry.id)
+    transitEventDao.deleteEventsForEntry(entry.id.toString())
 }
 ```
 
