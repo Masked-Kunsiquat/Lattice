@@ -3,9 +3,10 @@ package com.github.maskedkunisquat.lattice.ui
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -71,9 +72,9 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("Keep local").performClick()
 
-        composeRule.onNodeWithText("Enable cloud processing?").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Enable cloud processing?").assertCountEquals(0)
         // Provider dropdown should not be visible (only shown when cloud is on)
-        composeRule.onNodeWithText("Provider").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Provider").assertCountEquals(0)
     }
 
     // ── Criterion 4: confirming warning enables cloud ─────────────────────────
@@ -86,7 +87,7 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("Enable").performClick()
 
-        composeRule.onNodeWithText("Enable cloud processing?").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Enable cloud processing?").assertCountEquals(0)
         composeRule.onNodeWithText("Provider").assertIsDisplayed()
     }
 
@@ -106,7 +107,7 @@ class SettingsScreenTest {
         navigateToSettings()
         composeRule.onNodeWithContentDescription("Add activity").performClick()
         composeRule.onNodeWithText("Cancel").performClick()
-        composeRule.onNodeWithText("Add Activity").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Add Activity").assertCountEquals(0)
     }
 
     // ── Criterion 6: audit trail navigation ──────────────────────────────────
