@@ -1,6 +1,6 @@
 # Implementation Roadmap: Seed-Data Engine & Persona-Driven Testing (Schema v8)
 
-> Last updated: 2026-04-09 — §1 complete, §2 complete  
+> Last updated: 2026-04-09 — §1 complete, §2 complete, §3 complete, §4.1 complete  
 > Branch: `chore/seed-data`  
 > Codebase audit performed against current HEAD.
 
@@ -118,46 +118,44 @@ Each persona is a self-contained seed set: a `people` block, a `journal_entries`
 
 ---
 
-### 3. Operational Guardrails
+### 3. Operational Guardrails ✓
 
-#### 3.1 PII Isolation
+#### 3.1 PII Isolation ✓
 
 `PiiShield` is fully implemented in `:core-logic`: name-variant regex substitution (full name, first, last, nickname), sorted by length descending, word-boundary anchored, case-insensitive. Masked text is stored in `journal_entries.content`; raw names live only in `people`.
 
-**Seed-specific requirements:**
-- All `[PERSON_<uuid>]` placeholders in seed JSON must reference UUIDs present in the same file's `people` block.
-- `SeedManager` must run `PiiShield.mask()` as a validation pass (not just trust the JSON).
-- Phone numbers in `phone_numbers` are not currently masked in journal text — this known gap is out of scope for seed data since seed entries will not include raw phone numbers.
+**Seed-specific requirements — all enforced in `SeedManager`:**
+- All `[PERSON_<uuid>]` placeholders in seed JSON resolve to UUIDs in the same file's `people` block — validated in `validateSeed()` per-entry placeholder scan.
+- `SeedManager` runs `validateNoRawNames()` as a PII guard before any DB writes — equivalent to `PiiShield.mask()` (same algorithm: name variants sorted longest-first, case-insensitive). Direct `PiiShield` call omitted to avoid circular dependency `:core-data` → `:core-logic`.
+- Phone numbers: out of scope — seed entries contain no raw phone numbers.
 
-#### 3.2 Sovereignty Check
+#### 3.2 Sovereignty Check ✓
 
-`transit_events` table exists with `entryId TEXT` (added in 5→6 migration). For seeded entries:
-- Write a `TransitEvent` per entry with `providerName = "seed_injection"` and `operationType = "seed"`.
-- This keeps the sovereignty audit log self-consistent and prevents seeded entries from inflating `llama3_onnx_local` attribution stats.
+For every seeded journal entry and mood log, `SeedManager.seedPersona()` writes a `TransitEvent` with `providerName = "seed_injection"` and `operationType = "seed"`. Keeps the sovereignty audit log self-consistent; prevents seeded entries from inflating provider attribution stats.
 
-#### 3.3 Rule of 30
+#### 3.3 Rule of 30 ✓
 
-Each persona seed file must contain ≥30 `journalEntries`. `SeedManager` should enforce this at parse time:
+`SeedManager.validateSeed()` enforces ≥30 `journalEntries` at parse time before any DB writes:
 
 ```kotlin
-require(seed.journalEntries.size >= 30) { "Persona '${persona.name}' has fewer than 30 entries — RAG baseline insufficient" }
+require(seed.journalEntries.size >= 30) { "Persona seed has ${seed.journalEntries.size} journal entries — minimum 30 required for RAG baseline" }
 ```
 
 ---
 
 ### 4. Integration & UI
 
-#### 4.1 `DebugSeedScreen`
+#### 4.1 `DebugSeedScreen` ✓
 
-A Compose screen accessible only in `debug` builds. No product flavor exists yet — gating via `BuildConfig.DEBUG` is sufficient for now (add a flavor dimension if an `internal` release variant is introduced later).
+A Compose screen accessible only in `debug` builds. Gated via `BuildConfig.DEBUG` (`buildConfig = true` added to `app/build.gradle.kts` — disabled by default in AGP 8+).
 
-UI requirements:
-- Button per persona: "Seed Holmes", "Seed Watson", "Seed Werther".
-- "Clear All Seeds" button that calls `SeedManager.clearPersona()` for each.
-- Entry count readout per persona (live `Flow` from `JournalDao.countByTag()` or equivalent).
-- Seeding progress indicator (coroutine scope tied to the screen's lifecycle).
-
-Navigation: add a hidden debug entry point in `SettingsScreen` (or a dev-only nav route) — do not expose in release builds.
+**Implemented:**
+- `DebugSeedViewModel`: per-persona seed/clear/clearAll with `loadingPersona: SeedPersona?` state and entry count readout via `SeedManager.getSeededEntryCount()` (reads SharedPreferences manifest synchronously).
+- `DebugSeedScreen`: `PersonaSeedRow` per persona showing name, clinical target subtitle, entry count, Seed/Clear `OutlinedButton`s, `CircularProgressIndicator` while loading. Red "Clear All Seeds" `Button` disabled when nothing is seeded.
+- `SeedManager.getSeededEntryCount(persona)`: public non-suspend accessor returning manifest `entryIds.size` or 0.
+- `LatticeApplication.seedManager`: lazy property.
+- Navigation route `"settings/debug/seed"` registered in `AppNavHost`.
+- `SettingsScreen`: `BuildConfig.DEBUG`-gated "Debug › Seed Data" `ListItem` entry point; hidden from release builds.
 
 #### 4.2 ONNX Model Sharding Progress Indicator
 
