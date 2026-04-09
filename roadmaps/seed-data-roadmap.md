@@ -1,6 +1,6 @@
 # Implementation Roadmap: Seed-Data Engine & Persona-Driven Testing (Schema v7)
 
-> Last updated: 2026-04-09 — §1.1, §1.2 complete  
+> Last updated: 2026-04-09 — §1.1, §1.2, §1.3 complete  
 > Branch: `chore/seed-data`  
 > Codebase audit performed against current HEAD.
 
@@ -30,7 +30,7 @@ There is no `:core-domain` or dedicated `:debug`/`:internal` module. All seed in
 
 ---
 
-### 1. Data Ingestion Architecture ✓ (partial — §1.1 done)
+### 1. Data Ingestion Architecture ✓
 
 **Goal:** A `SeedManager` in `:core-data` that maps JSON seed files to Room entities and inserts them transactionally.
 
@@ -59,7 +59,7 @@ The roadmap calls for mood-only entries (null content, valid valence/arousal). C
 
 Option A implemented: `JournalEntry.content` is now `String?` (schema v8, `MIGRATION_7_8`). All callsites in `JournalRepository`, `SearchRepository`, `ReframingLoop`, and `JournalHistoryScreen` updated with null-safe handling.
 
-#### 1.3 `SeedManager` in `:core-data`
+#### 1.3 `SeedManager` in `:core-data` ✓
 
 Responsibilities:
 1. Parse seed JSON from `assets/seeds/<persona>.json`.

@@ -35,4 +35,7 @@ interface JournalDao {
 
     @Query("SELECT * FROM journal_entries WHERE valence > :minValence ORDER BY valence DESC")
     suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry>
+
+    @Query("DELETE FROM journal_entries WHERE id = :id")
+    suspend fun deleteEntryById(id: UUID)
 }
