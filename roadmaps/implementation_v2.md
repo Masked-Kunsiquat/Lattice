@@ -241,15 +241,14 @@ NOTE: !reframe detection, triggerReframe(), and TransitEvent logging were pulled
 forward into Task 5.1 (commit 370e2ee). Remaining work split into three chunks:
 ```
 
-#### 5.3-A: RAG Evidence Layer (core-data + core-logic)
-- [ ] `JournalDao`: add `getEntriesWithMinValence(minValence: Float): List<JournalEntry>` (suspend, one-shot)
-- [ ] `SearchRepository.findEvidenceEntries(placeholders, minValence=0.5f, limit=5)`: Flow<List<JournalEntry>>
-  - Reuses Snowflake Arctic XS cosine logic from `findSimilarEntries`
+#### ✅ 5.3-A: RAG Evidence Layer (core-data + core-logic) — commit 452bb66
+- [x] `JournalDao`: add `getEntriesWithMinValence(minValence: Float): List<JournalEntry>` (suspend, one-shot)
+- [x] `SearchRepository.findEvidenceEntries(placeholders, minValence=0.5f, limit=5)`: Flow<List<JournalEntry>>
   - Filters to `valence > minValence` (positive quadrant only)
   - Keeps only entries whose `maskedContent` contains ≥ 1 placeholder from the set (cross-entry anchoring)
   - Excludes zero-vector entries
-- [ ] `ReframingLoop` Stage 3: inject top evidence entries as an "Evidence for the Contrary" block into Q2 and Q3 prompts
-- [ ] Unit tests (3): valence gate enforced, placeholder match required, evidence block present in prompt string
+- [x] `ReframingLoop` Stage 3: fetches evidence for Q2+Q3 (valence < 0); injects "Evidence for the Contrary" block into both prompts via `PLACEHOLDER_REGEX` extraction + `fetchEvidenceEntries()`
+- [x] Unit tests (3): valence gate enforced, placeholder match required, evidence block present in prompt string
 
 #### 5.3-B: Streaming UiState (ViewModel)
 - [x] `onTextChanged()`: `!reframe` detection, stripping, `triggerReframe()` dispatch — commit 370e2ee
