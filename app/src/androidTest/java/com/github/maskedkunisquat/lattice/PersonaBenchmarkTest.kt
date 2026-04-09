@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -36,7 +37,7 @@ private const val TAG_TELEMETRY = "Lattice:Hardware:Telemetry"
  *
  * ## What is always asserted (no model required)
  * - Rule of 30: ≥30 journal entries seeded per persona.
- * - PII masking: entry content routed to the LLM contains [PERSON_UUID] placeholders.
+ * - PII masking: entry content routed to the LLM contains no raw name variants (firstName/lastName/nickname).
  * - Quadrant routing: the first negative-valence entry maps to the expected [ReframeStrategy].
  * - Sovereignty: [PrivacyLevel.LocalOnly] throughout; zero cloud [TransitEvent]s in the DB.
  * - Cleanup: [SeedManager.clearPersona] leaves a clean manifest.
@@ -120,13 +121,15 @@ class PersonaBenchmarkTest {
      * 35 entries, 30 negative-valence. Seed distortion: Catastrophizing.
      */
     @Test
-    fun benchmarkHolmes_Q2_SocraticRealityTesting() = runBlocking {
-        Log.i(TAG_BENCHMARK, "🚀 Holmes benchmark — Q2 SOCRATIC_REALITY_TESTING")
-        runPersonaBenchmark(
-            persona          = SeedPersona.HOLMES,
-            expectedStrategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
-        )
-        Log.i(TAG_BENCHMARK, "✅ Holmes benchmark complete")
+    fun benchmarkHolmes_Q2_SocraticRealityTesting() {
+        runBlocking {
+            Log.i(TAG_BENCHMARK, "🚀 Holmes benchmark — Q2 SOCRATIC_REALITY_TESTING")
+            runPersonaBenchmark(
+                persona          = SeedPersona.HOLMES,
+                expectedStrategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
+            )
+            Log.i(TAG_BENCHMARK, "✅ Holmes benchmark complete")
+        }
     }
 
     /**
@@ -134,17 +137,19 @@ class PersonaBenchmarkTest {
      * 30 entries, 7 activity hierarchy items. Seed distortion: Overgeneralization.
      */
     @Test
-    fun benchmarkWatson_Q3_BehavioralActivation() = runBlocking {
-        Log.i(TAG_BENCHMARK, "🚀 Watson benchmark — Q3 BEHAVIORAL_ACTIVATION")
-        runPersonaBenchmark(
-            persona          = SeedPersona.WATSON,
-            expectedStrategy = ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
-        ) {
-            val activities = db.activityHierarchyDao().getAllActivities().first()
-            assertEquals("Watson must have 7 BA activities seeded", 7, activities.size)
-            Log.i(TAG_INFERENCE, "⚖️ Watson activity hierarchy: ${activities.map { it.taskName }}")
+    fun benchmarkWatson_Q3_BehavioralActivation() {
+        runBlocking {
+            Log.i(TAG_BENCHMARK, "🚀 Watson benchmark — Q3 BEHAVIORAL_ACTIVATION")
+            runPersonaBenchmark(
+                persona          = SeedPersona.WATSON,
+                expectedStrategy = ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
+            ) {
+                val activities = db.activityHierarchyDao().getAllActivities().first()
+                assertEquals("Watson must have 7 BA activities seeded", 7, activities.size)
+                Log.i(TAG_INFERENCE, "⚖️ Watson activity hierarchy: ${activities.map { it.taskName }}")
+            }
+            Log.i(TAG_BENCHMARK, "✅ Watson benchmark complete")
         }
-        Log.i(TAG_BENCHMARK, "✅ Watson benchmark complete")
     }
 
     /**
@@ -153,7 +158,8 @@ class PersonaBenchmarkTest {
      * When the model is loaded, Stage 2 must flag [CognitiveDistortion.EMOTIONAL_REASONING].
      */
     @Test
-    fun benchmarkWerther_Stage2_EmotionalReasoning() = runBlocking {
+    fun benchmarkWerther_Stage2_EmotionalReasoning() {
+        runBlocking {
         Log.i(TAG_BENCHMARK, "🚀 Werther benchmark — Q2 SOCRATIC_REALITY_TESTING + EMOTIONAL_REASONING DoT")
         runPersonaBenchmark(
             persona          = SeedPersona.WERTHER,
@@ -171,6 +177,7 @@ class PersonaBenchmarkTest {
             }
         }
         Log.i(TAG_BENCHMARK, "✅ Werther benchmark complete")
+        }
     }
 
     // ── Core benchmark loop ───────────────────────────────────────────────────
@@ -180,7 +187,7 @@ class PersonaBenchmarkTest {
      *
      * 1. **Semantic isolation** — `clearAllTables()` + prefs wipe.
      * 2. **Data ingestion** — `seedPersona` from bundled asset; assert Rule of 30.
-     * 3. **PII masking** — target entry content must contain `[PERSON_UUID]` placeholders.
+     * 3. **PII masking** — target entry content must not contain raw name variants (firstName, lastName, fullName, nickname).
      * 4. **Quadrant routing** — first negative-valence entry maps to [expectedStrategy].
      * 5. **Inference** (model-gated) — run Stages 1–3; assert strategy + TTFT telemetry.
      * 6. **Sovereignty** — `PrivacyLevel.LocalOnly` + zero cloud transit events.
@@ -215,12 +222,24 @@ class PersonaBenchmarkTest {
         val maskedText = requireNotNull(target.content) {
             "Target entry has no text content for $persona"
         }
-        // Belt-and-suspenders: confirm the DB content uses masked placeholders.
-        // The hard enforcement happens in SeedManager.validateSeed() at seed time.
-        assertTrue(
-            "$persona: entry content routed to LLM must contain [PERSON_UUID] placeholder",
-            maskedText.contains("[PERSON_")
-        )
+        // Belt-and-suspenders: confirm the DB content contains no raw name variants.
+        // Hard enforcement happens in SeedManager.validateSeed() at seed time; this
+        // catches any regression where content bypasses masking before reaching the LLM.
+        val persons = db.personDao().getPersons().first()
+        val rawNames = persons.flatMap { p ->
+            listOfNotNull(
+                p.lastName?.let { "${p.firstName} $it" },
+                p.firstName,
+                p.lastName,
+                p.nickname,
+            )
+        }
+        rawNames.forEach { name ->
+            assertFalse(
+                "$persona: raw name '$name' found unmasked in entry content — PII leak",
+                maskedText.contains(name, ignoreCase = true)
+            )
+        }
         Log.i(TAG_INFERENCE, "🧠 $persona target entry: v=${target.valence} a=${target.arousal}")
 
         // ── Step 4: Quadrant routing (deterministic) ──────────────────────────
