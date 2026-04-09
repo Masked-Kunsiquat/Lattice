@@ -109,6 +109,7 @@ class SettingsOrchestratorIntegrationTest {
         // First request — cloud enabled
         orch.process("masked prompt").toList()
         assertEquals(1, cloud.callCount)
+        val eventsAfterFirstRequest = dao.events.size
 
         // Simulate user disabling cloud in Settings
         cloudEnabled = false
@@ -118,6 +119,8 @@ class SettingsOrchestratorIntegrationTest {
 
         assertEquals("Cloud must not receive second request", 1, cloud.callCount)
         assertEquals(PrivacyLevel.LocalOnly, orch.privacyState.value)
+        assertEquals("No new transit event must be logged when cloud is disabled",
+            eventsAfterFirstRequest, dao.events.size)
     }
 
     @Test

@@ -51,7 +51,9 @@ class SettingsViewModel(
     val apiKeySaved: StateFlow<Boolean> = _apiKeySaved.asStateFlow()
 
     fun setApiKey(key: String) {
-        cloudCredentialStore.setApiKey(CLOUD_CLAUDE_PROVIDER, key.trim())
+        val trimmed = key.trim()
+        if (trimmed.isEmpty()) return
+        cloudCredentialStore.setApiKey(CLOUD_CLAUDE_PROVIDER, trimmed)
         _apiKeySaved.value = true
     }
 
@@ -110,6 +112,7 @@ class SettingsViewModel(
 
     companion object {
         const val CLOUD_CLAUDE_PROVIDER = "cloud_claude"
+        const val CLOUD_NONE_PROVIDER = "none"
 
         fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

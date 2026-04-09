@@ -48,7 +48,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,9 +71,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
+import com.github.maskedkunisquat.lattice.ui.SettingsViewModel.Companion.CLOUD_NONE_PROVIDER
 
 private val CLOUD_PROVIDERS = listOf(
-    "none" to "Local only",
+    CLOUD_NONE_PROVIDER to "Local only",
     "cloud_claude" to "Claude (Cloud)",
 )
 
@@ -93,7 +96,14 @@ fun SettingsScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.exportShareIntent.collect { intent -> context.startActivity(intent) }
+        viewModel.exportShareIntent.collect { intent ->
+            try {
+                context.startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                Log.w("SettingsScreen", "No app available to handle export intent", e)
+                snackbarHostState.showSnackbar("No app found to open the export file")
+            }
+        }
     }
 
     if (showCloudDialog) {
@@ -314,7 +324,7 @@ private fun SovereigntySection(
                 }
             }
 
-            if (cloudProvider != "none") {
+            if (cloudProvider != CLOUD_NONE_PROVIDER) {
                 Spacer(Modifier.height(12.dp))
                 ApiKeySection(
                     apiKeySaved = apiKeySaved,
