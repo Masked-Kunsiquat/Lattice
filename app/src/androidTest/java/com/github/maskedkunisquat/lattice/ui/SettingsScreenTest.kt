@@ -41,6 +41,19 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag("screen:settings").assertIsDisplayed()
     }
 
+    /**
+     * DataStore persists across tests in the same process. If a previous test
+     * confirmed "Enable", cloud is still on when the next test runs. Click the
+     * switch once to disable it (no dialog when disabling).
+     */
+    private fun ensureCloudDisabled() {
+        val cloudOn = composeRule
+            .onAllNodesWithText("Data may leave this device")
+            .fetchSemanticsNodes()
+            .isNotEmpty()
+        if (cloudOn) composeRule.onNode(isSwitch).performClick()
+    }
+
     // ── Criterion 1: sections render ─────────────────────────────────────────
 
     @Test
@@ -58,6 +71,7 @@ class SettingsScreenTest {
     @Test
     fun cloudToggle_showsWarningDialog_onEnable() {
         navigateToSettings()
+        ensureCloudDisabled()
         composeRule.onNode(isSwitch).performClick()
         composeRule.onNodeWithText("Enable cloud processing?").assertIsDisplayed()
     }
@@ -67,6 +81,7 @@ class SettingsScreenTest {
     @Test
     fun cloudToggleDialog_keepLocal_dismissesWithoutEnabling() {
         navigateToSettings()
+        ensureCloudDisabled()
         composeRule.onNode(isSwitch).performClick()
         composeRule.onNodeWithText("Enable cloud processing?").assertIsDisplayed()
 
@@ -82,6 +97,7 @@ class SettingsScreenTest {
     @Test
     fun cloudToggleDialog_enable_showsCloudWarningText() {
         navigateToSettings()
+        ensureCloudDisabled()
         composeRule.onNode(isSwitch).performClick()
         composeRule.onNodeWithText("Enable cloud processing?").assertIsDisplayed()
 
