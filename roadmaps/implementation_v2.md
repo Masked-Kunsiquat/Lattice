@@ -215,70 +215,72 @@ Stage 3 — Strategic Pivot ✅
    clinical review requires strict spec alignment.
 ```
 
-### 🟢 Task 5.2: Behavioral Activation (BA) Integration
+### ✅ Task 5.2: Behavioral Activation (BA) Integration
 ```markdown
 # Task: ActivityHierarchy Room Entity + Quadrant III Retrieval
-Deliverables:
+DONE — commit ccd7e10
+
 - ActivityHierarchy Room entity (core-data):
   - Fields: id: UUID, taskName: String, difficulty: Int (0–10), valueCategory: String
   - Table: activity_hierarchy
 - ActivityHierarchyDao: getActivitiesByMaxDifficulty(max: Int): List<ActivityHierarchy>
-  (suspend, one-shot; used by ReframingLoop to find an accessible "Step 1" activity).
-- LatticeDatabase migration v3 → v4: CREATE TABLE activity_hierarchy (same block as 5.4).
-- ReframingLoop Stage 3 (Quadrant III path): calls getActivitiesByMaxDifficulty(),
-  selects the lowest-difficulty activity whose valueCategory aligns with entry context,
-  injects it into the Llama prompt as a concrete BA suggestion.
+  (suspend, one-shot; ordered ASC by difficulty).
+- LatticeDatabase migration v3 → v4: CREATE TABLE activity_hierarchy.
+- ReframingLoop: optional activityHierarchyDao param; Q3 path calls pickBaActivity()
+  which selects lowest-difficulty activity (≤ BA_MAX_DIFFICULTY=5) whose valueCategory
+  appears in entry context; falls back to easiest overall; skips if hierarchy is empty.
+- buildInterventionPrompt: injects baActivity.taskName + valueCategory into Q3 prompt.
+- LatticeApplication: MIGRATION_3_4 added; reframingLoop wired with activityHierarchyDao.
 - Unit tests (3): difficulty gate enforced, empty hierarchy handled gracefully (Stage 3
   proceeds without BA block), activity injected into prompt string.
 ```
 
 ### 🟢 Task 5.3: Memory-Augmented Socratic Dialogue
-```markdown
-# Task: RAG Evidence Injection + Streaming UiState + ReframeBottomSheet
+```
 NOTE: !reframe detection, triggerReframe(), and TransitEvent logging were pulled
-forward into Task 5.1 (commit 370e2ee). Remaining 5.3 deliverables:
-
-Deliverables:
-- SearchRepository.findEvidenceEntries(
-      placeholders: Set<String>,
-      minValence: Float = 0.5f,
-      limit: Int = 5
-  ): Flow<List<JournalEntry>>
-  - Reuses Snowflake Arctic XS embeddings (existing cosine logic from findSimilarEntries).
-  - Fetches entries where valence > minValence (positive quadrant only).
-  - Filters to entries whose maskedContent contains at least one placeholder from the set
-    (cross-entry evidence anchoring to the same people/entities).
-  - Zero-vector entries excluded.
-- JournalDao: add getEntriesWithMinValence(minValence: Float): List<JournalEntry>
-  (suspend, one-shot).
-- ReframingLoop Stage 3: inject top evidence entries as "Evidence for the Contrary"
-  block into both Q2 and Q3 prompts.
-- JournalEditorViewModel:
-  - ✅ DONE: !reframe detection + stripping (commit 370e2ee).
-  - ✅ DONE: triggerReframe() with fail-fast pipeline + TransitEvent logging.
-  - Upgrade EditorUiState.isReframing/reframeResult → sealed ReframeState:
-    Idle | Loading | Streaming(partial: String) | Done(text: String) | Error(msg: String)
-  - Stream LlmResult.Token chunks into ReframeState.Streaming; seal to Done on Complete.
-- ReframeBottomSheet.kt (app/ui): modal bottom sheet consuming reframeState.
-  - Skeleton shimmer while Loading; token-by-token text append while Streaming.
-  - "Apply" action: appends reframed text below original in editor field.
-  - "Dismiss" resets reframeState to Idle.
-- Unit tests (5): cloud provider never invoked, Streaming → Done state transition,
-  valence gate enforced, placeholder match required, evidence block injected into prompt.
+forward into Task 5.1 (commit 370e2ee). Remaining work split into three chunks:
 ```
 
-### 🟢 Task 5.4: Room Schema Update & Audit Trail
+#### 5.3-A: RAG Evidence Layer (core-data + core-logic)
+- [ ] `JournalDao`: add `getEntriesWithMinValence(minValence: Float): List<JournalEntry>` (suspend, one-shot)
+- [ ] `SearchRepository.findEvidenceEntries(placeholders, minValence=0.5f, limit=5)`: Flow<List<JournalEntry>>
+  - Reuses Snowflake Arctic XS cosine logic from `findSimilarEntries`
+  - Filters to `valence > minValence` (positive quadrant only)
+  - Keeps only entries whose `maskedContent` contains ≥ 1 placeholder from the set (cross-entry anchoring)
+  - Excludes zero-vector entries
+- [ ] `ReframingLoop` Stage 3: inject top evidence entries as an "Evidence for the Contrary" block into Q2 and Q3 prompts
+- [ ] Unit tests (3): valence gate enforced, placeholder match required, evidence block present in prompt string
+
+#### 5.3-B: Streaming UiState (ViewModel)
+- [x] `onTextChanged()`: `!reframe` detection, stripping, `triggerReframe()` dispatch — commit 370e2ee
+- [x] `triggerReframe()`: fail-fast 3-stage pipeline + `TransitEvent` audit logging — commit 370e2ee
+- [x] `applyReframe()`: persists accepted reframe via `updateReframedContent()` — commit cb0240d
+- [x] `dismissReframe()`: clears `reframeResult` (state-only, no DB write) — commit cb0240d
+- [ ] Replace `EditorUiState.isReframing: Boolean` + `reframeResult: String?` with sealed `ReframeState`:
+  `Idle | Loading | Streaming(partial: String) | Done(text: String) | Error(msg: String)`
+- [ ] Upgrade `triggerReframe()`: emit `Loading` on start; collect `LlmResult.Token` into `Streaming(partial)`; seal to `Done` on `LlmResult.Complete`
+- [ ] Adapt `applyReframe()` / `dismissReframe()` to consume `ReframeState` instead of `reframeResult: String?`
+- [ ] Unit tests (2): `Streaming → Done` state transition, cloud provider never invoked
+
+#### 5.3-C: ReframeBottomSheet UI (app)
+- [ ] `ReframeBottomSheet.kt`: modal bottom sheet consuming `reframeState`
+  - Skeleton shimmer while `Loading`
+  - Token-by-token text append while `Streaming`
+  - "Apply": calls `applyReframe()` (persists via `updateReframedContent`, clears sheet)
+  - "Dismiss": calls `dismissReframe()` (resets state to `Idle`, no DB write)
+
+### ✅ Task 5.4: Room Schema Update & Audit Trail
 ```markdown
 # Task: JournalEntry reframedContent Column + TransitEvent Logging
-Deliverables:
-- JournalEntry entity: add reframedContent: String? = null column.
-- LatticeDatabase migration v3 → v4:
-  ALTER TABLE journal_entries ADD COLUMN reframed_content TEXT;
-- JournalDao: updateReframedContent(entryId: String, content: String) suspend fun.
-- JournalEditorViewModel: on "Apply" (from ReframeBottomSheet), call
-  updateReframedContent() — no additional TransitEvent needed (already logged by
-  triggerReframe() in Task 5.1 at generation time, provider="local_llama_3b").
-- TransitEvent.operationType already exists (added in Phase 3 — no migration needed).
-- Unit tests (3): migration no-op for null reframedContent, TransitEvent logged on apply,
-  TransitEvent NOT logged on dismiss.
+DONE — commit cb0240d
+
+- JournalEntry entity: reframedContent: String? = null column added.
+- LatticeDatabase migration v4 → v5 (note: v3→v4 was consumed by Task 5.2 activity_hierarchy):
+  ALTER TABLE journal_entries ADD COLUMN reframedContent TEXT
+- JournalDao: updateReframedContent(entryId: String, content: String) @Query suspend fun.
+- JournalRepository: updateReframedContent() delegates to DAO (no extra TransitEvent).
+- JournalEditorViewModel: tracks savedEntryId after save(); applyReframe() calls
+  updateReframedContent() and clears reframeResult; dismissReframe() unchanged (state-only).
+- LatticeApplication: MIGRATION_4_5 added to migration chain.
+- Unit tests (3): null default on entity, DAO delegation on apply, DAO untouched on dismiss.
 ```
