@@ -46,6 +46,7 @@ class LatticeApplication : Application() {
 
     val exportManager by lazy {
         ExportManager(
+            context = this,
             journalDao = database.journalDao(),
             personDao = database.personDao(),
             transitEventDao = database.transitEventDao(),

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!--
+        Covers getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).
+        Scoped to the app's own external storage — no MANAGE_EXTERNAL_STORAGE needed.
+    -->
+    <external-files-path
+        name="documents"
+        path="Documents/" />
+</paths>

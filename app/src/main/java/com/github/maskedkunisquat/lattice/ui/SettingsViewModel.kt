@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.lattice.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import android.net.Uri
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
@@ -39,6 +40,9 @@ class SettingsViewModel(
 
     private val _snackbarMessage = MutableSharedFlow<String>()
     val snackbarMessage = _snackbarMessage.asSharedFlow()
+
+    private val _exportUri = MutableSharedFlow<Uri>()
+    val exportUri = _exportUri.asSharedFlow()
 
     fun requestCloudEnable() { _showCloudEnableDialog.update { true } }
 
@@ -80,9 +84,8 @@ class SettingsViewModel(
     fun exportJournal() {
         viewModelScope.launch {
             try {
-                exportManager.generateManifest()
-                // TODO(6.8): replace with exportToFile() + share intent
-                _snackbarMessage.emit("Export validated — file write wired in Task 6.8")
+                val uri = exportManager.exportToFile()
+                _exportUri.emit(uri)
             } catch (e: Exception) {
                 _snackbarMessage.emit("Export failed: ${e.message}")
             }

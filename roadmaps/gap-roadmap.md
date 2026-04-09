@@ -148,7 +148,7 @@ suspend fun setTransitRetentionDays(days: Int)
 **Acceptance criteria:**
 - [x] Cloud toggle shows amber warning before enabling; disabling requires confirmation
 - [x] Activity list reflects DB state reactively via `getAllActivities()` Flow
-- [ ] Export button produces a valid `lattice_export_<timestamp>.json` file (wired in 6.8)
+- [x] Export button produces a valid `lattice_export_<timestamp>.json` file
 
 ---
 
@@ -226,9 +226,9 @@ context.startActivity(Intent.createChooser(
 ```
 
 **Acceptance criteria:**
-- [ ] Exported JSON validates against `SPEC.md` schema
-- [ ] File is written to `Documents/` (accessible without MANAGE_EXTERNAL_STORAGE)
-- [ ] Share sheet launches and allows saving/sending the file
+- [x] Exported JSON validates against `SPEC.md` schema
+- [x] File is written to `Documents/` (accessible without MANAGE_EXTERNAL_STORAGE)
+- [x] Share sheet launches and allows saving/sending the file
 
 ---
 
