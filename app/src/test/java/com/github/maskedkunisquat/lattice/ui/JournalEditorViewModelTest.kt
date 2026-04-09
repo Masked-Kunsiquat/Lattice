@@ -115,7 +115,7 @@ class JournalEditorViewModelTest {
             nanoProvider = unavailableProvider,
             localFallbackProvider = fakeLocal,
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = false,
+            cloudEnabled = { false },
         )
         return JournalEditorViewModel(
             journalRepository = repo,
@@ -237,7 +237,7 @@ class JournalEditorViewModelTest {
             localFallbackProvider = fakeLocal,
             cloudProvider = fakeCloud,
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = true,
+            cloudEnabled = { true },
             piiDetector = { false },
         )
         val vm = JournalEditorViewModel(
@@ -286,7 +286,7 @@ class JournalEditorViewModelTest {
             },
             localFallbackProvider = fakeLocal,
             transitEventDao = FakeTransitEventDao(),
-            cloudEnabled = false,
+            cloudEnabled = { false },
         )
         val vm = JournalEditorViewModel(
             journalRepository = repo,

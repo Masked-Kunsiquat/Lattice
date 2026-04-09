@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.lattice
 
 import android.app.Application
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
@@ -10,6 +11,10 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.NanoProvider
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import com.github.maskedkunisquat.lattice.core.logic.SearchRepository
+import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
+import kotlinx.coroutines.flow.first
+
+private val Application.settingsDataStore by preferencesDataStore(name = "lattice_settings")
 
 class LatticeApplication : Application() {
 
@@ -24,6 +29,8 @@ class LatticeApplication : Application() {
             )
             .build()
     }
+
+    val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
 
     val embeddingProvider by lazy { EmbeddingProvider() }
 
@@ -56,9 +63,10 @@ class LatticeApplication : Application() {
             nanoProvider = NanoProvider(this),
             localFallbackProvider = localFallbackProvider,
             transitEventDao = database.transitEventDao(),
-            cloudEnabled = false,
-            // cloudProvider omitted: cloud routing is disabled by default.
-            // Inject a CloudProvider (+ piiDetector) here when the user enables cloud models.
+            // cloudEnabled reads live from DataStore — survives process restarts and
+            // updates immediately when the user toggles the setting in SettingsScreen.
+            cloudEnabled = { settingsRepository.settings.first().cloudEnabled },
+            // cloudProvider / piiDetector omitted until cloud routing is user-enabled.
         )
     }
 

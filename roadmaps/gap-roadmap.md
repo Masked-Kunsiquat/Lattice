@@ -120,8 +120,8 @@ suspend fun setTransitRetentionDays(days: Int)
 **Wire into `LatticeApplication.kt`:** provide `SettingsRepository` as a lazy singleton, inject into `LlmOrchestrator` so `cloudEnabled` is driven by DataStore rather than the hardcoded `false` at line 56.
 
 **Acceptance criteria:**
-- [ ] `cloudEnabled` persists across process restarts
-- [ ] `LlmOrchestrator` reads `cloudEnabled` from `SettingsRepository`, not a constructor param
+- [x] `cloudEnabled` persists across process restarts
+- [x] `LlmOrchestrator` reads `cloudEnabled` from `SettingsRepository`, not a constructor param
 - [ ] Unit test: toggle cloud → orchestrator routes accordingly
 
 ---

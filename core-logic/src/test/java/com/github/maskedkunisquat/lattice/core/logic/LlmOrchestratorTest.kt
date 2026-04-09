@@ -46,7 +46,10 @@ class LlmOrchestratorTest {
         val nano = FakeProvider("gemini_nano", nanoAvailable)
         val local = FakeProvider("qwen_onnx_local", localAvailable, listOf(LlmResult.Complete))
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
-        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled)
+        val orch = LlmOrchestrator(nano, local, cloud, dao,
+            cloudEnabled = { cloudEnabled },
+            piiDetector = { false }
+        )
         return Triple(orch, nano, local)
     }
 
@@ -89,7 +92,7 @@ class LlmOrchestratorTest {
         val local = FakeProvider("qwen_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         // piiDetector = { false }: prompts in this test are pre-masked; PII checking intentionally skipped.
-        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true, piiDetector = { false })
+        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = { true }, piiDetector = { false })
 
         orch.process("masked prompt").toList()
 
@@ -106,7 +109,7 @@ class LlmOrchestratorTest {
         val local = FakeProvider("qwen_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         // piiDetector = { false }: prompts in this test are pre-masked; PII checking intentionally skipped.
-        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true, piiDetector = { false })
+        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = { true }, piiDetector = { false })
 
         orch.process("masked prompt", operationType = "reframe").toList()
 
@@ -133,7 +136,7 @@ class LlmOrchestratorTest {
         val local = FakeProvider("qwen_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         // Detector: simulates a prompt that still contains a raw name (no [PERSON_uuid] placeholder)
-        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true,
+        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = { true },
             piiDetector = { prompt -> "John" in prompt })
 
         val results = orch.process("John did something today").toList()
@@ -152,7 +155,7 @@ class LlmOrchestratorTest {
         val local = FakeProvider("qwen_onnx_local", false)
         val cloud = FakeProvider("cloud_claude", true, listOf(LlmResult.Complete))
         // Detector: raw name absent — prompt is already masked
-        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = true,
+        val orch = LlmOrchestrator(nano, local, cloud, dao, cloudEnabled = { true },
             piiDetector = { prompt -> "John" in prompt })
 
         val results = orch.process("[PERSON_abc123] did something today").toList()

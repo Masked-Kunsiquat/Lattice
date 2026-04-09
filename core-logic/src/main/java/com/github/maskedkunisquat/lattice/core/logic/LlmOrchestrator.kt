@@ -31,30 +31,31 @@ import java.util.UUID
  * if [piiDetector] returns true (raw PII detected), the request is rejected with
  * [LlmResult.Error] before any data leaves the device.
  *
- * @param cloudEnabled Gates cloud routing. False by default — users must explicitly opt in.
- * @param piiDetector Required when [cloudEnabled] is true. Returns true if the prompt contains
- *   unmasked PII; when true, cloud dispatch is blocked and [LlmResult.Error] is emitted before
- *   data leaves the device. Pass `{ false }` to explicitly opt out of PII checking (only safe
- *   when the caller guarantees all prompts are already masked via [PiiShield]).
- *   Implementations should not throw — if the detector throws, the orchestrator treats the
- *   prompt as containing PII (fail-safe: block the request rather than risk leaking data).
- *   Null is only valid when [cloudEnabled] is false; constructing with `cloudEnabled=true` and
- *   `piiDetector=null` will throw [IllegalArgumentException].
+ * @param cloudEnabled Suspend lambda returning true when cloud routing is permitted.
+ *   Defaults to `{ false }`. Wire to [SettingsRepository.settings] so the value tracks
+ *   the user's DataStore preference across process restarts.
+ * @param piiDetector Required when [cloudProvider] is supplied. Returns true if the prompt
+ *   contains unmasked PII; when true, cloud dispatch is blocked and [LlmResult.Error] is
+ *   emitted before data leaves the device. Pass `{ false }` to explicitly opt out of PII
+ *   checking (only safe when the caller guarantees all prompts are already masked via
+ *   [PiiShield]). Implementations should not throw — if the detector throws, the orchestrator
+ *   treats the prompt as containing PII (fail-safe). Must be non-null whenever [cloudProvider]
+ *   is non-null; constructing with a non-null [cloudProvider] and null [piiDetector] throws
+ *   [IllegalArgumentException].
  */
 class LlmOrchestrator(
     private val nanoProvider: LlmProvider,
     private val localFallbackProvider: LlmProvider,
     private val cloudProvider: LlmProvider? = null,
     private val transitEventDao: TransitEventDao,
-    val cloudEnabled: Boolean = false,
+    private val cloudEnabled: suspend () -> Boolean = { false },
     private val piiDetector: ((String) -> Boolean)? = null
 ) {
     init {
-        require(!cloudEnabled || cloudProvider != null) {
-            "cloudProvider must be supplied when cloudEnabled=true."
-        }
-        require(!cloudEnabled || piiDetector != null) {
-            "piiDetector must be provided when cloudEnabled=true. " +
+        // piiDetector is required whenever a cloud provider is wired in, because
+        // cloudEnabled can flip to true at runtime — we need PII checking ready.
+        require(cloudProvider == null || piiDetector != null) {
+            "piiDetector must be provided when cloudProvider is supplied. " +
             "Pass { false } to explicitly opt out of PII checking only if prompts are pre-masked."
         }
     }
@@ -93,8 +94,7 @@ class LlmOrchestrator(
     private suspend fun selectProvider(): LlmProvider {
         if (nanoProvider.isAvailable()) return nanoProvider
         if (localFallbackProvider.isAvailable()) return localFallbackProvider
-        // cloudProvider is non-null here: init block enforces this when cloudEnabled=true.
-        if (cloudEnabled && cloudProvider != null) return cloudProvider
+        if (cloudEnabled() && cloudProvider != null) return cloudProvider
         // No provider available and cloud not enabled — return localFallback which will
         // emit LlmResult.Error explaining the model is not bundled.
         return localFallbackProvider
