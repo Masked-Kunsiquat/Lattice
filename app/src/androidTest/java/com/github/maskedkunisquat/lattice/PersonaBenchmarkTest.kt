@@ -79,8 +79,13 @@ class PersonaBenchmarkTest {
         db = Room.inMemoryDatabaseBuilder(context, LatticeDatabase::class.java).build()
         seedManager = SeedManager(db, context)
 
+        // LatticeApplication.onCreate() already called embeddingProvider.initialize() on the
+        // shared application-level EmbeddingProvider. Creating and initialising a *second*
+        // EmbeddingProvider here loads the 23 MB ONNX model a second time into the same native
+        // OrtEnvironment singleton, which causes a native process crash. Since all inference
+        // stages are gated on modelLoaded (always false here — no Llama assets present), the
+        // SearchRepository only needs the zero-vector fallback, so skip initialize().
         val embeddingProvider = EmbeddingProvider()
-        embeddingProvider.initialize(context)
 
         // NNAPI acceleration is requested inside LocalFallbackProvider.createSession() —
         // no explicit configuration needed here. Fails silently to CPU if NNAPI is absent.
