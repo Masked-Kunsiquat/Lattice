@@ -40,6 +40,7 @@ class ReframedContentTest {
         override suspend fun updateReframedContent(entryId: String, content: String) {
             updatedReframes.add(entryId to content)
         }
+        override suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry> = emptyList()
     }
 
     private fun makeRepo(journalDao: FakeJournalDao): JournalRepository =

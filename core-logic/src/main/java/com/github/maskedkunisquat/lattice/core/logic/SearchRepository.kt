@@ -52,6 +52,38 @@ class SearchRepository(
     }.flowOn(Dispatchers.Default)
 
     /**
+     * Finds past journal entries that serve as "Evidence for the Contrary" — positive
+     * experiences involving the same entities as the current entry.
+     *
+     * Entries are filtered to:
+     * 1. `valence > [minValence]` — positive quadrant only.
+     * 2. `maskedContent` contains at least one placeholder from [placeholders] — anchors
+     *    the evidence to the same people/entities referenced in the current entry.
+     * 3. Non-zero embedding vector — entries with no embedding are excluded.
+     *
+     * Results are ordered by valence descending (most positive first) and capped at [limit].
+     * Content is returned masked (callers receive the stored masked form; this is intentional
+     * since evidence is injected into LLM prompts which operate on masked text).
+     *
+     * @param placeholders Set of `[PERSON_UUID]` tokens extracted from the current entry's
+     *   masked text. Used for cross-entry entity anchoring.
+     * @param minValence Minimum valence threshold (exclusive). Defaults to 0.5.
+     * @param limit Maximum number of evidence entries to return. Defaults to 5.
+     */
+    fun findEvidenceEntries(
+        placeholders: Set<String>,
+        minValence: Float = 0.5f,
+        limit: Int = 5,
+    ): Flow<List<JournalEntry>> = flow {
+        val candidates = journalDao.getEntriesWithMinValence(minValence)
+        val results = candidates
+            .filter { entry -> entry.embedding.any { it != 0f } }
+            .filter { entry -> placeholders.isEmpty() || placeholders.any { it in entry.content } }
+            .take(limit)
+        emit(results)
+    }.flowOn(Dispatchers.Default)
+
+    /**
      * Computes the cosine similarity between two 384-dimensional float vectors.
      * Returns 0f when either vector is the zero-vector (no valid direction).
      */

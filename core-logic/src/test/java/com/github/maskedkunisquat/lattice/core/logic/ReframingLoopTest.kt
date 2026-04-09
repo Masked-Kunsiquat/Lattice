@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.lattice.core.logic
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
+import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -501,5 +502,34 @@ class ReframingLoopTest {
         )
         assertTrue(prompt.contains("Take a 5-minute walk"))
         assertTrue(prompt.contains("health"))
+    }
+
+    // ── Task 5.3-A: RAG Evidence injection ───────────────────────────────────
+
+    @Test
+    fun `buildInterventionPrompt - evidence block injected into Q2 prompt when entries provided`() {
+        val evidence = JournalEntry(
+            id = UUID.randomUUID(),
+            timestamp = 0L,
+            content = "[PERSON_abc] was kind and supportive yesterday.",
+            valence = 0.8f,
+            arousal = 0.2f,
+            moodLabel = "SERENE",
+            embedding = FloatArray(384),
+        )
+        val prompt = loop.buildInterventionPrompt(
+            maskedText = "I feel [PERSON_abc] is angry at me.",
+            strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
+            distortions = emptyList(),
+            evidenceEntries = listOf(evidence),
+        )
+        assertTrue(
+            "Evidence for the Contrary block must appear in Q2 prompt",
+            prompt.contains("Evidence for the Contrary")
+        )
+        assertTrue(
+            "Evidence entry content must be present in prompt",
+            prompt.contains("[PERSON_abc] was kind and supportive yesterday.")
+        )
     }
 }

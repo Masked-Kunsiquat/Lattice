@@ -4,8 +4,6 @@ import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
-import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -17,123 +15,92 @@ import java.util.UUID
 
 class SearchRepositoryTest {
 
-    // --- Fakes ---
+    // ── Fakes ─────────────────────────────────────────────────────────────────
 
-    private class FakeJournalDao(private val entries: List<JournalEntry>) : JournalDao {
-        override suspend fun getAllEntries() = entries
-        override suspend fun insertEntry(entry: JournalEntry) = Unit
-        override suspend fun updateEntry(entry: JournalEntry) = Unit
-        override suspend fun deleteEntry(entry: JournalEntry) = Unit
-        override fun getEntries(): Flow<List<JournalEntry>> = flowOf(entries)
-        override fun getEntryById(id: UUID): Flow<JournalEntry?> = flowOf(null)
-    }
-
-    private class FakePersonDao(private val people: List<Person> = emptyList()) : PersonDao {
-        override fun getPersons(): Flow<List<Person>> = flowOf(people)
-        override fun getPersonById(id: UUID): Flow<Person?> = flowOf(null)
+    private class FakePersonDao : PersonDao {
         override suspend fun insertPerson(person: Person) = Unit
         override suspend fun updatePerson(person: Person) = Unit
         override suspend fun deletePerson(person: Person) = Unit
+        override fun getPersons(): Flow<List<Person>> = flowOf(emptyList())
+        override fun getPersonById(id: UUID): Flow<Person?> = flowOf(null)
         override suspend fun incrementVibeScore(personId: UUID, delta: Float) = Unit
     }
 
-    /**
-     * EmbeddingProvider that returns a caller-controlled vector and records what text it received.
-     * The parent dispatcher is never used because [generateEmbedding] is fully overridden.
-     */
-    private class ControlledEmbeddingProvider(
-        private val embedFn: (String) -> FloatArray
-    ) : EmbeddingProvider(Dispatchers.Unconfined) {
-        val capturedTexts = mutableListOf<String>()
-        override suspend fun generateEmbedding(text: String): FloatArray {
-            capturedTexts.add(text)
-            return embedFn(text)
+    private fun entry(
+        valence: Float,
+        content: String,
+        hasEmbedding: Boolean = true,
+    ) = JournalEntry(
+        id = UUID.randomUUID(),
+        timestamp = System.currentTimeMillis(),
+        content = content,
+        valence = valence,
+        arousal = 0f,
+        moodLabel = "SERENE",
+        embedding = if (hasEmbedding) FloatArray(384) { 0.1f } else FloatArray(384),
+    )
+
+    private fun makeRepo(entries: List<JournalEntry>): SearchRepository {
+        val dao = object : JournalDao {
+            override suspend fun insertEntry(e: JournalEntry) = Unit
+            override suspend fun updateEntry(e: JournalEntry) = Unit
+            override suspend fun deleteEntry(e: JournalEntry) = Unit
+            override fun getEntries(): Flow<List<JournalEntry>> = flowOf(emptyList())
+            override fun getEntryById(id: UUID): Flow<JournalEntry?> = flowOf(null)
+            override suspend fun getAllEntries(): List<JournalEntry> = emptyList()
+            override suspend fun updateReframedContent(id: String, content: String) = Unit
+            override suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry> =
+                entries.filter { it.valence > minValence }.sortedByDescending { it.valence }
         }
+        return SearchRepository(
+            journalDao = dao,
+            personDao = FakePersonDao(),
+            embeddingProvider = object : EmbeddingProvider() {
+                override suspend fun generateEmbedding(text: String) = FloatArray(384) { 0.1f }
+            }
+        )
     }
 
-    // --- Helpers ---
-
-    private fun makeEntry(embedding: FloatArray, content: String = "content"): JournalEntry =
-        JournalEntry(
-            id = UUID.randomUUID(),
-            timestamp = System.currentTimeMillis(),
-            content = content,
-            valence = 0f,
-            arousal = 0f,
-            moodLabel = "NEUTRAL",
-            embedding = embedding
-        )
-
-    /** Builds a unit vector pointing only along dimension [dim]. */
-    private fun basisVector(dim: Int, size: Int = EmbeddingProvider.EMBEDDING_DIM): FloatArray =
-        FloatArray(size).also { it[dim] = 1f }
-
-    // --- Tests ---
+    // ── Tests ─────────────────────────────────────────────────────────────────
 
     @Test
-    fun `findSimilarEntries masks PII in query before embedding`() = runTest {
+    fun `findEvidenceEntries - valence gate enforced`() = runTest {
         val personId = UUID.randomUUID()
-        val person = Person(
-            id = personId,
-            firstName = "Alice",
-            lastName = null,
-            nickname = null,
-            relationshipType = RelationshipType.FRIEND
-        )
-        val provider = ControlledEmbeddingProvider { FloatArray(EmbeddingProvider.EMBEDDING_DIM) }
-        val repo = SearchRepository(FakeJournalDao(emptyList()), FakePersonDao(listOf(person)), provider)
+        val placeholder = "[PERSON_$personId]"
 
-        repo.findSimilarEntries("I talked to Alice today", limit = 5).first()
+        val aboveThreshold = entry(valence = 0.8f, content = "Had a great day with $placeholder.")
+        val belowThreshold = entry(valence = 0.3f, content = "Was okay with $placeholder.")
+        val atThreshold    = entry(valence = 0.5f, content = "Exactly at threshold with $placeholder.")
 
-        assertEquals(1, provider.capturedTexts.size)
-        val embedded = provider.capturedTexts[0]
-        assertTrue("Raw name 'Alice' must not reach the embedding pipeline", !embedded.contains("Alice"))
-        assertTrue("Masked placeholder must be present", embedded.contains("[PERSON_$personId]"))
-    }
+        val repo = makeRepo(listOf(aboveThreshold, belowThreshold, atThreshold))
+        val results = repo.findEvidenceEntries(
+            placeholders = setOf(placeholder),
+            minValence = 0.5f,
+        ).first()
 
-    @Test
-    fun `findSimilarEntries ranks results by cosine similarity descending`() = runTest {
-        // Query points along dimension 0 (similarity = 1.0).
-        // Entry A aligns with dim 0 exactly → similarity 1.0.
-        // Entry B points partly at dim 0, partly at dim 1 → similarity ~0.5 (lower).
-        val entryA = makeEntry(basisVector(0), content = "entry A — high similarity")
-        val entryBVec = FloatArray(EmbeddingProvider.EMBEDDING_DIM).also { it[0] = 0.5f; it[1] = 0.866f }
-        val entryB = makeEntry(entryBVec, content = "entry B — lower similarity")
-
-        val provider = ControlledEmbeddingProvider { basisVector(0) }
-        val repo = SearchRepository(FakeJournalDao(listOf(entryA, entryB)), FakePersonDao(), provider)
-
-        val results = repo.findSimilarEntries("anything", limit = 10).first()
-
-        assertEquals(2, results.size)
-        assertEquals(entryA.id, results[0].id)
-        assertEquals(entryB.id, results[1].id)
-    }
-
-    @Test
-    fun `findSimilarEntries respects the limit parameter`() = runTest {
-        // All entries point along dim 0 so they all pass the score > 0 filter;
-        // limit=3 should cap the result at 3.
-        val entries = List(10) { makeEntry(basisVector(0)) }
-        val provider = ControlledEmbeddingProvider { basisVector(0) }
-        val repo = SearchRepository(FakeJournalDao(entries), FakePersonDao(), provider)
-
-        val results = repo.findSimilarEntries("anything", limit = 3).first()
-
-        assertEquals(3, results.size)
-    }
-
-    @Test
-    fun `findSimilarEntries excludes zero-vector entries`() = runTest {
-        val zeroEntry = makeEntry(FloatArray(EmbeddingProvider.EMBEDDING_DIM), content = "zero entry")
-        val realEntry = makeEntry(basisVector(0), content = "real entry")
-
-        val provider = ControlledEmbeddingProvider { basisVector(0) }
-        val repo = SearchRepository(FakeJournalDao(listOf(zeroEntry, realEntry)), FakePersonDao(), provider)
-
-        val results = repo.findSimilarEntries("anything", limit = 10).first()
-
+        assertTrue("Only entries above minValence=0.5 should be returned", results.all { it.valence > 0.5f })
         assertEquals(1, results.size)
-        assertEquals(realEntry.id, results[0].id)
+        assertEquals(aboveThreshold.id, results[0].id)
+    }
+
+    @Test
+    fun `findEvidenceEntries - placeholder match required`() = runTest {
+        val personA = UUID.randomUUID()
+        val personB = UUID.randomUUID()
+        val placeholderA = "[PERSON_$personA]"
+        val placeholderB = "[PERSON_$personB]"
+
+        val matchingEntry    = entry(valence = 0.9f, content = "Loved spending time with $placeholderA.")
+        val noPlaceholder    = entry(valence = 0.9f, content = "Had a great solo hike.")
+        val wrongPerson      = entry(valence = 0.9f, content = "Worked well with $placeholderB.")
+
+        val repo = makeRepo(listOf(matchingEntry, noPlaceholder, wrongPerson))
+        val results = repo.findEvidenceEntries(
+            placeholders = setOf(placeholderA),
+            minValence = 0.5f,
+        ).first()
+
+        assertEquals("Only entries containing a matching placeholder should be returned", 1, results.size)
+        assertEquals(matchingEntry.id, results[0].id)
     }
 }
