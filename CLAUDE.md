@@ -106,6 +106,8 @@ Stage 3 pulls two optional context blocks before prompting: the lowest-difficult
 
 **Version 8** (`LatticeDatabase`), 6 entities, 7 migrations tracked in `LatticeDatabase.kt`:
 
+- When adding a UNIQUE index during migration, dedupe the shadow table first: `SELECT MIN(id), name FROM <table> GROUP BY name` — `INSERT OR IGNORE` alone only skips PK conflicts, not name conflicts.
+
 - `JournalEntry.content` is **nullable** since v8 (mood-only entries have no text).
 - `JournalEntry.embedding` is a `BLOB` (384 × float32, IEEE 754 little-endian, 1536 bytes) since v7 — `LatticeTypeConverters` handles FloatArray ↔ ByteArray. Do not store embeddings as CSV strings.
 - `TransitEvent` exists for sovereignty auditing. Seeded entries use `providerName = "seed_injection"`.
@@ -154,6 +156,12 @@ HuggingFace repos:
 - **Clinical persona seeds (dataset)**: `https://huggingface.co/datasets/masked-kunsiquat/clinical-personas`
 
 `core-logic/src/main/assets/` contains the embedding model (`snowflake-arctic-embed-xs.onnx`, 23 MB) and `vocab.txt` — these **are** committed to git (small enough, needed by `:core-logic` tests without any download step).
+
+---
+
+## Commit Style
+
+Conventional commits with feature-area scopes (not module names): `feat(editor):`, `feat(schema):`, `fix(editor):`, `docs:`, `chore:`, `test:`, `refactor:`. Inline review fixes go in a dedicated commit: `fix: address inline review findings from <area>`.
 
 ---
 
