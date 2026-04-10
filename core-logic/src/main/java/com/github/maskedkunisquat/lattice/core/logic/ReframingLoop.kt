@@ -208,43 +208,29 @@ class ReframingLoop(
         else
             "Identified cognitive distortions: ${distortions.joinToString(", ") { it.label }}"
 
-        val (systemMsg, techniqueBlock) = when (strategy) {
-            ReframeStrategy.SOCRATIC_REALITY_TESTING -> Pair(
-                "You are a compassionate CBT therapist. The client is experiencing " +
-                "high-arousal negative emotions — anxiety, anger, or tension. " +
-                "Guide them using Socratic questioning and Reality Testing.",
-                "Generate a concise (2–4 sentence) CBT reframe using:\n" +
-                "1. Socratic questioning — invite the client to examine the evidence " +
-                    "for and against their interpretation.\n" +
-                "2. Reality testing — gently check whether the situation matches the belief.\n" +
-                "3. Probability calibration — help them assess the realistic likelihood " +
-                    "of the feared outcome."
-            )
+        val techniqueBlock = when (strategy) {
+            ReframeStrategy.SOCRATIC_REALITY_TESTING ->
+                "Write a 2–3 sentence reframe in the writer's own voice that:\n" +
+                "1. Names the core fear or assumption driving the thought.\n" +
+                "2. Questions its certainty — what evidence supports or contradicts it?\n" +
+                "3. Lands on a more balanced, realistic interpretation."
+
             ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
-                val baBlock = if (baActivity != null)
-                    "\n3. Concrete first step — suggest this specific activity from the " +
-                    "client's own hierarchy as the first step: \"${baActivity.taskName}\" " +
-                    "(value area: ${baActivity.valueCategory})."
+                val stepThree = if (baActivity != null)
+                    "3. Ends with one small concrete step: \"${baActivity.taskName}\"."
                 else
-                    "\n3. Behavioral activation — suggest one small, concrete action to break " +
-                    "the cycle and restore a sense of agency."
-                Pair(
-                    "You are a compassionate CBT therapist. The client is experiencing " +
-                    "low-arousal negative emotions — depression, fatigue, or hopelessness. " +
-                    "Guide them using Behavioral Activation and Evidence for the Contrary.",
-                    "Generate a concise (2–4 sentence) CBT reframe using:\n" +
-                    "1. Evidence for the contrary — identify specific evidence or past " +
-                        "experiences that challenge the negative belief.\n" +
-                    "2. Validate the difficulty without reinforcing hopelessness." +
-                    baBlock
-                )
+                    "3. Ends with one small concrete action to restore a sense of agency."
+                "Write a 2–3 sentence reframe in the writer's own voice that:\n" +
+                "1. Acknowledges the difficulty without catastrophising.\n" +
+                "2. Counters the belief with a specific past experience that contradicts it.\n" +
+                stepThree
             }
-            ReframeStrategy.STRENGTHS_AFFIRMATION -> Pair(
-                "You are a compassionate CBT therapist. The client is experiencing " +
-                "positive emotions. Help them consolidate and build on this state.",
-                "Generate a brief (2–3 sentence) affirming reflection that helps the " +
-                "client recognise their strengths and anchor this positive experience."
-            )
+
+            ReframeStrategy.STRENGTHS_AFFIRMATION ->
+                "Write a 2–3 sentence reframe in the writer's own voice that:\n" +
+                "1. Names the strength or effort the entry reveals.\n" +
+                "2. Connects it to a broader pattern or value.\n" +
+                "3. Anchors what made this moment meaningful."
         }
 
         val evidenceBullets = evidenceEntries.mapNotNull { entry ->
@@ -254,18 +240,20 @@ class ReframingLoop(
             "- $snippet"
         }
         val evidenceBlock = if (evidenceBullets.isNotEmpty()) {
-            "\n\nEvidence for the Contrary (from past journal entries):\n" +
+            "\n\nPast journal moments that contradict this belief:\n" +
                 evidenceBullets.joinToString("\n")
         } else ""
 
         return "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
-            systemMsg +
+            "You are a CBT journaling assistant. Rewrite the journal entry as a concise " +
+            "first-person thought record — the writer challenging their own thought. " +
+            "Write in the writer's voice. No preamble, no advice, no therapist language. " +
+            "Output only the reframed thought." +
             "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
-            "The client wrote:\n\"$maskedText\"\n\n" +
+            "Journal entry:\n\"$maskedText\"\n\n" +
             "$distortionContext" +
             "$evidenceBlock\n\n" +
-            "$techniqueBlock\n\n" +
-            "Address the client directly and warmly. Do not name the techniques." +
+            "$techniqueBlock" +
             "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
     }
 
