@@ -15,10 +15,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -249,6 +253,7 @@ private fun SuggestionStrip(
 
 // Stateless inner composable — all mutable state lives in the ViewModel.
 // Previews target this directly with stub state.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun JournalEditorContent(
     privacyState: PrivacyLevel,
@@ -288,6 +293,9 @@ private fun JournalEditorContent(
         is PrivacyLevel.CloudTransit -> "Cloud: ${ps.providerName}"
     }
 
+    // Collapse the mood grid when the keyboard is open so the text field can expand.
+    val imeVisible = WindowInsets.isImeVisible
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -308,24 +316,32 @@ private fun JournalEditorContent(
             )
         }
 
-        // Mood grid
-        MoodGrid(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.45f),
-            initialValence = uiState.valence,
-            initialArousal = uiState.arousal,
-            hasInitialMood = uiState.moodSelected,
-            onMoodChanged = onMoodChanged,
-        )
+        // Mood grid — hidden when the keyboard is open so the text field gets full height
+        AnimatedVisibility(
+            visible = !imeVisible,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            MoodGrid(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                initialValence = uiState.valence,
+                initialArousal = uiState.arousal,
+                hasInitialMood = uiState.moodSelected,
+                onMoodChanged = onMoodChanged,
+            )
+        }
 
-        // Privacy-bordered journal text field
+        // Text field — weight(1f) fills all remaining space; expands to full screen height
+        // when the mood grid is hidden and the keyboard is active
         OutlinedTextField(
             value = uiState.text,
             onValueChange = onTextChanged,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.45f)
+                .weight(1f)
                 .onFocusChanged { focus -> if (!focus.isFocused) onMentionDismiss() },
             placeholder = { Text("What's on your mind?") },
             visualTransformation = PiiHighlightTransformation(
