@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
@@ -120,6 +121,7 @@ private fun MentionDropdown(
         is MentionState.SuggestingPerson -> DropdownMenu(
             expanded = true,
             onDismissRequest = onDismiss,
+            properties = PopupProperties(focusable = false),
         ) {
             mentionState.results.forEach { person ->
                 DropdownMenuItem(
@@ -137,6 +139,7 @@ private fun MentionDropdown(
         is MentionState.SuggestingTag -> DropdownMenu(
             expanded = true,
             onDismissRequest = onDismiss,
+            properties = PopupProperties(focusable = false),
         ) {
             mentionState.results.forEach { tag ->
                 DropdownMenuItem(
@@ -154,6 +157,7 @@ private fun MentionDropdown(
         is MentionState.SuggestingPlace -> DropdownMenu(
             expanded = true,
             onDismissRequest = onDismiss,
+            properties = PopupProperties(focusable = false),
         ) {
             mentionState.results.forEach { place ->
                 DropdownMenuItem(
@@ -256,16 +260,18 @@ private fun JournalEditorContent(
                     unfocusedBorderColor = borderColor.copy(alpha = 0.5f),
                 ),
             )
-            MentionDropdown(
-                mentionState = uiState.mentionState,
-                onPersonSelected = onMentionSelected,
-                onPersonCreateNew = onMentionCreateNew,
-                onTagSelected = onTagSelected,
-                onTagCreateNew = onTagCreateNew,
-                onPlaceSelected = onPlaceSelected,
-                onPlaceCreateNew = onPlaceCreateNew,
-                onDismiss = onMentionDismiss,
-            )
+            Box(modifier = Modifier.align(Alignment.BottomStart)) {
+                MentionDropdown(
+                    mentionState = uiState.mentionState,
+                    onPersonSelected = onMentionSelected,
+                    onPersonCreateNew = onMentionCreateNew,
+                    onTagSelected = onTagSelected,
+                    onTagCreateNew = onTagCreateNew,
+                    onPlaceSelected = onPlaceSelected,
+                    onPlaceCreateNew = onPlaceCreateNew,
+                    onDismiss = onMentionDismiss,
+                )
+            }
         }
 
         // Save error (non-reframe failures)
