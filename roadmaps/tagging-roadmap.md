@@ -27,24 +27,25 @@ Reframe trigger: `!reframe` text command → replaced by a **Reframe button** in
 **Goal:** Add `tags` and `places` tables. Add `tags` (CSV text column) to `journal_entries`.
 Places are masked like persons; tags are unmasked display labels.
 
-- [ ] Add `Tag` entity: `id: UUID`, `name: String`
-- [ ] Add `Place` entity: `id: UUID`, `name: String`
-- [ ] Add `TagDao`: `getAll(): Flow<List<Tag>>`, `insert`, `deleteById`, `searchByName(query): List<Tag>`
-- [ ] Add `PlaceDao`: `getAll(): Flow<Place>`, `insert`, `deleteById`, `searchByName(query): List<Place>`
-- [ ] `MIGRATION_8_9`:
+- [x] Add `Tag` entity: `id: UUID`, `name: String`
+- [x] Add `Place` entity: `id: UUID`, `name: String`
+- [x] Add `TagDao`: `getAll(): Flow<List<Tag>>`, `insert`, `deleteById`, `searchByName(query): List<Tag>`
+- [x] Add `PlaceDao`: `getAll(): Flow<List<Place>>`, `insert`, `deleteById`, `searchByName(query): List<Place>`, `getByName(name): Place?`
+- [x] `MIGRATION_8_9`:
   ```sql
   CREATE TABLE tags   (id TEXT PRIMARY KEY, name TEXT NOT NULL);
   CREATE TABLE places (id TEXT PRIMARY KEY, name TEXT NOT NULL);
-  ALTER TABLE journal_entries ADD COLUMN tagIds TEXT NOT NULL DEFAULT '';
-  ALTER TABLE journal_entries ADD COLUMN placeIds TEXT NOT NULL DEFAULT '';
+  ALTER TABLE journal_entries ADD COLUMN tagIds TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE journal_entries ADD COLUMN placeIds TEXT NOT NULL DEFAULT '[]';
   ```
-- [ ] `LatticeTypeConverters`: add `List<UUID> ↔ CSV String` converter for `tagIds` / `placeIds`
-- [ ] `LatticeDatabase`: register `Tag`, `Place` entities; add `MIGRATION_8_9`; expose `tagDao()`, `placeDao()`
-- [ ] `LatticeApplication`: wire `tagDao` and `placeDao` lazy properties
+- [x] `LatticeTypeConverters`: add `fromUuidList` / `toUuidList` (JSON array of UUID strings)
+- [x] `LatticeDatabase`: register `Tag`, `Place` entities; add `MIGRATION_8_9`; expose `tagDao()`, `placeDao()`; bump to v9
+- [x] `LatticeApplication`: register `MIGRATION_8_9` in migration chain
 
 **Acceptance criteria:**
-- [ ] Fresh install opens at schema v9 with no migration errors
-- [ ] Existing installs upgrade cleanly from v8 → v9 (tagIds / placeIds default to empty string)
+- [x] Compiles clean against schema v9
+- [ ] Fresh install opens at schema v9 with no migration errors (verify on device in 8.6)
+- [ ] Existing installs upgrade cleanly from v8 → v9 (verify on device in 8.6)
 
 ---
 
@@ -53,17 +54,17 @@ Places are masked like persons; tags are unmasked display labels.
 **Goal:** Remove the magic text command. Add an explicit Reframe action button to the editor.
 Frees `!` as the place trigger.
 
-- [ ] Remove `REFRAME_COMMAND = "!reframe"` constant and the intercept in `onTextChanged()`
-- [ ] Add `fun requestReframe()` to `JournalEditorViewModel` — calls `triggerReframe(uiState.value.text)`
-- [ ] Add Reframe `IconButton` (or `ExtendedFloatingActionButton`) to `JournalEditorScreen` toolbar
-  - Disabled when: text is blank, `reframeState` is `Loading`/`Streaming`, model not loaded
-  - Shows `modelLoadState` tooltip ("Model loading…") when `modelLoadState != READY`
-- [ ] Update `JournalEditorScreen` — remove `!reframe` hint text from placeholder if present
+- [x] Remove `REFRAME_COMMAND = "!reframe"` constant and the intercept in `onTextChanged()`
+- [x] Add `fun requestReframe()` to `JournalEditorViewModel` — calls `triggerReframe(uiState.value.text)`
+- [x] Add `FilledTonalButton("Reframe")` + `Button("Save")` side-by-side row in `JournalEditorScreen`
+  - Disabled when: text is blank, `reframeState` is `Loading`/`Streaming`, or `modelLoadState != READY`
+  - Label reflects state: "Reframing…" in-flight, "Model loading…" when not ready
+- [x] `modelLoadState` passed into `JournalEditorContent` for button state
 
 **Acceptance criteria:**
-- [ ] Typing `!` in the editor no longer triggers the reframe pipeline
-- [ ] Tapping the button fires `triggerReframe()` with current text
-- [ ] Button is disabled while a reframe is in-flight
+- [x] Typing `!` in the editor no longer triggers the reframe pipeline
+- [x] Tapping the button fires `requestReframe()` → `triggerReframe()` with current text
+- [x] Button is disabled while a reframe is in-flight
 
 ---
 
