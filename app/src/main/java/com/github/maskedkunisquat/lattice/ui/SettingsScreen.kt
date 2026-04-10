@@ -31,6 +31,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
+import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.util.Log
@@ -89,6 +91,8 @@ fun SettingsScreen(
     val activities by viewModel.activities.collectAsStateWithLifecycle()
     val showCloudDialog by viewModel.showCloudEnableDialog.collectAsStateWithLifecycle()
     val apiKeySaved by viewModel.apiKeySaved.collectAsStateWithLifecycle()
+    val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
+    val copyProgress by viewModel.copyProgress.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -158,6 +162,16 @@ fun SettingsScreen(
                     onProviderChange = viewModel::setCloudProvider,
                     onApiKeySave = viewModel::setApiKey,
                     onApiKeyClear = viewModel::clearApiKey,
+                )
+            }
+
+            // ── Local Model ──────────────────────────────────────────────────
+            item { SectionHeader("Local Model") }
+            item {
+                LocalModelSection(
+                    modelLoadState = modelLoadState,
+                    copyProgress = copyProgress,
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
 
@@ -251,6 +265,60 @@ fun SettingsScreen(
                     AboutRow("Embedding model", "snowflake-arctic-embed-xs")
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LocalModelSection(
+    modelLoadState: ModelLoadState,
+    copyProgress: Float,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val statusText = when (modelLoadState) {
+            ModelLoadState.IDLE            -> "Not started"
+            ModelLoadState.COPYING_SHARDS  -> "Copying model shards… ${(copyProgress * 100).toInt()}%"
+            ModelLoadState.LOADING_SESSION -> "Loading model session…"
+            ModelLoadState.READY           -> "Ready"
+            ModelLoadState.ERROR           -> "Failed to load"
+        }
+        val statusColor = when (modelLoadState) {
+            ModelLoadState.READY  -> Color(0xFF2E7D32)
+            ModelLoadState.ERROR  -> Color(0xFFB00020)
+            else                  -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Llama 3.2 3B (local fallback)", style = MaterialTheme.typography.bodyLarge)
+                Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
+            }
+        }
+        when (modelLoadState) {
+            ModelLoadState.COPYING_SHARDS -> {
+                LinearProgressIndicator(
+                    progress = { copyProgress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "First launch only — model is ~3.4 GB and copies to device storage.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            ModelLoadState.LOADING_SESSION -> {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Compiling ONNX graph for your hardware. First launch may take several minutes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            else -> Unit
         }
     }
 }

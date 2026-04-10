@@ -76,6 +76,10 @@ class LocalFallbackProvider(
     private val _modelLoadState = MutableStateFlow(ModelLoadState.IDLE)
     val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
 
+    /** 0.0–1.0 progress during [ModelLoadState.COPYING_SHARDS]; 0 otherwise. */
+    private val _copyProgress = MutableStateFlow(0f)
+    val copyProgress: StateFlow<Float> = _copyProgress.asStateFlow()
+
     /**
      * Copies the model shards from assets to internal storage (if needed) then
      * opens an [OrtSession] with NNAPI acceleration and initialises the tokenizer.
@@ -393,14 +397,32 @@ class LocalFallbackProvider(
     }
 
     private fun copyAssetsToFilesDir() {
+        // Known total for the three model shards — used for determinate progress.
+        // Slight over/under-count is fine; progress is clamped to [0, 1].
+        val approxTotalBytes = 3_435_000_000L
+        var copiedBytes = 0L
+
         for (asset in ASSET_FILES) {
             val dest = File(context.filesDir, asset)
-            if (!dest.exists()) {
-                context.assets.open(asset).use { src ->
-                    dest.outputStream().use { dst -> src.copyTo(dst) }
+            if (dest.exists()) {
+                // Already present from a previous launch — count its size and move on.
+                copiedBytes += dest.length()
+                _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
+                continue
+            }
+            context.assets.open(asset).use { src ->
+                dest.outputStream().use { dst ->
+                    val buf = ByteArray(2 * 1024 * 1024) // 2 MB chunks
+                    var n: Int
+                    while (src.read(buf).also { n = it } != -1) {
+                        dst.write(buf, 0, n)
+                        copiedBytes += n
+                        _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
+                    }
                 }
             }
         }
+        _copyProgress.value = 1f
     }
 
     private fun createSession(modelPath: String): OrtSession {
