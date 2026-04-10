@@ -1,43 +1,59 @@
 package com.github.maskedkunisquat.lattice.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddLocation
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
-import com.github.maskedkunisquat.lattice.core.data.model.Person
-import com.github.maskedkunisquat.lattice.core.data.model.Place
-import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
@@ -104,10 +120,15 @@ fun JournalEditorScreen(
     }
 }
 
-// Stateless inner composable — all mutable state lives in the ViewModel.
-// Previews target this directly with stub state.
+/**
+ * Docked suggestion strip — a horizontal scrollable row of chips that appears above the
+ * soft keyboard whenever a mention trigger (`@`, `#`, `!`) is active.
+ *
+ * Each result is a [SuggestionChip]; the trailing "Add" action uses [AssistChip] to
+ * distinguish it visually as a create operation rather than a selection.
+ */
 @Composable
-private fun MentionDropdown(
+private fun SuggestionStrip(
     mentionState: MentionState,
     onPersonSelected: (Person) -> Unit,
     onPersonCreateNew: (String) -> Unit,
@@ -115,67 +136,119 @@ private fun MentionDropdown(
     onTagCreateNew: (String) -> Unit,
     onPlaceSelected: (Place) -> Unit,
     onPlaceCreateNew: (String) -> Unit,
-    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    when (mentionState) {
-        is MentionState.SuggestingPerson -> DropdownMenu(
-            expanded = true,
-            onDismissRequest = onDismiss,
-            properties = PopupProperties(focusable = false),
+    AnimatedVisibility(
+        visible = mentionState !is MentionState.Idle,
+        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+        modifier = modifier,
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 2.dp,
         ) {
-            mentionState.results.forEach { person ->
-                DropdownMenuItem(
-                    text = { Text(person.nickname ?: person.firstName) },
-                    onClick = { onPersonSelected(person) },
-                )
-            }
-            if (mentionState.query.isNotEmpty()) {
-                DropdownMenuItem(
-                    text = { Text("Create \"@${mentionState.query}\"") },
-                    onClick = { onPersonCreateNew(mentionState.query) },
-                )
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                when (val state = mentionState) {
+                    is MentionState.SuggestingPerson -> {
+                        items(state.results, key = { it.id }) { person ->
+                            val displayName = person.nickname
+                                ?: if (person.lastName != null) "${person.firstName} ${person.lastName}"
+                                else person.firstName
+                            SuggestionChip(
+                                onClick = { onPersonSelected(person) },
+                                label = { Text("@$displayName") },
+                                icon = {
+                                    Icon(
+                                        Icons.Filled.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SuggestionChipDefaults.IconSize),
+                                    )
+                                },
+                            )
+                        }
+                        if (state.query.isNotBlank()) {
+                            item {
+                                AssistChip(
+                                    onClick = { onPersonCreateNew(state.query) },
+                                    label = { Text("Add @${state.query}") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Filled.PersonAdd,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(AssistChipDefaults.IconSize),
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    is MentionState.SuggestingTag -> {
+                        items(state.results, key = { it.id }) { tag ->
+                            SuggestionChip(
+                                onClick = { onTagSelected(tag) },
+                                label = { Text("#${tag.name}") },
+                            )
+                        }
+                        if (state.query.isNotBlank()) {
+                            item {
+                                AssistChip(
+                                    onClick = { onTagCreateNew(state.query) },
+                                    label = { Text("Add #${state.query}") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Filled.Add,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(AssistChipDefaults.IconSize),
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    is MentionState.SuggestingPlace -> {
+                        items(state.results, key = { it.id }) { place ->
+                            SuggestionChip(
+                                onClick = { onPlaceSelected(place) },
+                                label = { Text("!${place.name}") },
+                                icon = {
+                                    Icon(
+                                        Icons.Filled.LocationOn,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SuggestionChipDefaults.IconSize),
+                                    )
+                                },
+                            )
+                        }
+                        if (state.query.isNotBlank()) {
+                            item {
+                                AssistChip(
+                                    onClick = { onPlaceCreateNew(state.query) },
+                                    label = { Text("Add !${state.query}") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Filled.AddLocation,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(AssistChipDefaults.IconSize),
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    is MentionState.Idle -> Unit
+                }
             }
         }
-        is MentionState.SuggestingTag -> DropdownMenu(
-            expanded = true,
-            onDismissRequest = onDismiss,
-            properties = PopupProperties(focusable = false),
-        ) {
-            mentionState.results.forEach { tag ->
-                DropdownMenuItem(
-                    text = { Text("#${tag.name}") },
-                    onClick = { onTagSelected(tag) },
-                )
-            }
-            if (mentionState.query.isNotEmpty()) {
-                DropdownMenuItem(
-                    text = { Text("Create \"#${mentionState.query}\"") },
-                    onClick = { onTagCreateNew(mentionState.query) },
-                )
-            }
-        }
-        is MentionState.SuggestingPlace -> DropdownMenu(
-            expanded = true,
-            onDismissRequest = onDismiss,
-            properties = PopupProperties(focusable = false),
-        ) {
-            mentionState.results.forEach { place ->
-                DropdownMenuItem(
-                    text = { Text("!${place.name}") },
-                    onClick = { onPlaceSelected(place) },
-                )
-            }
-            if (mentionState.query.isNotEmpty()) {
-                DropdownMenuItem(
-                    text = { Text("Create \"!${mentionState.query}\"") },
-                    onClick = { onPlaceCreateNew(mentionState.query) },
-                )
-            }
-        }
-        is MentionState.Idle -> Unit
     }
 }
 
+// Stateless inner composable — all mutable state lives in the ViewModel.
+// Previews target this directly with stub state.
 @Composable
 private fun JournalEditorContent(
     privacyState: PrivacyLevel,
@@ -218,6 +291,7 @@ private fun JournalEditorContent(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .imePadding()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -245,39 +319,41 @@ private fun JournalEditorContent(
             onMoodChanged = onMoodChanged,
         )
 
-        // Privacy-bordered journal text field with mention dropdown
-        Box(modifier = Modifier.fillMaxWidth().weight(0.45f)) {
-            OutlinedTextField(
-                value = uiState.text,
-                onValueChange = onTextChanged,
-                modifier = Modifier.fillMaxSize(),
-                placeholder = { Text("What's on your mind?") },
-                visualTransformation = PiiHighlightTransformation(
-                    highlightColor = MaterialTheme.colorScheme.tertiary,
-                    tagHighlightColor = MaterialTheme.colorScheme.secondary,
-                    placeHighlightColor = PlaceGreen,
-                    resolvedPersonNames = uiState.resolvedPersons.keys,
-                    resolvedPlaceNames = uiState.resolvedPlaces.keys,
-                ),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = borderColor.copy(alpha = 0.5f),
-                ),
-            )
-            Box(modifier = Modifier.align(Alignment.BottomStart)) {
-                MentionDropdown(
-                    mentionState = uiState.mentionState,
-                    onPersonSelected = onMentionSelected,
-                    onPersonCreateNew = onMentionCreateNew,
-                    onTagSelected = onTagSelected,
-                    onTagCreateNew = onTagCreateNew,
-                    onPlaceSelected = onPlaceSelected,
-                    onPlaceCreateNew = onPlaceCreateNew,
-                    onDismiss = onMentionDismiss,
-                )
-            }
-        }
+        // Privacy-bordered journal text field
+        OutlinedTextField(
+            value = uiState.text,
+            onValueChange = onTextChanged,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(0.45f)
+                .onFocusChanged { focus -> if (!focus.isFocused) onMentionDismiss() },
+            placeholder = { Text("What's on your mind?") },
+            visualTransformation = PiiHighlightTransformation(
+                highlightColor = MaterialTheme.colorScheme.tertiary,
+                tagHighlightColor = MaterialTheme.colorScheme.secondary,
+                placeHighlightColor = PlaceGreen,
+                resolvedPersonNames = uiState.resolvedPersons.keys,
+                resolvedPlaceNames = uiState.resolvedPlaces.keys,
+            ),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = borderColor,
+                unfocusedBorderColor = borderColor.copy(alpha = 0.5f),
+            ),
+        )
+
+        // Suggestion strip — docked above the soft keyboard via imePadding() on the Column.
+        // Animates in/out as mention triggers become active or resolve.
+        SuggestionStrip(
+            mentionState = uiState.mentionState,
+            onPersonSelected = onMentionSelected,
+            onPersonCreateNew = onMentionCreateNew,
+            onTagSelected = onTagSelected,
+            onTagCreateNew = onTagCreateNew,
+            onPlaceSelected = onPlaceSelected,
+            onPlaceCreateNew = onPlaceCreateNew,
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         // Save error (non-reframe failures)
         uiState.error?.let { err ->
@@ -334,7 +410,39 @@ private fun EditorLocalPreview() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         JournalEditorContent(
             privacyState = PrivacyLevel.LocalOnly,
-            uiState = EditorUiState(text = "Today I spoke with [PERSON_00000000-0000-0000-0000-000000000001] about the project."),
+            uiState = EditorUiState(text = "Today I spoke with @Watson about the project."),
+            modelLoadState = ModelLoadState.READY,
+            onTextChanged = {},
+            onMoodChanged = { _, _, _ -> },
+            onSave = {},
+            onResetSaved = {},
+            onReframe = {},
+            onApplyReframe = {},
+            onDismissReframe = {},
+            onMentionSelected = {},
+            onMentionCreateNew = {},
+            onTagSelected = {},
+            onTagCreateNew = {},
+            onPlaceSelected = {},
+            onPlaceCreateNew = {},
+            onMentionDismiss = {},
+        )
+    }
+}
+
+@Preview(name = "Editor – Suggestion strip (dark)", showBackground = true, backgroundColor = 0xFF1C1B1F)
+@Composable
+private fun EditorStripPreview() {
+    LatticeTheme(darkTheme = true, dynamicColor = false) {
+        JournalEditorContent(
+            privacyState = PrivacyLevel.LocalOnly,
+            uiState = EditorUiState(
+                text = "Spoke with @Wat",
+                mentionState = MentionState.SuggestingPerson(
+                    query = "Wat",
+                    results = emptyList(),
+                ),
+            ),
             modelLoadState = ModelLoadState.READY,
             onTextChanged = {},
             onMoodChanged = { _, _, _ -> },
