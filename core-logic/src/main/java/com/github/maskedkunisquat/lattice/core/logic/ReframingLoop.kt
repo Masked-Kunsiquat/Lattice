@@ -195,17 +195,6 @@ class ReframingLoop(
         "Text: $maskedText" +
         "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
 
-    /**
-     * Selects the intervention strategy based on circumplex quadrant.
-     * v<0 and a≥0 → Quadrant II → [ReframeStrategy.SOCRATIC_REALITY_TESTING]
-     * v<0 and a<0  → Quadrant III → [ReframeStrategy.BEHAVIORAL_ACTIVATION]
-     * v≥0 (any a)  → Positive valence → [ReframeStrategy.STRENGTHS_AFFIRMATION]
-     */
-    internal fun selectStrategy(valence: Float, arousal: Float): ReframeStrategy = when {
-        valence < 0f && arousal >= 0f -> ReframeStrategy.SOCRATIC_REALITY_TESTING
-        valence < 0f && arousal < 0f  -> ReframeStrategy.BEHAVIORAL_ACTIVATION
-        else                          -> ReframeStrategy.STRENGTHS_AFFIRMATION
-    }
 
     internal fun buildInterventionPrompt(
         maskedText: String,
@@ -428,6 +417,18 @@ class ReframingLoop(
         private const val TAG = "ReframingLoop"
         /** Maximum activity difficulty included in the BA suggestion lookup (0–10 scale). */
         internal const val BA_MAX_DIFFICULTY = 5
+
+        /**
+         * Selects the intervention strategy based on circumplex quadrant.
+         * v<0 and a≥0 → Quadrant II → [ReframeStrategy.SOCRATIC_REALITY_TESTING]
+         * v<0 and a<0  → Quadrant III → [ReframeStrategy.BEHAVIORAL_ACTIVATION]
+         * v≥0 (any a)  → Positive valence → [ReframeStrategy.STRENGTHS_AFFIRMATION]
+         */
+        fun selectStrategy(valence: Float, arousal: Float): ReframeStrategy = when {
+            valence < 0f && arousal >= 0f -> ReframeStrategy.SOCRATIC_REALITY_TESTING
+            valence < 0f && arousal < 0f  -> ReframeStrategy.BEHAVIORAL_ACTIVATION
+            else                          -> ReframeStrategy.STRENGTHS_AFFIRMATION
+        }
         // Both regexes tolerate optional spaces around `=` and an optional leading `-`.
         private val V_REGEX = Regex("""v\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
         private val A_REGEX = Regex("""a\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)

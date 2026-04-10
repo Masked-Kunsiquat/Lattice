@@ -1,0 +1,541 @@
+{
+  "people": [
+    {
+      "id": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+      "firstName": "Charlotte",
+      "lastName": "B.",
+      "nickname": null,
+      "relationshipType": "ACQUAINTANCE",
+      "vibeScore": 0.9,
+      "isFavorite": true
+    }
+  ],
+  "journalEntries": [
+    {
+      "id": "30000000-0003-0000-0000-000000000001",
+      "timestamp": 1717200000000,
+      "content": "Everything I feel confirms the truth of my situation. I feel despair and therefore despair is warranted.",
+      "valence": -0.5,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "cA9BPrfAPD+sTRK9IMjbvjYBXj66L\/k+HetDvkR0rr0\/HAm+tJgfvu3hz75EKg4\/3SbBPm3VSb7LX5U+PwuYvdbQQzyZY4i+L2ODv+vmBr\/RGZQ5cwZzPoc2rT40448+SSBSvmTfhL5YXSi\/d\/Omvoyzzj70A7i\/N7MePuehNTy51NK9\/i+tvvRfQ7vndja7pAe5vj\/4xL2NnGS+IIrQvvGXW75T00g+hjHSPVD4H76nOOA+RhPxPQU4BT5mUA8\/gFZGPzHW9j5wkyM\/Vt5LvluEoL4nGY8+BviJvzqMYj7xhfO9AUEavnQPob0\/epK9N32XPmbx5Lx0SC7AMfwrvXa6Dj6XVvc+bSABvuRnbL41xAE+h5upvurr370p4o492bv3PdeMrb5MGU6+R1nTvnmSFT7AXSK\/O7wLP5QgSD5H6TC+rDzXPOqiFT9G088+50CMvXyusj1ZmJK+ba1ZvjaDlT1jJag+LYe9PCYItb7krbm+7+4av893jj6\/lUY\/lh36vWbQEb3pxTu+yWEXP5KDKj8e8qO8o45fPwO0dj4KcTs+F4xtvt1XXzs\/SwA8QSdnPd3cFr9KPBw8JgkIvV3+GD867eE9JtfAPsn0AD\/auWK\/oTjvPa6xNj670yU\/kGw8v9ApLb4xdoY9CtOLPvmWlL4fYaG+wdoov5NoYj+cLzo+1CxXPxSU3T5cMq071Fs7vetPtj7+rwC\/41cFPwZ0Yz6QRPO+922XPRyEBT5Auea+H9VZv2mQCD\/XIGK\/+mllP6GIUz+xv6O9A9LkPNX9jz3a1Lq+BlZ3vun6Uj\/cYWY+unPJPlh0gD8a97q894jAvvkRLz8\/GcS+GeIcPikcGD\/QYWW8RNteP4SlnT87oYI+5YqTvs1XAT73W4K+Ezj8Pn\/4CT5t38a+7cadPsYsrL4HxyM+TZrHPoJpAz6zpY+67F+6PrdXiT08qO69RjxePZgenD1cLuu+IcgSvzPCc76jDY++SZF2vgSEU72oTAA\/2bZVPyZSYr9z+EU\/EDJTv0r\/sjs3+cI+rtmKvpiaIb82Oe4+hOuOvF9mfb2dGCU\/fKRYPqMleT6\/eN++Lw10vkYf1L7\/09a+ygnOvi1g374+giu\/jYMUPdGKRz64j4s\/WbsePyfqbT41W7K+XBRRPap4bT6mHPU+ik0SP6YMnb52j8++esE\/v7z73L+UkRO\/MVqEvpSWhb4QJN0+996+PU+evj5JeQM\/cTysPvR8h77IzZc+tM2GP08JWz4BEsE9TFcpP0XMuL3GtIc+1I15Pvc3+r7tIBG\/jVIpPujfhL7j\/3w75vkrv69Xar4NWpU94\/KbPwdxMj+sIWq+RrWiP8EBJD9nhaA9VJq+PkmStL9pFBU\/D3Juv6wiHj6Kaju+pN1Wvu05WD1kguu9KlvJPl9Cuz3zN8K+F3aMPuNPvb4Phz++Z8QCP2keJD5x3Y++kKTaPY3wUz2ntNw9wLqnPhnq1j5MY4s94KEYv5lf\/r3E0oS+iaPcvh0WPL5t8As+t2EtvW1PLj3Ef0O\/o+SGOvClqz4p1Qe\/ZhHuvlHD2D6+HSS7+d6gP76EFj\/Xxdk+44PDPukrpz1AD70+5r3TveEBor2\/LmU+7f5pvu+ST789cvK+QbZJPiAOaj6qj5I8\/4t+vpoQFr0EHzY+uuKjvhyeor4dHRs+p96vvrCkzD58NXo+WehRPw4AD8DU0Km+c5XiPdOZdT\/to+2+D9GqvgoEbj6X6w8\/b7+Ivp3NH77mCxk\/uglTPwnHLL\/w9Am\/AfMXvw+VZz0GDpq9ZzLevXF1hj2IqLC\/6ULuPMf5Xj\/s2R5AujPkPYjdpT7Q1U0+yzecPjav3L032xa\/QDlUvlaEn75EAYC+5++NPpfmDb6s8EW\/eXPOPiyC5D4Aso8+hOKTPv5OHDxHhVU\/NFn3vfdhiz7fas+934bLP5cTMb7dfNy803TFPvEMEL93ThO\/9\/6iPR2RgL5QeGI+XnKKPomJgT0g4ci+szJTP0eGAz6kUHI+I+zOPY\/TGDwkRUO+wz4avrwDML\/xYDa\/",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Overgeneralization"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000002",
+      "timestamp": 1717286400000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] smiled at someone else today in a way she has never smiled at me. I know what it means.",
+      "valence": -0.6,
+      "arousal": 0.8,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "yuedvULqhL5SXqW+sGrsPTNCNb4wC54+WavKvmLcIL8W+cS6VRsoPnaCEr4v9oM+VgxFv+ZMIz7yL9G9ST8SvwC5Xr2kQac+QjfavzKkH76vAkW+CtTfPd3ljj6JadA+f6cQvkVlbT5W6lY++pyovvYZpr9c9nm\/uhRLPgQCLj\/JtK4+r\/AWvjphvL2a9vC+PnYuPo5SerxsuNu8qnPMvnw8yj34BKO+TKxhvXRGLD4CNTy+jnFFP2mhDD42Wjc\/40ATP9Ly0D5Heie\/VlyPvrfuz75pz4o+3\/0Rv0oSOj+6hrE+SNrxvV6yKb3hZyk\/rxNDP8ck2L280QLArqjAP+ikJ76OQ5u68fyxvnsJ8TxbzA6\/OyxSPm7XhD18ufM9\/tdVv\/ua6z7xHL0+xCDovlVC\/D6PXX4+gkFkP4KNyL2+cxE\/7n0AP4mVUj0vsGQ+VpcVv4M3Wz5wVwK\/HFFjv8BdwD6MzoA+MdWlPL+EuD2ZNUa76NonvwrxJT7Y8BQ\/Upq2PjwOkj20g3A+YhbNPi94BT\/vN14928\/jPjBbUT4ymhk+m78av\/44Zb5PL0O+M4Qtvm84qbzKcxY+HKPwvrl4FL+Mloi+eSkfP+zd9T7iyJu+mwnpPU8d5T6hLco+4Z4Jv6TiBz\/jhg6+21WnPtbTM73Bikk+W\/9Tvr0Vjz8e4QU+TRrHPgluKz9t8Rk+RvP3vm7r8z2+vm+\/R3xzvm876j5oAYa+wQipvRrZJ728z10+kTMUvw7wFz8n2H4+lC0OP\/Wh5730IbO9aXbDPSUkAb950i+\/ZF+8PdOSoj4v4lg+cSRBPqVzvz8PTmc8Q3t1PqYShTyZOP++I0ANP0QPCT\/nxXA9jlR6P5I7pz\/8E1k\/anA9v4V1vD5V0f6+29oOP30vjj7ID6u+6bhAvTmBv753QrA9y0VOPpHNSTtYQVS9B3pkvnznc71fYAS\/M3ocPYD8Zj9CLei+Gv7pviqnaD4UGfu+JnywvD0DVz7uzg4\/vnr0vXXUCL+i2xI\/b84ev5SKqD2luB0\/L1NePnQvFD2xPJ++yDqRvnoZ3z6qEQ4\/P\/ugPtSOvL7ovgY\/7doKv9G0zr4z05Y9v6aHPhaxL786sVK+wUKpPln6hD2KyU8\/GheqPnVE9DzYWqq+AkKyO3ODpD4hTJI+sRP8Pq+1Ar3sJ6Y+HBH+vrPT4L\/Zgza+wZImvq0oI7+cBCa9pj6\/PdBg1L3Y3WI+hw4KP64OuD13vKW8s3+gP5aJRz5KtFO+yEjQPuQ6Wz67wJy+XbaBPp6GHT0IZw2\/It15PZ3fLT94jCS\/rBsQPiGMSL6Uo6S+QgF2P6i62T6jlpU9nWuZPvyzyT5eh2m+Cnl5vkBXA8BV\/Rm\/Eh+Ev13oU77B7yG+2z4fv4D8tDylmEu+zi9gP2H4C72I9Wu+pH1sPNIcLL9jkdm++u2VPGH\/Mz6rC9u+jAeFPONuBj60F7i+mlwxPk7HiD9RFAG\/GiO5PuFAUr7SF48+mSrlPgojAT\/Vu0k+EQxxPocXgr+EY5C+lXbZPkPzlT5Ujdo9Z3KxvogwCj+tfYG+2lbtP7vr1D5OmME9yOUmPx6qD78F3Y+9xoG3Pf8mj70LnQw+V9lGvier475TmNu+HNXbPmZEAj5RcRi\/AlecvqRwi702W64+8y\/1PuZrmzzq57e+eIz2PkID2D6nKyO+0lqPPWlsF8Ay9cq+T3YFvmJaGT9pqG2+R1sqPrVm0r5A7Ou+42SZPt\/EXr905TU\/4g3zO2j217vdPDG8jjROvgMvej9qvEG+ifgHPs2dSLzy+qu\/egSbvphACr4xpsc\/2nZmPpEcZD5nlBu\/NBSuvlbCqL6579g9CZSgPXq+vL79kYC+ZVcmP2dRJj4GEre+DCRfPyI4Uz934TK+7hSCvXJ8gjnmgGs\/uM6Evtdlkz3RyN099EwHQPvhsL4bD1I9jz6SvrIq8r1pnII+7Qk3vVQlMr4hHDw+leJFPzPubD4b1sa+kwD6vKSkor66TO4+7ksNvlsErD5fE9K+DCaSvp7Ju74Lb7a+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Mind Reading"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000003",
+      "timestamp": 1717372800000,
+      "content": "I feel it so intensely that it cannot be wrong. No reasoning can argue against what I feel in my chest.",
+      "valence": -0.5,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "DybHPh3Bhj5xSZu9QeFpv5ztrb1juuA+S34jPXRXEr8XoUS+46qcvm3clb54CkE+6UJLvrjLMD42eQM\/Dwgcvh83mD6x3ue+XEisv2BZrz3ZBA6+89jHPoe\/jTzIxLk+SSqPvJdG6b0W+xa+hHm4vfLtQz2MemS\/KSJ\/PkqFR7953AG\/GK7BvB17Wz6uu0G\/119jvs\/qEz5fGiO\/Ok\/nPcbVPz7afsQ+8Q\/RvcyHD79UyM0+26kgvqwvvj4CFYo9zHA1P8bXxD5uvnG+N38Vv438QL7IRoc+YJMOvxojhj4aR20+CR24vqb+Lb09Hky9+KKxPqTb\/T5PlBrAMZGFPqYHJT+ahcs+3foGv8RgWT4Gtg0\/wNDOvi+Kzb0v+SI\/yMwQv2RSkL1AbVY\/2ksOv4crEb+hyNk7kkNLPxeN3j0korA94aZIPpx+pT4qzD++QbjevjKgtT3kWf6+M18fPWFCa76twUU+lLOTvVHNS783mlw+U+uEPebMCL5KcZw+j65aPwgR1j1493W+6BgSPzOP9j77yUK+uAY+Py8KZz3PpCo+ugnvvlHa670XxGw+N7PpPa8P\/b4YJZc9upf3vi3Wkz1XEym+N6JkPVVogz\/APDO\/lJcxPgXuLT688LE+bwmOvtF8Nr12j+A9wflbPi7BR77FJeW8\/Ls3v9T6Vz+J1r8+EtQcPzYyDz8dckK+ZRm5vg5z8r77qXo8bN69vv\/rOD9hWGu\/Nk2Vvfw2CL5WDum9rrCovzFP7z5Noxi\/iDGPPuZaIT90\/+8+FxKKvAYzCb\/BIfy+FL0Uvvq9hj4bKFy+aGSZPll7iz9M1RK\/GA0Yv6MPFz\/dMVS\/Grg2P0+ynT4fuBe\/bAfLPiHxWz\/8cNQ+5sTSvSUn9D4JiXi94xvpPT3xVL5hhba+rqblPgaU\/jx2MC4\/07JqPnZPQj5XVWU+zgGEPldFOD+ZRxK\/QfV5Ps0qsj4hGbm+Se2iPeKvjb23VEK+wF1VPlKA5boBmXI\/EaDtPI4TH7+InCA\/f\/OLv9Oe\/bt0SPA+d3mzvRvtPD17Ee8+rerDPu7yJb5XET0\/UmNhvmMSeb6qdi4+bltCv3b84b4SRBE+Q8o4viR6B76mZs2+U\/EmvtT1Cj4PMDM\/42t0PlzAuj4yG289QzXRPQnK8j6BVpO9YHQIP\/j8+juBKc28FH4Mv8Ch+r\/oBa++Jkspvi9lf77YJkS8Ba8bvnPSGj838A8\/n\/ghP9Jbgj4Wuiw\/U242P40Azz5RtpI8QF6BPprV2D5OzkY+3p8CvnQrLT1tvge+P2CCviQ+RLyFgLE947hhvr996D1BUbY8pubdP67Wzz2TMfS+ZhmZP7aXhD48zgE\/EdMzPfJHwr+BaEk+XN1Av7ILfz1dkh+\/97kqv4jPgD54pIg+mJ\/JPhOY3z6naxm+Bj5OvRipPD7NthO+hWhBPleV8T3RqJ2+B5ERPIrE\/jzRUKm9uFChPkkiXjyMtmq9CsYPvolx8r1c+2i+G\/w+vvFpL77gnPe9uM15PpIYpr5+Epi+RYbePZFn6D5fyhW\/pQw4v1YMEb7cP6U+94fNP1ckmD7UiWW+IB1nP4Sj\/j4EwBY+6vzsPQNmo72P2oq9eowUvgP4Or\/A9bY8NHI5vfyhtT6Ikdi+ZLfSvhCdgj14+YC+c\/1UPm9xpD64b0U+iN\/rvtN\/OT50nRG9gb6pPrrAGcCg\/Wq+XAR9vcv3B70cRBe\/yH4Nv7g50L2EHrQ+FOqvvh+ngD2GmBs\/zTjePgHixjz9ghy\/+AxWPvMZ4b6YgOq9Y2ylPs3IVz2Pj+q\/+4ZXveyuqj7bBN4\/tmECvhKAYT+jHg8+rrU8PizzJb+aU\/s7aT6lvdfIkz5Nboe+mDUhP8Bo9rwRuQW9lnMdP7+Kxz4JYrM9zUtNvN\/BLz78\/JU\/+8FsvgwybL1PldK9ShDLP1YRp76FuT2+yjOevdwL876UV7q+gfqUPppzcj7RNDU+FD8lP6GLvrsfnJ0+QbYrPx2sg74WZK4+rXwePu+EGL0DhEe934M5PXroOb90xTI\/",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000004",
+      "timestamp": 1717459200000,
+      "content": "All people are like this. Every connection I attempt ends the same way: in indifference.",
+      "valence": -0.7,
+      "arousal": 0.5,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "lokmPe5XKb7WNFK+AAbvvss02b5eFCo+3ywbv3vO+74rhzS95lZtvmAI\/7vSyN4+cCPfvhJ4tj75qQc9kr3MvhYKlD4WPts8E2b8v2jrY74QZgm+iIiFPkr38j6ug1O+DnKFPO1x3z1Pjbq+DtdJvsUSAb4IJbO\/VgZ2PtYUtr02wda+iqkrPQBWs756n8C+VT8FvkNcpT7dywW\/ALMGv8UZTT5jQk4+opRTvf46V77dRiY+65\/AvkCUZTzqEk08ULsKPwgshD6sSAM+xsC4vliu5Lx1e7Y+Mf44v\/hBHz3qXPs+3IaFvlNG9b7DtEE+RnCWvX6vKj5v+zTAxld\/P+MO+D6JgIW9QnBwvBeHoz5kJRy+09Xbu7LdALxQFZO+qBUHvyUOYr4eXjQ\/G2hIv\/llv76DiJM+vGuBPb1UXL2LmOg+ItPevbxjDL\/pIYc+mnczOtW3FT+msyG\/9rS4vggiBj7j5mQ+3nUIvu1ElT7c262+tYvivlYIwL3T4Rg\/vdlWPibfvT57dOY+vVhaPzrvBD+wBW69veNbPhQ6mjzG\/Ag\/1gT1vYjJsL5Ai9Y+MyTVPQlpgb5Kkxq\/wYEdv\/phyD17No6+ME3avfOGzT1y0Fi+hxa3PgaHvT6YCfo+0Gwkv07B8z729MI9OieLPs4wGT3DC9Q+eotuv69LiT8uadQ9zhjqPqauiz4bW8E7di9ev2Vtub6S2Gi+8xCXPuEWNj9XEYy+dqd1vq6wjr4r8iU+Wm47vyL3cD\/rMt++DgA7PxKo\/D56x8S+h3ctvvo0iL4GIjG+M06wvtpvOD++O80+KunUvTDd5j7ione9VOGevkWmIz9GEZm+ckUEvdwaDL440L691jfCPs0kzT\/MrZQ\/pTTkvR0Ksj5L6KS+H6QcPyVO2D5F\/3A9GqgFv0oKrTyNUz4\/ol+pPg5kkD7CvKs9c15XvjZsUT\/DCoa\/FHIRP0MKYD9SoZi9Mh2GvtIRgrwgVuM+2yULPwoclT46qq8+MzO8Ph84Ar+FzSg\/MQiLvgCd1r2NeGI+\/iTzvdpAQr6Ss4w+AtxKvopATD5DRO0+oPWEvl7eZz0uRm2+uFUvv8WjzD274eo+j1pBPiI7kz6bTyK\/5hyQvgWUdb4qhQI\/KzoQP6IPOT9ej3G+ahDxvGp9nL7ifQ4\/TEqgPvorOz4VXrI+nwKLvjYB\/L+8L56+fQ3gvq\/Il77Cs8c+0lwvv+EmnT7MOZo+Hg5cPmnmRj+erTA\/wqpVP4IRS7xk7YG7stc4P8wCgz8QMJC+ju5FP0bBgr67X0q+iGsqvqHGlT5Qo16+JgVePtuYEb3eQse9KiqkP9pbKj\/ij6o+eGi8Pt15MT51p6y+2y9hvO2+jb8m5qq6A7V+vwRtAz8DMng73S7EO5ZmdT2glz69b0WWPVs96TxTBDK\/qozoPD9mmb42lPM9c9x1vsX2pbx\/zxi\/OHbxvdKo2z2dVRo\/Kp7RPolPhr4tKUO\/4xFUviDoL75AOGW+Ll2sPo2unDwNGbs+vaa1vjI5Er80moI+jR1JP334Nj9Jfoa+Nl6QvshEAz7941k96oLEPyQbNT5ezmi+eaSFvZMNLb79Pqm9Zn8tPkIHoby3jC++ypruvrKgQr9sQA2\/1z2uvdBJLj6sozK+jc6hvjmTpT6WNJo99ifVPtOOvLyNjXs8MI1fvFphCz9NC3a+s7lePbrqFcCpr6O+5ZfFPk76KT7n46y+WmkDv4M0ND46yGs+sN4cveL5Fr81gy0\/VzgAPzK1Ib2AEKe+qZMSPnuV1j5zIs26mwD5Poc0nL62jby\/6UE9vG7LoT6InOo\/biZ9Pq4LiD2Z0LA+RVcnPyvMD79qw+a+4ACrvNNGs771DPG+BHyPPjPItL7ClCK\/mlFkPrJGLT9voYs+MiypvaCifjt730c\/K47oPZsEW728+IS++7qTP5MU2r46WwU\/ZrhFP3xEJL8FGpc+rfIxPJdtRr5qzuk9\/s1vPYUzE7x09DA+01JXvBa07Tz8CJ8\/hMcCPuMPnT4wRQq9yl2BPhXJcL\/Ttuk9",
+      "cognitiveDistortions": [
+        "Overgeneralization",
+        "All-or-Nothing"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000005",
+      "timestamp": 1717545600000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] is the only good thing in my life. When I think of her I feel a warmth that nothing else provides. I feel happiness, and so happiness must be possible — she is the proof of it.",
+      "valence": 0.5,
+      "arousal": 0.7,
+      "moodLabel": "EXCITED",
+      "embeddingBase64": "3vd1PYFkKD5g5I8+jCktPfa7wj0KVYQ+K4h3vtcnPb8Cy4M6Im6RPYXrZz4PQW49vtlfvntzzr4re4u+HLgLvwpSGz4347w96kXev+CxGL1TKhm9se9bvvQgOL3PKAS9AYQHvrFAo72uN2i+ggz7vgBvM78++Jq\/TJaTPPrS\/jxxvhY+ud4NvzCWu72nQrW+oOLRvR1TDL6Iq8q9zHOjvkD\/oT5mFCm\/7Lxkvgg+ir3W8X88CL7BPt+vqD04fRW92MGpPi4YMT4mI5u+2bvdvX99M7+nOGg+MsuYvpqWxT567YM+BTPrvs91\/b2eqb0++zHxPkzlrj2nQAvAYYstP4hLKD6maa0+VR2Cvs+ZLz60yVu+XemyvoJDsj2bFZA+0polvzFqOz7hKNQ9XdotvqKI4D4qFA0+QvkZP2ZhvL5ja527UHXePjCXlr706NE+rDy9vhjgnr4x+Fe9ePRbv0ieAD9GrjI+mG6XPnYQhL6EZsA+C34zvy2cBz6CQ+q8yFisPBa3zT2WZ94+er22PgPgjD34LFg+jUeCPFb0UD3CePA9pZ9LvmP+Dj5FPSG\/M9qdPha15bzDubu+KP0Rv1oLmb7bwF2+mI+SPr4cTT9x9nC+wU+bPgQ4jD9lQ0I\/togOv1uYO76gcNc9YHCPPn49bb1pQXi+yhjjvewbhz+I740+6wqSPqXa2z67WZQ+zcPTvp16HT\/Z+S6\/NocJvg9Zxj6PmQi\/M3p4PZ0QKb7dYsY9DnYyv07UiT5hWzi+E\/0mP4q3N75xiEI+hg23Pr0nir1roRO\/WaCsvRC8FT9WYs29nI7OPi1LRj94EwC\/8dYzvqjO9T0giCW\/THe0PtWX7D53144990wxP+rRxT\/tzlU\/5wbYvgAYCz6cJGO+sbQTPwTPuD5Mu7Y9pD9EP5BZP76qzdM8o9lFvO0QWb6DkDK+B9iXPu3Bbr53FE+9LQ73PlIRFD\/gGVO\/e+vVvkLbQz4zsXi+tgbyPt4Ixj6GZ5E\/szRtPpnCPL\/4nSo\/JYFHvsSHmj5sjPI+GqiRPqjub74tFe6+KvrQPR6jHj40egM\/lnbdPvjOfz73Ork+O+XPvuBecb+q+CK+kqyTvSVZTr+Ocri+jLgMvo9UjL2y5Ac\/CPQCP4rLkT0ZwIU+xIc5PhZS8z7\/g4I\/HWowP\/e30b7pDEm+A6wQvxHS3r9gnge\/TTXVvq0dzb63+pS7Q1UUu5IUFL6XQ70+QlgRP77sqT5OfLI+BWHhP8XiWr5roJM+uYhSPnof9j74hsO9xRb8PTp5FL56O2q+x4NTvg8sHj4veii+vSixvS0Wjb4JgoM9AjZXP+1qWD4Tuwo+hVUmP47zKT6FkIo+44JOvjy94L\/KOYq++344v1ZgiT4aNca+bc40vz7xnTw7A12+KIj\/Pq14lL6hbIa+zXo2PUH6m73m7\/W8NKCmvhR9X77Po3y+NwQAPY+ahDzun4O9tEyTPguHVD\/ZKUW+ZDpHP2PaBL+LENC9o6WzPmn4ID\/Yqu4+jMWMvdDVzb4OFLO++JydPky14T3Ckqu9bjKAvqjMpz6mpK++gluZP1YnFT8ZFoY+vMwRP2wYfb3TYcY+xFVXPoX+iDwWHZQ+fZy2u0e8Kr+O7cq+g2G8Pg17kL40xKu9\/zmXvrXvOL5elB++5ClGPkIIBD0GnfO9Gf5bPi6HJT9xkgq\/qkXKPp1xFsA\/nVS\/CMuJvt69TD9NqnW+H2BqvmA8s73SJ5A+eNxZvtMTDr8O6Xo\/\/S0GP6te9L0AM+Y9kcHQPTZf6T4l7JC9SAkVP3VVoD0y5MC\/WTzWvoBs2zy\/i7I\/oP48Prxn7T44xB++cegfvrxeyzysF469C9KPvLnBA7\/d+rO+9PwoP5z2yD3p2a2+7cgfP5darj80Hp2+NLZoPW0sFr5qYVA\/fD6NvZy2nT51Tqw+JwfyP0ccvb4UFSE+RVz1vk1+KT1PqdO9sS0pvrhcFLtFJMQ+I5V2P2IROD1QYFs+QsRkvmDGLb7W1h0\/beiqvoZh0T5FPgC\/3WBLvrzHtb40W\/m9",
+      "cognitiveDistortions": [
+        "Catastrophizing",
+        "Emotional Reasoning"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000006",
+      "timestamp": 1717632000000,
+      "content": "My feeling is the proof. I feel the wrongness of this deeply and that depth is evidence.",
+      "valence": -0.5,
+      "arousal": 0.8,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "kwyGPr\/tLj\/cuNM+g4Suvs3Ywz1xTbE+P0F5PUWlqb6duc2+WQbmvm9Ky76dTB8\/nWvVPTqMgjzSXKY9M02OvePwF73mTPS+1KKCv0Me1L7h8BW\/hAiUPq3UuD6nDXw9VTaHvnrvvz4TIhu\/TBrwvdqPVD6cxq2\/rdB8vJiELr6+ow2+RyIUv3\/8ab1D7bu+Vy0TPscUhz7XIHq+ZvchPizUAT4qbs4+g13TPYn+pL6hW6Y+xmPvPTRHj76pdVy+8\/0TP8SJ8T76BcQ+9JjLvhjwHL4HCEa9NO0jv7SoID4JxQU+RrC7vkaqdL1YjAM+fK1yPmjrIz+ctzjAE5\/BPt0ZpT6X0J4+TbA6vWqG1D6I0qk+udUAv8Nj3Ty0jcY+LHIUvgOGlD0Dtqg+QQS5vY9+OL005xo+AK01PwwNbr7RTfO9ZPX0Pvm357y6Tb29WQfSvmaQTD5neSG+4IQ2vvepmLt\/H629oC25PQsGnr1fgNa9UagDvlwo1T5n9nE+ocQqPpTs9T6UAXc9dhwiP+o+OT\/KNTA+DMs+PquKMb2hT0092fehvp9ebr1SBAs+ECLWPuoKLL+tzIA9M4vLvt1IeD6EtAk9dhPoPtqfuj1J3OG+IA\/iu+wvFD9x46G9103WvuPDhruY6hA\/7xEwvQxcpr4C3jG\/11WHvjzvfj8PTxo\/\/iiTPjB43T0nEkS8l+Dyvk3WLb4fhmI+84OxPjxrqT75mjC\/YS+YvHSCar4zU+69swpWv1ch3j5JPzi\/vxZnPwT0TT\/DNCS+a6KFPo9Qhb4Z+3q+J6pGvoTtTT\/pM3m+ioQ6PgD32j7UWcG+AQxFv6f9iT1ZLTO\/wWKWPu\/EID88GhK+FvDgPuQXgD90p4Y+enoEPpZrQT7fUGi+4JE7PkdKwb29AnW+6Y4ZP\/Ox9b7fQFQ+SJGnvqdug72c6nK+6ZprPk8BUL3jvlc9ZOKqPswMjL0Ip7G+Z\/7+vadXAT0G6GO7T2+3PYPnJTuKJ4Q\/UussP+cmgb\/PmoE\/SKmdv2ZG2rwBOho+6tmAPoeJTL44A60+mvqAvSz\/rLxEC+o+yCM2vbB7ez45tXg8VdcSvzGgQb9\/GUG+P6RNvkaVBb\/xTTq\/LA1WvrE6Nbt6KYA\/LSNNPwUwjT7kp5k+ulpfPkziGz+SAKQ+eTsNP8ZEQb5X\/TO+ZNK4vsvoB8BGy6697yOzvdPn9r4yX5M+HU7gvNIOkz7GGro+tKkXP8cjyz5V2w0\/iAmMP5D6ej5qxZU+CR4TPxFbwT1pgCO+bx7PvaC+gb3f\/rg8XfjdvtTePD68WMq9HcOFvlcqFz55e6K94bOUP9y2Cj9uJ7e9DJ4kP+rP5j2leak+CdLEPhORq7\/DjqE9Uai1PMm7ED95Hi2+RCZQv8H0F7+cQMg9ZG\/yPbxtSj5vBgu\/lGeXvXQslT1BM2W+f+oKPewOsD7aA0I+d7xPPhYOfr2TRFg+QSTUPUkOgT5\/WZu+G6YgvvxcFb5GBFi+iwoUPn\/nxD13pue9oVW2vjTeGL5KI8a+v5lZPiNU3T4JJ5O+yjW8voMAJz3ds2G+ap+mP2xlxz7t7\/k+c9FNPz1kWD8BVA6+vXU4PoY6cr75GNM+ouY5PzmBHL+8QoK+qg1SO5z6sz4JD0C9p\/R5vha0ijxMKeu+5wK+vj0y9b2BEPg9gfpcv9mDCj\/fIZm+rWw0PhCtK8AUzO+9kEVgvoRELj8YOoK+TMQdv+aooT5Qam0+GljOvnkx777PYzY+XEoqP09kGTwSXbW+IOKSPTyAh77HDUq+CurLPdrycj4MftO\/kWJWvt\/2FT8DjM0\/1DMyPlSWNT+WnYE+X0mDPkHBA7+UU\/67NE10vY8JCr\/Jcd69WYmWOzHC6L3xJxc+TdBcP3+G\/T5fI0W+j+wIP1DGwr0\/cdI\/\/fkCv3bowTxQ4F0+YTXSPzSDB79hDYM9dxawvGEY4T22S8++FJn+PkmUbb6\/OV8+jfzrPkClyT0z+e4+cH6vvoDC3r12t6s+eji8vun0Z750rBi+4JTHvHOB+b4Mus4+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000007",
+      "timestamp": 1717718400000,
+      "content": "Every person I have loved has found me insufficient. The pattern is undeniable.",
+      "valence": -0.7,
+      "arousal": 0.4,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "USZgPsoYmT6+F8k8+HhGv7G8xjwUl309WIPEvllsM7827KM+Y405v2XT4L7W4hQ\/sVySPa\/Q4r67zwE\/S+9QPBl6yj7igS2+UdpPv\/b67jvIOoq+qDvxPllnaz2NiYA+iCj7vR6RW75ffAS\/0yv5vp\/fDT7Awa6\/VK\/YPuIABj0US+u+q9HHvYXG7D4drie\/ztA\/v6KR5j5Bcc6+ZQNsv+gJgT4RP8M+nVhbvd03\/76zDNy8gnGTvgGCNz5ybSU+HcIhP7A9tj4djIS+oL8pvs9ycLybWgo+WM4uvmkzMj8Yz4k+6HmRvqEkUL5AzQs\/prMBP4h7DD8LZzHAvXffPYNgqT0aGs89NQm1Pb1OuzufKME7+AEfPmK0Qr7OMag+35a5PbMPdz1ULeC+BXFgvi5QmL2oOE0+BcYPP0p04T4cSRq+aGguP2Eixj5NAtw9wBqRvqMp9z6Grg2\/+3cPvgO9m74H7zk\/aDgKvouCnjyUJg2\/kTQXv00Wwr5jNgo\/KppuPv2DAD0xSWC+bVhVPzbTWz90eKg9OjIiP+Dwtz7jf94+cp01v+3iU75rp46+Nj99veuhmbxvKrS+uIsAvg+7KD4NQKs+NqA2PypxeT7Dvgu+2QQHPnnSVz4xBVM\/I3Qov86nID7TqhW+\/8YZvaterT1ABFi+QzPvvrYcZT\/rlFI\/TjEYP4QuwD4TNee9Q9YIv\/5IkLy5yzG+oryQvjjH9z5MhsK+u9ZIvT62sr0ZaSe++QFvv9FG2D6eb92+NXeIPzbV6j4YidG9hW5\/vUoJFL5nujW++XP9PdsDHD4JzwS\/BCuGPlGRYz\/eOOu+FvxvvyKpPT99DzK\/rNW9PpRTjz7eJn0+E\/44P108ej+REGE\/qQAIPgj9vj4j1QC\/XAM2PuZIj75+0m2+ilXTvLmhlz07zUM\/LXbePrVk1j6Nv6S9AxXkvVhQUj7lI\/++Ecv+PZbYET\/jeFs8SPYxv72+uL7zEBS9enshPrruEz6ChXI\/0L0HP40W3r7t6Vc\/g4uyvs3Qxz2tZbo+Z+8Mvv2nqL5L6k++7qA5vpmBubzmApo+73L6PZO+v7ywBJA+PeyIvmNBD7+zmXe9NALdO4Ly4L5u5AK\/2Y7evlPHHz9t5w8\/REuePjPUez0IKFU+QmbZvXGKfL45QEI\/qOEzPflkJj5IlqK+GIDFvgNd8r9czda+QnnCPewPa77teqI+gxuZvqivlz5inGk+CnD8PmuWUT\/iwgA\/rxk6P7aPBj\/9g7E+74y7Po4rAD4ey2e+ma7KPbuBEb5fcA++GVrivgAbsDwmRBW9\/K8lPtM7Pr5AVke\/rr20PyDJ2z7C1fc9p\/5tPibIhT8jlK4+Bl2PPNRJ+r8ss6U+pDAbvmObAL8\/m9I9Yt1QvxnDHr49Sly+qMa3PuxcOT\/Z6mG+PSG8PfgVtb79QSO\/Y+e9vej94z6z8bY+orOoPjIuljwsHRw\/6oHuPg018j7UGEu+vWWJu5kD37yTtQW+p1kLP2iAtz6TaSw+Uh9QvnuRGL+KZQu\/HHw9P8PnbD2dn56\/r9LrvbW+Gr6WyLK+yAeKPz6U+T1kIqk+O3blPhWtLz5WNwa\/MmgBPhNLBb+iYou+DDOmvdk9AL9ZjQO\/WKgqvqc0Qj6KGnG+3wOavay4Xb1AKhw\/Uwq0PIqX1z7sfpm+BTwVvbDPBr8d320+gMcgPlgSHMAzHg2+XT4rvvKKI71uJQG\/XgElOpcLFT7ICCQ\/NBj\/vTU0RL67OjQ\/O0L0PS21iT5r+yi\/6HkBv\/jC+z5PHJ6+lVcSvu3w0Dzj7vG\/USPovhNMOz\/j3cc\/+Lm\/Poo63T7KIoi+IVKvvs0Zj75tuJS+ciOePeJZJj0egg6+4PwvP0udiz70tbG+UW77PmZmJj8rpBA+TbqLvbDwUb6d6ns\/z6jdvhI5C729XZ8+rFviP72yqr1+H\/e9CJvoPjQkD7+WpXa+6XXCPm16az7FAbe+YR4LP48gCD+AlcQ9SgVcvv77yLvuOq8+DpOcPirzqT5zvcQ9kz5KvoAd677ttTS\/",
+      "cognitiveDistortions": [
+        "Overgeneralization",
+        "Labeling"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000008",
+      "timestamp": 1717804800000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] spoke briefly to me this morning. I felt the world shift. The warmth in her voice was real — I felt it, so it must mean something. It must mean she sees me.",
+      "valence": 0.4,
+      "arousal": 0.8,
+      "moodLabel": "EXCITED",
+      "embeddingBase64": "WFJlvcieCD5j4tq9QDL9vejBEr+ma4U8Rl1RvrV7t74qAK263a4UPsGJIj2WuHe8xoE3vh5pxj3oocY9Fl62voQUAT4rugk+c5ndv+ReST4QJsQ6rLdHPYkduj69Er0+8uwSvjZELb6trQi8gEyMvjX+WL\/TSY6\/qga4PU2xdz5vJCI\/AvQBvwduvr1W0oy+LPoAPVb9ib7SncU8o8LFvoOXEz4Pccu+hE0NvkEAmD0KYFo+vTx4Ps0DAb5\/bSA\/BfFSPz2+9T6IBg2\/+k8Nv3J+Kr9fdYs+0psLvraswj7gqVM\/N9FGvqkVxj11jpI+RRh5PiYw+72G0A7Ae8JWP\/PDrz2ERoE+5i4GvzL9wb5lwK49sg5Qvj3zIz5cT7G9rouwvlMISj7o8R0\/W+74vYMm5j6SaQw+qYlAP5jMkb4i0K4+Qt9ZP4xXkztL0ik+wdqjvlMDhz5SYhW\/1iNMv8u6Hj\/lNh0\/LpkZvr+djj7YyOs+GW+tviPFPT0RqZM+iiyIPl8ag7yWYVY+YhoNP6ofAz+UlKM+QyJqvHhmDb4+wJi+AGr4vkhDnb4O8\/m+3s3ZvqaUjb5KJ8U9I9g\/v01Pfr+Wm8Q92s0sPwpWNz9JM5m+xOYNPrboUT\/gQu4+JgQUvwlqkD73Rpe9w9uoPjLGlTpRhMY9gOfZPvqijz+GToy9nr28Prgu\/T4I+4s+M36Fvga1Gz5vjzu\/KslcvpyQAT\/zhlW\/O\/HivlKzRzxyOhY9uf0cv4AZmD7mdki+MyxbPyb8276NQyG+NSakPsNcb77\/h72+oPP1PjLtgz6ulYC94qmBPZhAeT\/vd5y+xvIVvuMNYz5e6hm\/6MEtPzrfwD76SdU9ogpDPxDvlD9N\/Hg\/Q1QlvwPPYz4iKoW+LCGnPkTVPj\/u1Ym+3Y6CvSgLgL624hk\/\/nwivsajmr2PnRS+PiOQPsq\/gr5ATLy+7nRePoLIaj+ca6W+4TCavia2QT7zut2+YmwOPvCylT5Tju4+tHClvBq\/DL9DvVU\/foIPv1Cmm71+6hk\/G60fPuU9MLyTH+695\/s5vlnbIz+mSdw+8tObPmhH1L26lXc+k\/ZOv6FBOb\/c+yy9nhsBP3UvBL\/el0a+qgF+Psisv7xzhLA+FpnTPha9GT2mDg2+sjSjPli\/zj4oM+w+2GBFP9MHET6YsO09AMbYvlYS4b8voQC\/iMjZvYTnAr\/iMww9whVqvlXTxb3SqrE+X5mdPvZGCj+6DgY\/sNp5P4WUvDstik6+Ix3tPrEwAD+bNLa+Pp4SvroGLb5GQWa+0NtbPiZf4z46tji\/XgWuvkQtD75\/UYW9wm50PzrFXD6xrru9l6kCP8ol6T0STLm8JmMlPPpq17+CV+S+ZYNYv6xewb3pjCC9uYIkvx0Hgr4\/m6C+dqlCPwUji77GZv++og+0PRpcH7\/oIxi\/mlK\/PsKAzj2+GuS+2S0bvtXphzzKTK2+4maBPV+YhD8I136\/s17xvF3BID7njRu+tZ3dPstiMD\/9rxI+8Folvm3dQ7\/r84S+w1KTPh1OCb06DN87+EJgv\/4AVT5ttYm+uOHMP2iMCD6wpCI+Wl2rPgIBdz0uX949pHoIvq83nL42x82+sCVkvsrbLb+QwLe+VB1DPjYWmTy\/kow9y9oLPqXJRT5K9Jq+pAe2O\/7tXj5oPQS+i+iiPqYm7D6XaCa\/ttyUPWFsFMCXYSi\/INzJvVpcGj\/owCG+tkTAPdN5+Tq2xYC+oLUHPiQaLb+413Q\/mSbHPtQjLr49v8Q+NTvePCtxaz+W0w4+OomUPjdGDr0Lk+a\/XiVwPQXa2z7ubcQ\/Msi5Ptog9z4aVYQ8s3Abvls9076uKAU+29VbPvriZr6Ww06+nmeLP2gf5T2r3kK+q7LUPv4EhD9rfvG9Vm+8PhsJEb6LqU0\/QKBVvjL3wbpbPKo+nuL2P5ZnLL7W5VA9ixx1vRsIoL0eG50+299zPjvkxb5mbNk+AyaMP6qzUT4zmdu8EIx0viZd8D3ufaw+1chsvjNR1z5SfSS\/juofvwb2ML9qGtS+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Catastrophizing"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000009",
+      "timestamp": 1717891200000,
+      "content": "I cannot be argued out of this feeling about [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3]. It is too large and too present. Reason offers nothing against it. The feeling is the evidence and I stand inside it entirely.",
+      "valence": -0.5,
+      "arousal": 0.8,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "LZ0rvrdRET66i8I+dFrPvlP+gb0+L2I+rkIEvu80Tb9HMru+IoLjvZ\/83L5K6wa+vNqGvZz4kj5wdUI8uFEpvuf+hD5ePuK+MVvSvx5PRz7e8vE9xOYmvdXz3T6akBY+34IdvuIlhL7cHB6\/z5q2POqVB7+hTHy\/3IeaPhxeF7+slYE+Yq\/xvk8syD3PttW+kVinvnkwvr3SK7++xPeDvEszNb67PoE9h4rNvhkXKj41YOo+Xu8dP45FwD3zK+Y+1wgQPyUdwL2L\/Kg9y+Qbv\/1J1r7ZxlA9FJWAvadtZT4Qphg\/j7zEvoJa3L0mLAE9kDYBP0VQAz6HsxDAENpHP4tQtz0SEZE9zztwvkgwrD6H83c8nq1Zvk7utr6cSuA+FRkpvnXLOz4QIXQ\/\/ZvZvjDypj3unA4+ft8eP9EZQ76U\/Bc9fJcZP0LoqL7CRsW+jdrHviUFHD0EB6W+lIWvvt\/30z45Brs87q0ePxJXjD09Muk+G9pOv3VFqr4UZ+W9wA07PzIiBz6Qsx4+ML3OPvABoT7\/uZc+vd9MPnABaTyHv6G++YgEv3u2zT49EX2+Z6xfPnGuhL4tIaM9kpgTv5lGHL8egte9lJKpvt\/zKz9yTbK+ELgDPiEMUj+1Mv4+gLNSvkkrOT6J4b4+IW5CP2pszr4ppzO+1knPvkPlej8uCR8\/+VC2Pityjj4vZAk+zfz6voP6ab0AP929jYtIvm63mz5ohKG+B6gfPXxFpb5PRyQ90OpAvzUeED+55Bu\/Nkq1PiwDkL4YzZY+uS4RPzQxT76chri+4jGMPq0qAj9GzQA9btnjPgfOST9fzle\/brhevufkej5PfXC\/PkafPgKKCD1kgVw9q\/ESP6aTaD9LFAI\/sCPSvn7Qej75c66+e79DPrKECT82ruq+Jo+LPhL\/Mr2cx8s+u0wmvYNYy77FZeW+3TC5PU13oT5kdkK77Q+xPg9\/BD\/1lUe\/0ESbvnCjCb7ymyK\/taioPoqlf76ILkI\/nDa4PtOCK79uQWc\/Yswmv+r4yr3SODg\/NVWoPe6v0r6RDie+Tf5\/PlOBDD41dhc\/6wSZPnmk470GVB88HklpvzYQ4L6+UyE+K6QvvknJJr84\/ga\/UknsPTwquTzAMbc+LPTgPlV0+zwk+wo+mwErvsvvzr2pPjk\/KMwkPyqBI74yxEU9b5aLvjXu4L+rvDi+xMRIvrg\/974reR++lN2cvnzAzT2tm6I+JQK6PsmYvT5sbg8\/BJm4Pzc1lT7Zlao+X6BrPgt32T6Alg8+TjkgvjFZ8j1XxdK+MCV1vTAvCj\/L4iS\/7zURvx2DCb\/nyCi+xtmYP7HafT51TKC+uZRcP0OARz5xDGs+VlAivscZyb9+Pr++5Ts9v8UzU73wYQe+\/QR+vx6kUz4qywy8YjgsP1fH\/L3HqtK+8MrfPshwdr5711a9vbO7PS5v1z4B1Kq+kKdDvoXNhb1XThE+kofAPm0FFD+voTe9WUuvPkpcSb+bW4C+jb+YPhG1ID9en88+jFeyvlYiDr9D8r6+dnejPv1CeD5wdX2+1CglvyK5gT5LYRu\/zJLLP7UCtD5qsiY++jE3P7l1Gj+MEsY+Qj4evWfoxL7jNAU+5980vl4SfL6eoUo73iiwPpRjqj5a9lk9\/rFCvG6WGL7\/iRi\/RTtDvgpvjD4ZFCC9SQqdvkV4bz8zMNu8QUKtPl1KKsBLvh6\/gBrnvZcFEj58oMy+TSe\/vqaMpTzi2Km9MpCsPsLBUz21ZwY\/qacyPntyVT5V2dQ93LNQvhqDJb3EzbK9d86sPvd0jD3Qd7a\/IxVMvs295z6U27o\/6WIbPt2bDD+mfem+2J+WPSf7FD4vnok+pgNtPeundL7Z+Vm+MStiP94ZHr0Oyry8kSqKP7WNGz92Ec++c8s6P7DLj71SZH8\/UphqPY1gqL0EEQc+uLDqP+3Jir54f5U+ooe3vidukb2a2bY9IpQTPjHrsTwyQsg+gCCLP3aP7D4tByU+kkELviDdNL0jLhY\/+JvwPYsX6j3Q1iu+mktlvr7WB7\/RaJ89",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000010",
+      "timestamp": 1717977600000,
+      "content": "The world is arranged against people like me. I have always sensed this and now I know it.",
+      "valence": -0.7,
+      "arousal": 0.5,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "uUEEPoCKlT4NcSu+PL0XvoGrC75T4V0+cZCDvmdVC7\/tN+C+1HOcvicB9b3BtDI\/OuV0vdOrxT2NPSo\/lvzFvhhNGT62IQK9jVypv5tjqL5I6C0+CxIoPyRaHj7ZEN0+BkrmvuD\/8T0DGFi+T7gSv1xKiz4geIG\/za7SPidRJz6wsoy+I0rbPXbq1r7qd+2+MXiLvjT8rbz8Ffy+W+8wvx1EKT9np7u+nA4fvhPKab6PNx0+jYw0vTHF5T7\/3QY\/d+4LP3Ck9T6gUNe+6mTxvqE9Zz1klbC7v+Mfvm7XBD92oFA\/0ahxPobdWTzcFh++cSQsP0KTBr2\/JDHAdpJUP83UFz6Eq48+xHqXPmdxtj598Os9fcDRvFQNRb5XeO29EZMcv9eRdj5Aiy69RqoEO9Q3JL44zay+Dx8OP0K+uT6Psds9rLwbP\/xnZj56Z0c+Z2H0vm0wgT7nJ8G+5qzGvjZIQT3xBTw+YPdhvvH6JL6X55++UqeLvt10hr6hww0\/UYsKPwZopD1HgHa+AIs9Py8U8D426sU879bsPoMrVD6nca+9H9O9vq2R470TpzS8PDD1vXHuy75kQwa\/5KzBvQOMUb4juYy96uj1Pobhkb5R0t+9vQgBvvawPL5p8Sw8nM7ZvpGgODy3Inc81QcWPivzF759rDg+rFKSvuTXlj8ATQ0\/\/bb+vBpB3T78Xbi+Nfsmv2LNmT6mcba+qUtyvkG0Jj8U6ji+D+aHPE1zmr55JZG+mUFGv1q9Tj9m1Hq+cUmlP4uJDz+8yOU9xPv7Pl9hqL5Fvqq9MsKRvXScd75A\/9c9o+kVP8+SsD+DwH+9kScYv7bgNj8E8ui+jnEeP3ebPL6vOxq+q6IGP9ZTUT\/vEjw\/yY05vnLKBj+BBCG\/rXswP4nw4zxjd5+7P2clPsARZj4dO08\/rPOwPiBH1z3J\/gA+UWeNvknu2j5cpQC\/aTplvoElYj6hhAO9xPYjPk+J2z1PWNY+dIaxPt81RD2hMB4\/TNuTvNRojb6\/IDg\/z6YRv2e1lj6miE4+tu1\/vS\/zQb7qB9g+bmeFvegAEj7KNbw+HS6ZPnrF6D1RkAI8WdsmvXEv4b4gQNc9Pz9RvrGJKr90dpu+ZFHXPj+h3j3TuX0\/ps9hPlRuTj6Hv2C+1xX2PeaVOD7J1Ps8ibQZP2kl5j5ESIm+KT8qvwsPA8CcNzG\/HxeTPdErjL53Osq9t\/hqvkepPD2z2T8+ytIcP9an6z4tWw0\/fkaHP2rSQD02c9i9VrhjP6A45zuyCbW+Z+TWPcRjhb60G829+tbBvroxsT3dzam+e3KZvaMCDj7PesI7KWiVP9fRbT8EHEI+w1O6PgE5Vz\/mmHA8TDNRPVci4L+gQHc9ZAswvwmNnL4ngs++HGwgvzMe0j3sHdM9jMSAvSSrQz9Buka\/USx7vg00bL+fvtS+HPqVvMy19D6AhDW\/bDBGPbnMNz4Jdnw+nB2PPrm0rL1hFR+\/j2SgvoHMMD6NFJE9jVf7ProZxb4fK0++gfKUPq3hur6qkVK+BWAyP8+eDz\/QgtO+TZPxvq8ltz5qUuo7fRnHP9symD6qD9Q915FhP3tnDb4Vlxu+zPK\/PL0uRL9fZY2+3\/gJvuwXZ76\/Jru9AYGcPvETBDz08lO+14zvvI5aNr7XB\/g70VoSPyLCEr5XMZS+iQtMvkfzrL39ilE9BNFLPhvvK8BzyEy+vKEgPsDRDD+BPge\/gTKKvkVytT4Qj1G+sfcVPte3e76\/kt0+raC5PgclZD337aG+L6AGPXyrGj+Owq69t70ZPZvmjL75a++\/FwGzvbR5Cz9dDsA\/uY+sPn8JKT\/n0YE+3BkNviW+J7\/5IMm+a3SDPuLprb4DYWA8HZYKPhnWZT0\/si68dfaqPcxeQT+NKJG+9DrIvUnk8L3qhGI\/fjuCvjWtkj7crQ++jMC9P5BDir5\/Qf08LNQdPwWtAL9oXBo+X77QvCORc76piNK93N4FP4aqjz5+SyU+xMrYvSkdeD6OsSQ\/py6MPcyV9b3ArMy9tHVIvtyFjb+Jnt6+",
+      "cognitiveDistortions": [
+        "Overgeneralization",
+        "Fortune Telling"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000011",
+      "timestamp": 1718064000000,
+      "content": "When I am near [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] I feel fully alive. There is a clarity in her presence that exists nowhere else. I feel joy, and joy of this intensity cannot be baseless. This feeling is its own argument.",
+      "valence": 0.5,
+      "arousal": 0.8,
+      "moodLabel": "EXCITED",
+      "embeddingBase64": "Q4J4uy5Zeb0Cp5K+aL2wu8fMkzzePyM\/s4+5PdDpAr8SjQc+JdHUvLirgL4WfYe+6y6ovmaLAj42bSa+qCsEv2hPdz0Pnwu+uoTUv2bBeT5XVvk9ZTEbPotEPj4\/faI+y8BEPZeI674IYde+rn8Tv16Uhb8D8qi\/6V1DPpWOrTwG87I+LMBJv39olb5ywuy+bNTMvluX2b11zK29B7SLvvtMqT2PEBG+ztLRveI\/eb5USMQ+23JDPvq9DD6Hla0+rAxMP1A+AT\/YCIo9xNguv2u7fL4aOdk+eEjfvk0LIj6Cm4k+3UdRv7m8hj6ayfA9pUfiPrQcxT2jgf6\/7rToPuJZe732Uw4+8ZaTvktoZL5iHMM+BfHYvl1e+r1I5YY+ixwtv+JjHT56AGE\/TP7Hvh1LNr3ijnU8ovAqP3CTCz4N\/Iw+dccIPyX8u74bN4G+1pEXvy8MLL8OMIq+AlkMv6gi4z4cc48+1qY8PjiQVT4Y8AE+RSufvk+0Bz8GSHU+\/VRhP082UD5pIXS8A+mdPijyFD84wfK9sRAqvsySaz6eZvK88kE\/v7ZKOjxGt\/2+1ejmPhiF+b4lLIA+cjpyvx6fFL86coi+LPfOPtXVDD84l7084HZXPl2MGj\/L5Sk\/e4Havtu2BT97GOq84Uo7PyJX072XYvE9a\/YFv5gUcT9SDsw8X2tAPzci9T7fWIs+OCLXvkSVKj53pVO\/bDFlvrtdrD5mNtC+SYXIvctSAj6+uhW+tJZXv3i\/6j4inuq+yVUwPwks4r4O0NE+6EMLvxjem7yO46O+9POLvX2sET+JOMQ+bmoGPs2smj+bDS2\/4pyAvmJJtj5LqFe8PXLKPo9twT7iZmk9Un6AP0eYmz8pl0c\/Wh8PvwV3hT4bjd2+KU\/FPhHYtz6uZOO9+82fvnV5Vb0JzMW9UpR0Pv5Yqb1plCq\/Vi0mPw42qb5bZmq+ZQY8P\/FSkj8pdai+cgIwv+JThr4bPRi\/R6a9PibKvrxUPns\/df20PjHAS78aLjE\/OF9Uv2sliL7bagI\/RZ+KvbpypL74RAa8g+95vuDvTj6X9zw\/UkMOPUidP761KvE+5rh9v5WJIL8Iktq8hjOxOE8iTL\/98Fm9+2OgvlgMND353zg+ge82Pr5Uij6ntgo\/iG5rPlVawT2UO0o\/3WW0PuANkj59wmE+MUFEvrRU2L+u6z2+aSB0vpYAHr\/wWSa+NBQcPsn\/4D2MK34+GI8ePvEs671euP48Eml9P1Sj5r1v0mo+gPf9PSIoHj7dyUY+sqMkPqKAOL3i510+YysEPACjiD5zLi6\/ntA0vklBNz41WsK+MLKJPxV1Lz+ocQq+hRxFP8USmD2kYkA+V5\/pvFtPsr\/FYS2+OG4yv0jQCz11Wn4+CvA+v6ijkb4SliG+sqE2P0wZeb7TlhW\/I5FnPR8Drb4nSwK\/2Gq4PsLuRT4\/Ajq+j9OZvDGDyr30oPi+6MQnPkPOlT\/6Af++X0yjPlYNAb8FmYk9dUqXPp3iUD5A7uA9KzaTvk0vH79GgAm\/STW5Pmj0GT5pFL++8aUHv32j+rruESo+S7XKPwz3qD7Hpj0+p78vP6mxrj69+6A+InT2PtuL3713fJ0+tGjBvd4rab6Xrky+TxnnPh4ZB75htJw9Vc2MPkOXgr6bbTI9aG+dPvssjj6DUpq+jIOZPbtYNT+T6DC\/Dsm1PlSpAcBn9gy\/NU2FvvHYJz9Ax12+8Ud0PUZRtT44OaS9fjQavjC8Nb8oQGY\/tWYdP9zVP77VKYU+QS2XPkZIFT9ZQaS+p3XAPmMV5T1ODMi\/2xWuviFBKD6JeOg\/JbC3Ps6iZD58uAG+e7\/nvdtDujzny5U9ED0Jv9mfFL4boh2+Eg+LP3fN6b2eUHK3Pe1WP\/rYUD8Qk5Q8zdCdPrDAmr5ATnw\/sR7FvnhyXD51SFy+o4nrPz4yGL4LQ4Y9BSvyvvsfcL53Dyw+Gg6JPSW+h71x2VU9U0aGPwhiFD+bdTO+MroYPhZugb4ngTU\/22y1vDHenz6JE9W+R2KsviUc+r4YfZy+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "All-or-Nothing"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000012",
+      "timestamp": 1718150400000,
+      "content": "To feel this strongly about [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] is itself a form of knowledge. My feelings are more precise than any measurement. The intensity alone proves the reality of what I sense between us.",
+      "valence": -0.4,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "Y5zaPgiihT6CODs925HBvS5hUL5OZVM\/eQN7vrRATL\/4zJu94WeyvSyIgD0xIYM7WKfDviyGsL3nu8q9TSgMv9Pa471eUru+SJn+vwt4kz6IT+8+RRalvSKppj120XY+YBwJvniO4L5bfFy+0BwEvzjrWL+qXZS\/7HeVPd31Hb4lke8+GsCYPbQpZryzUge\/AaGwvlIsQz7Db2q+VWQ4vmLrvz0Dyxc++IoDv61Jmb47+dg+kxwnP4xSsb34GsY92xovP3GyIT4qaj8+I\/Q5v2iX6r6Kcyc+lBzoO2Adsj4MK3Q+1mi3vog7wD1i8aG9s5HePj7YqD6JagfAGKrkPgpiUT6yq1M9S+9WvpdorD3Pxik\/vAvBvvI7OD77+m29e4DJvtR\/jD4XfyI\/oIr3vvG3oT1yUoE+KBikPlnVfb7Rlce8bQdcP31F+b3xquy8p72NvpFz5L2kBcu+GRMDv6it8T4llAY+Y4BqPePjQj6Ulgu+Qpe8vrsHyz2bd+w+4KLjPkMf4rwxn7A+TPr8PiC\/Aj+nH\/o+YK\/gva0evL5KIWW+DZOYvgi2Ob0ahoK+0w8VPzlWHb+jLcI84DjYviNrTL8nUvi+uAtMPpgDhT8KCuO97yv0PuLHYD9B\/Bo\/eIjTvrHv3j47qBo8aDPrPp7J7L0aIKm+T\/qXvl6Ogj9wIrI+ZuQ+Pzo0S71g3lc+CLwMv3OTBz5g4h2\/xQf0vrgjHD3Z5i2\/Z+CzveL6dz4PuGu+8GU9vyMB9T6vlFu+2llDP+GCQT1Pl3U8lkmSPVUZBr9Netu+6JryPaFHyLxTTFU+Iy+JPd1ORj8WUNm+FBHKvgDTAT6ov2W\/noj6PtNdGz0MuIg+xdaZP5Qjaj\/V1U8\/LBeDvsvVpzwjyeS+XzQIPgs+Oj\/CA+K+mMgRvA8Reb5W9aE+FWKgvFNFib7pQBC\/KFW2vOGoAD2M1Zo9qCwDP9mU\/T48kou+ILR0PQyZcj7tXUC+I+MWPxaLSz1QWZY\/05kFPx0PTb+iCnw\/VpVzvmIRvTy5r20\/lYHPPpE+4b4MrYK9YlZ3vk0Sjj6nf+A+T+9AvaQsFT57tn4+uRVnv2M\/C7\/BaS4+7OhgPSXAxr5jsC2\/yCKBPTQd2rwtO24+W12TPibMBz8MAAi+NV0tPTMLmD4AFLQ+A088P5+FlL7Fo5m+tKubvj3b2L+NeZm+PuuOvpQWDr+bv3E9lDWmvbY95T4owZw+SPXRPewZhT2ivUw\/7+rGP\/Y2fz7yvkE9wFG6PnbtCz+TIli97A20vfN5az796fk8Y4aaPs4JBz45R0y\/k1KdvoIZW77Ciee+CImSP13Cqj4dVNC8Wo1JP0WMhrw5VY49B2G+voWCwb+OxAC+cWR1v9g2BL60l3m9YOpNvxOSnr22mZC9mNhWP70MiT6bTna\/BgMWvsj3FL\/Q+Qy\/T3knP1M68r1twaC+oNKsviOXQj50U6e7OaK\/PdOpMj8iK+i+3V5dPcPSkb4LfLm++d6BPpvELT8rmtI9FBVevmqM3L6rEIK+AgwuPthIlT5tQDC\/nWoWv9Hsaz2kjbC+jk65P2Lq2j7HE\/09Yt4UP9CAkz6iMIo9wr1xvsQIVr7PdMi+Nh7fOw2QSL6+bYa+yCX6PrgQcD4dYJe+Rb6fPfl80D3P55i+1NbvPERywT54Dbo9c79xvnQDRT9i5cy+J1VKPnNdAcAADTK\/IN30vtb5Jj8Ai2Y+EiOsvjOilj2SuFO+FlIgvlRquL6eSGk\/D5sFP7Lbxz3jUbs+dmSNvvEHHT7IRau9+XYDPzEUIL0VvM2\/33QHvvVKhj7kJco\/\/rvQPbczNT\/Of8a8R9pnPo2LuL5sE6k94UMIvlb4Rb5ljzc+NsU3P1gGajwghnK+o6BQP+XhkT9LpZe+WM\/gPtXSgb797ZM\/Oco+v85SMr4sPci9A2QHQCMzczxjuqU+mocMv5jLAL6xIUw+uteNPm9tnr6Yfe09eaOXP7gHQD4TkE8+51CVPc\/yxb0islk\/r6L6vTJIET356n2+Qnn\/vm+7Ab9K8OS9",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000013",
+      "timestamp": 1718236800000,
+      "content": "No one has ever understood me. This is not self-pity. It is an observation about the nature of other people.",
+      "valence": -0.8,
+      "arousal": 0.4,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "WTbcPgjePT4N4K29ENAOvyHp87shBDm96KbPvVPIiL\/L9qy+Xm2DPmkSNz47obw+hcWYvUzyUj7FBLM+4EWKvkSy6j4hos09CbJ6v+LEhb5Glz4+WKTWPkuSHT6SjR8+CNqLvkgHur0zP5u+KEGHvqs+fT0TtYS\/O\/H2Ppy\/DT1vrua9zPzDvTk3hT7PL7i+7v1Jvicooz6ETA+\/k6vevhnLBb7swRg+xLJxvW5FX703W3o9d8xuPSj7xDt0G0U+N6aIPqySvD5s5+i+eZiDvvLQRr5Ul5A+ZICbPa1KJz\/UEGU+QUCZPtfLCr7O0Q8\/ToVdPz7gZb1uHS3Aj9g6P1rGIj\/sFAE\/oaUJvkAqMz65Ji49mMMEPoC+Pj3CAQE689EhvwiN372Ntfe9VSKUvmxNBj7sptM8QeTTPhUTLz7lR5u+8YM5P4lsEr4BUrc+6\/g3vwLP9z6xMNG+0oPSvkCASb33NFo\/0aXWu9wvmb70a0c+Q5cMv\/ItuT0CY04\/BdeAPmWhUz51ZBA+hxA6P3bgBz+tqTU+GhrNPqzBkL3O\/Yi+HscHvl7atDyNNoW9ZxffvsRjDz9Ngse+EUJavquORjpIL5o9hSbSPm+elT7U7ja\/jM4VPqU2tz3mOJs+2iC4vhr14T7+dIy+v4oMP1iYGL4fBrs+1Cn2vtKhhz9\/y9Y+pc68PlqjFj88txG\/zOxHvzHcND\/lQ0q\/2+9zvE1E+D5BcUm\/zF3\/vBRK\/r01HSi9Tt6Xv+2JHz9ulge+xSM7P1VpDD8geKw+4jYXP0X7Ib+JKNW9XmyGvssF3T7B0dY9xIGCPgpIgz\/ohGq9xFmzvas\/Gz+JoKu+C\/EPP\/qsMb44qJy8gIZBP8VoKj8bY1Q\/vGvIPfjlED8fXRK\/MmvcPs7BmT6x0GW+X1CjPinqib7ED\/0+6NEgP4+loDwvA9W7F9ffvjJTEz88wHy++7CYveL1Gj\/VLba6WvnjOk06vr1OJpw+e6IBP\/9xkT6hvEw+CYtsOrlv675+7FY\/r+tSv2OilD27SZ8+5fsXvnHZUz4LTq4+4dGkvpqK6T1HJQU\/2+H1PbmCoDpaBFM+aF3mPNrZIr95i6S+2hbWvtdzDL9U3yK\/8QqvPmJKgL5vPBE\/vtT6uIE4kj6s9M08T7stvn6VNj7MISg81JY0PSLAkT6ymyy\/YPQjv7fv\/r\/PHcu+uamOvpfpq74fstu+Uxevvrk5jT7TYlY++E7CPgmK7T7zQVM\/fECDP4FoqT7vq5y9gE5DP6tE1D6lfgo+qxAmvgUDoL55npO\/uOK4vub2vL4kh8E+OFTlPgBr0b5J+1k+2cCsP+H\/uD4mD6M+wWYIP3ufLT8y2es9S07Dvd5G3b86Eak+ri\/mvrVstD64vca+4XWHv9eF0rzfgIc+f4T6vpxy1z6OEyu\/svkovrKGLr\/SJ7o9Nc\/SvnW\/gT0Xzlu\/XO7YPpIyuL1Fz6u+08wpPjW1O7tkmYi+TkIuvy9K1DxC22+9Anv1PvkJ+L0m8H0+HPq6vqJCPb8CnnS+59CqPgIxBT8vjeG+C+HlPSeV8T6hw3u+BsecPxXlBj86Jig9+NKkPnWizr7ibpi+YU86vgjiTL8p8wA8FPfivhRCIL+FI809JN\/\/PhH\/ED\/Uhw6\/t1hRPRJQob7l0Yw+\/ti9Po4OfT7uipe+WGQRvzztp76NE6c+p7exvWIqAcC8RkG+pLoNvk9+uj4fFhu\/0r+WPs8W6L5NvuA9Le1HvuCZTL0TLh4\/\/xnEPmC26rxpDAm+\/yKiPpcf9j6qBZY9pZDOPaU6tb7Ry+S\/7eUcuVjpsT4GusQ\/PEyEvfBHjz\/oVvO9tLdIPa6h5L5\/6tC+3uw1Pp1Ag74Cmra9enOyPq5j4T1ki5m+8xFfP9xJDz9Fja2+DeFFPmJzOr4yw68\/CoaWvn+qHD0zcZg+fwLRP+9uJz4Edh0\/TnK8vpyxR7+xvlE+Ve2uPbJ9uL7ySEM9LJfoPjz0pz5bU2C+iTQEvnn76r4pDAg\/WuucPgbpmTxfr6G9Zuo8vgcNUL9T9T6+",
+      "cognitiveDistortions": [
+        "Overgeneralization",
+        "Labeling"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000014",
+      "timestamp": 1718323200000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] cannot know what she means to me because people like her never do.",
+      "valence": -0.5,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "Ww46vgWHrb5Xcwi9W1bYPI6x1r76N5c+jcOJvr7kI78Zdbw+3n+UPU6Dvz02RO++o6E1v0r7IT2hszC+Tr2KvufFAzv6PFe+lvf4v1PTiT42I7E+MGUXPkCEdj3heRc\/+vmBu7YCGr7PTQS+GbSqvql9n79PNpW\/oVUlPlDO\/D6uEZi8mpMbv0+U9b2ohgG\/PYNNvpcBBD4TIoW+q\/nAPJChZT6Z26G9xR4SvtEQFT4nbZE+iN3pPmoIrz4w6oY+F68yP2iuOz5rQiG++AmlvmZoZT2SMYU+nUdGvqe81j453xc\/Fwutvfl8+budLak+RxLdPpNvPD6jsAPA3XSgPzwzkb1wrTk+MKljvR1ygT6AZhK+KaPPPRlELD3n2xs\/Custv1iKEz+LUyg+oXBoviek5T6hq5Y9gdFBP95Qsr4nBtA+R3JdP0XZor4E94Y9AkrGvlVklr1mHne+O1dZv4pp6j5999U+qPH8vEssHD5\/Ggo+wyTXvt4bD75Bj\/Y+Yzb2PYVaob5JrZo+Qea+Pm9r+T7uRwE\/p62rPW1jXT6dziE9hdG9vvDPDD71nL2+izMUvld+4L3Wfjk9OYnwvtcNQL8CNLW+as3JPSNS1j4huEa+it6sPm0QNj9r2EU\/TWQov8ZqXz6Gk4m+VYF3PtswgD5JSda9elkDv0nXez8W9Ys+Fum2PgBpOj\/HKHE+vVXkvoBT2z6vbUm\/AlWxvhwKAz9flQe\/wLuIvuD2SL4QhPG6VSNAv6hn\/z6iyWu+wZcTP\/fO2L1+orK+8zlzPmWioTwimBG\/dRBiPq+ILj5dFJC9PjadPtdUmT++CJO+7\/YGvoIYer02iUe\/iowoP2d5mz79Dzm+dZ9ZPxLIrT\/Cno8\/WVXDvnrdHD5XYwy\/X+4UP2buCDwrsMg9grJrPn+HLb5SfRI\/QVBCvZ7LGj4QplK+\/mIivubudT4fnCm\/XfmvPtpPXj9FWpS+e1jOvk1fuD5yZGu+qwztPkNnwD69bFA\/50ijPg6imr5AxzA\/A5m5vnnfTTwtl4k\/bjwyPi4nrjvyUyq\/Y3JHvkCS9j7S3+4+J8P+PgD\/5r1E7gQ\/r8FOv6u7G795qk0+m0zyPe3bFL\/uPJi+85yovZSXhL6ZItg+BtRgPs\/lMD9LDhC+VnuRPhjhZj6ztWo\/buZnP5gvSD17PtY8Ijcpv7dm2b+BVIO+wN4avRJ4577gLqq9+Rn5vjX8tbx7AR2+N0JLPzGn1z5fzYU97i1bP+8OE75x69g9N5gMvtC0RD+h1A+\/Pf1RPsgLCL6Nhpi7nbnvvFad0j06ACu\/GWDWOwWPeb721WG+0iGQP1QxBz8RkQ49YFCuPiD2orr5ZWe+efksv3GyBsCNl9a+CW6AvzaSqr4ZRMA9p8Q\/v4KcxLwVjG2+sgPwPht4P7yOA1O+ft6LvbIwFL\/1txO\/gohGPQJynz6g5xc9BbRrPcqayj4hpuS9CIKFPt+MQT9msHu\/ilpJP47dAL4uWi09t8BPP8FbNj+OfOg+uafCvAYZQ78lsH++3fY4P971iD2g11a+MPHwvonI0ru4\/aS+XgOhP\/nICz+IOn0+ejXlPvjKKT15fay9ybvgvajNmL7Xi5E9GrruveVmGr9Reui+GMUcP1pzZD6oZLG+gEOdvh1NaL5joZC9yVQHP3pmaj4dRbS+mDKZPnHaIz836tO+sAlWvf\/kEcBCpxe\/u\/YWvMVyIT+z2rS+GtiMPZvsdbzmzQ+\/E0iAPkDeXL\/LYXs\/rj69PmsLHz7lIYg+g5ngvC0tUj\/bsBC+c4SMPSVt1j4Izcq\/KxQ9v5X1zL0h6M4\/BgiSPk8TjL3qe+S+Rzf9voOddb7CEoc9HcaNPmhwsr7BZKW+KqZwP1Ifbz3oZuC+03Y8P0mcTz\/4U7i+wtWxPJ5rgL6ZoFY\/v47KvghfW779GYy9lpkFQOv6Jb4tGsy9epMrv6oNor6qZso9TvFJvedhmTv1DNu8KjeDP9JTCT+i\/YI+gf+CPhs+M74umNU+uRb3vhqAsj4adri+yPOovkGOmb6JHZm+",
+      "cognitiveDistortions": [
+        "Mind Reading",
+        "Overgeneralization"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000015",
+      "timestamp": 1718409600000,
+      "content": "I am full of feeling about [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] that has nowhere to go. It accumulates and grows heavier each day. I feel this absence profoundly, therefore the absence is real and not in my mind.",
+      "valence": -0.5,
+      "arousal": 0.6,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "KBD4Pct4qj0jC0o8a4d0vjomBT0YSFE+PgO1vkLpcL+zlWM+X+TIviK7s76CL7K+IH7bvFpZ177CGRQ+W+Kmvtk2Cr4J1ZO9Urrdv57n+DsRXQK9NUctvRA0gz5zMKW96GYDvrESr75u35C+P38kv1IoTL9tdZK\/21aRPtzvN765UQI9Qhcmv+F4jz6qK6a+OXTHvo7gCT6jsLG+iYAmv3ar+D75Sx2+qiwzPY8LAD8m0gM+05+GPr1Ac7yjDog+08E2PwpXoj3r\/OC9ksRuvj5Qu76+icQ98kAtv\/jx\/z3gcFw\/4OJNv5LMpr7detS8D6eUPWBUmr390gjA7MkaP54\/l7xrRFq9jtUEv1qI7TsdSAs\/HrQkvu\/WBD4arAE\/z6oQPtv0Jz7NK1Q\/2dqgvQZCtD1yVbQ+OGo+P6PusL3xwqa+uCFXPxCrDz8bdhk+2pMIv1IieztuJhq\/mo1avjN72T6wPP0+hYD4PlojDD4mHJo+hPM5vzA+Ur5kqBY+7nCVPiLbUz6EyJ4+SkfNPiYPJj9r\/l8+frL9vaEwyLxYkJ2+loxUv+6pDb5Xthe\/\/b97PsLF7r5+WYW9K\/Uzv120Br\/CJ9++9ebvPa5Bfz8Ytua+oO5lPltnNj\/CJOY+TbUgv+oq6T4cN4W9mDcTPwaHaz7ekTG+ay6fvl6UXz+P9gE+5jKhPrqG2j5VQ5k+O9LCvkOI2bq8xJW+HcxVvs5O8j5LSNC+EH9avVjk5L105a++1Kcjv5DXuz6GXi2\/LkseP1PbfL2OU\/8+1v8dvnuE2Lvivim+mwxIPiyiKT5GuQI\/RhjIPo4aaj8KaiS\/RHoGvxGfjj47xha\/os5jPXpO\/Dt81aM+CNqlP4MNej+qM08\/7Qyvvvhy4z1QeoY9NgDsPtLrNz9SrlW+UB5uumdir7yrRfw+FheEPh3Wwj4mMJ++ozwQvELYqD4bY2q+uwxOPxhRbz\/tH6K+etcdvyZilb61g7K+d54aPyf5qz3qo3M\/SIoCP3LXSr+GDJM\/\/+3Lvs+Nkr4+5gY\/WoipPsKQKL\/OBJm+V5aSPnY2mT6LcAg\/Bu0FPZ4VNj0qCxY+k9g3vzrgib75VxW+kFHMvc77Bb9uFU2\/Y1QGv0RINr69LAU+FeIfPyGlQD48B54+EFF5vWgQkb7Y0zA\/ojgLPy1Icr32Hqw9FZi3viN3278BPcK+ackMv31nxr57BWu94IbAvkqXyT5SvTE+YgZhvkgdW70LTOs+cRqtP4IjMT7dYyi8oxFePmqzCj8mAMc9uyabvhJ52zylEQ0+jBipPmZvOT4NVNi+RQN3vgQHhT08viO++NV4P47WMj9TMSq+2klIP4ztkT76c\/w+CARBPjJosL+tP9K9+kIuvwvmmb6zgde9lR8cvx6+Cz4MEb+9eLVDP2BEvb1WzB2\/WWKkPpYE3b7crCu\/\/e2rPZLf4r36eYW94oN1vjXcLr46NiW84MeGPr7sMT8NFfO+HbOnPnTxNr4iega\/qH\/oPtgy8z4xN4w+A\/WfvjfwKb\/VQ5S+vQyKPvNc+T5OlAO\/I83Mvl2DAT4sNaq+qrnQP+XapT7dzmQ+w5AmP0vYVD6187w9U8pVPgvJzb0AhT2+UX8ev2U87b4hPI++SEXCPnYNAT6wb9a9T+YfPsLhoL2CHqM9GOWPvRYu5z61HvI8mEwEPFPlgz79P2++Pp6pPkL7\/78VdVG\/c3rfvg7U0z5SnMm9KzWMvDaBm732Me09tSlePV0zXr8WsSU\/RaQeP53fKD47hmM+q0LWvdbI1z4l7aC+KOoEP9\/JmDvOT8y\/G4dEvhMh5T5A1es\/oJM1Pr\/tHT+i+j+\/KdTIu\/J+bjtDO2++wcw8Pswtob7NQ9M+cHp0P7pA6D6BvYW+PrCPP8rjGz9ggPA9XnImPs\/Gmb3Y74M\/lq7MvnizX7z4iWY+zWT3Py73N74ivPo8xGA7v6UytbyKgpg+0gVkPg0Cfb6ZtRs\/jj87P7N21D5CeMm9UK+evlndqb7oSe8+dlPqvmNL4z3jmG2+BWzNvj6W3L4L91S+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Catastrophizing"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000016",
+      "timestamp": 1718496000000,
+      "content": "My heart is never wrong even when everything else is. I trust it absolutely.",
+      "valence": -0.4,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "yQS3Puz5yT2C\/Wq+JK6lvs3JBb4+cC0+xHMgPvuI07511D49CdXmvswEWL1RILc+TArJvlyJHL4b6o0+NP72vmTmGT5kmJ88V9c9vzECCD7+C4q+PdcwPgRYyD795SQ\/pQiDvtnthz73lAc+vOlAvcPoyr5ySdm\/bsTvveINYL0bUyq\/WoYzvkMNj76uzR+\/JRiCPv\/UKD+QhEi9RO3AvX6f6D445gA+EIAVPksUA7+uC+08TDZGPeXxBj+gJB2+l8\/hPrVyHj\/WA46+W8\/8vXH\/27y7jBi+u0prvxSp6D5KLlq8q67lvnkFUD7cdEo+\/uz3PouZLD+kEyLAjGERP9yuDT8Peqo+ADy4vjeRFT9T4we+WZtyviXydj77qKw+LSegvlTPurzjt6M+tDI4vx7O570\/PTU9s784P4v8nz6IL7Y+kF1hvnLf4z3uo3q8lWInv7ZZpD41f969EZSHvjaMmL6Ad1099QaUPlrzxr7Zhgg9VUkDPEU2fz6Zzho\/0QsrPb5i8DwlemW+XCsnP4WGQj+43qu9QPINP7XNgD4uRFg\/FlQov1gSOD3jJsi9sYPcvWiGQr+rU2y+DqyrvizmwD7lVgw8vI\/LPl870D4JAhm\/Qsm+vRDxQT3PsOE+zdFFvubtqrs09M4+wo6IPtCCpr1O9c++cnZbvSKXgj9O7oQ+l032Pne+6z55Rkq+32MCv59POb42446+57ezvj\/xsD5vfIi+FjE0PtzWwr1KbGM9wQuiv2iXqT6gdXE+pEFOP8y5ij5wa50+IjwmvkJQ8r2CgRS+IHX1vhILhD4LTmW9+HYEPwR4nT\/gPUW9SePvvnIVcT+0FZG+rpusPhR8QD+lAPi+SYiMPuLWqT+fMCU\/xBCJPani7L2rzCa+LZqoPpDYdL5JHA+\/5KBXPm2Wir6XQzA\/nD\/cPtuggj3HxWA+rHmpPZ6gf7wVoQi\/cFobvsu92T6JIMq+ZUKFvnIuY77UogA9eb0DP0E2ojwou4E\/KfFKPmaPAL9M+yY\/vEdqvzCkXj01grg+3wsRvv6izDtEEWa+Q3YVPOEIGDxtqRU\/+nKdvuvZwb4kzf49om1Lv4wOE7\/X2+49Js+WPryW7L5UiaC8cMYavnqXQD48+ZY\/rpfyPrTRLT6lq14+\/LPtvcgBOT+Mvgc\/IFXpPpHqBj2SVP69HAAKv5Kv97+jIta+hPNuvnx7Kr7gELQ9PxZDPq5WAz8aRo8+gtE2P60GKz\/k2pA+zlD3PrZsuT5UChA9UBPNPrGw0T60gpK9XBTPPfIygr4rmqI+TcDOvi2gjD690gq8U3AuvkeNIj1cKPO+LnWpP\/CjwT6\/vg8+qusrPp20Az\/5knA+itXIPmnpxb9z6cE+5F18v2egpT7wBkK\/yatVvoQnEj2U2dw+TSWrPOxMQz+FyxC\/S49Hvjeri74IOra+NTG9PAZvHz4blls8u8zZPoBvQL573nK+2jqEPtB73T7\/+oi9XaQSP4eBbr4wDAg\/h8QkPmw2mz4Vy\/M9SZx9vrIG0L5sp56+vAewPii0Nz\/MXjw9eh0dvoSORr445Lo9iqrBP9B6cz957Y09tOJJP5QGCb4ImaI+DmsoPoae370UwC0+HbECPqDlKL+Fuue+rk8lPjWuEz6xzyK\/5B0Vvwncar7\/+w0+zyiqPtdQOz7nOLm9BNPDvhezHj6u9L++HJmtPebEO8BqL6++bWGtvnFEzD5SBWa\/4KxLv5IdDD6mWb8+dSZHv+cccL9DOjs\/piOoPjggHT422dC+td\/dPkZvPT4m2Rm\/a\/xOPgAcfz7Udr+\/Iph1viChfz4vZ7E\/VRJQvq\/D4j7lOMc+ORDuPG2oA7+dZgW\/KgIhPZp0Hb4lghC\/+49yvguiLj4H2AG8wy1DPr4tWD\/rekq+hMCAPGw\/bL4FoWY\/xaYnvxtFYLypjPU9hH2tP49LCL9SEZS9g2cNPQHCyb6Sifu++3XvvP4xkj6imb29u6nGPnxyOr3ysDg+3OUjPjl0kzk7LL0+Is5hvHkgbD7wE+u87N+HPpcwDr8V3Nw+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000017",
+      "timestamp": 1718582400000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] looked at me today with warmth. I felt hope flood through me. That feeling was so vivid and so certain that I cannot dismiss it — she must feel something of what I feel.",
+      "valence": 0.4,
+      "arousal": 0.7,
+      "moodLabel": "EXCITED",
+      "embeddingBase64": "jhrLPIHCpj3TrgM\/BQ2VvMWzC7\/gA0Q+vxi3vtLOML\/cM7a9+z0ovnHvmL0aLqS9LJM3voIjxj04qQm9CnPKvoIjLT75YIC+bWLnv6eTrz6U+rk9fc4tvPzYvj3OWFc+CB49vmW7xLwK+4O+i0ubvkckV7+wlZW\/htwnvEccFr3gIcA+MfFlvSstJD41h4O+xLCRvlZ4Lr5HsWa+rLLVvuGcaT7gngW\/NxABvtawYb7Yi6Y+HcjHPatGBD4KvfQ+hb8tP5l1hz4pMsi+Og8MvyCt+r5xW5w9sb0fv2DKNz+xJSo\/6feJvpDKb74AQ2g+Cix2Phxxsr0rcg3AoNx3P+bELLyCykQ+vvwpv\/WWOL794xY+j1agvrs2qD6jBoG9sfnOvg9IOD64BT0\/csZLvZqL+T4MphM\/M18UP6nG\/b0pXcQ+A1hQP622Zr1T25A9+lgRv59xED6tjRy\/98A5v2iS9z7jQRs\/nRhgPs4RIz6xS4k9JPgNvyv2QD5EkwY+ArbkPjxym77xuMe9DVzlPp7gAj4gdJY+foAqvkjXKb4kVgu+ZmS5vn+1RjrRWxi\/Pv4YvUmBfr4OBCm+2tEOv\/WEQb\/TU0O+oNklP6k\/Oj90F72+rfdtPvaRbT8wyxs\/DwzTvr\/gIz2le1u5EDJfPvU1zDwTlhm+kxaXvAvBhD8Xyh6+NG8mPsnjVT46E8Q+v+zYOn0bnz4K3Qm\/qWUSveR8iz4G6Ui\/n3XCvsc5qz5cG8y9pH7Uvk1Jgz5kkwO+zls4P79E9L4nOmi+in\/0Puenvr7GiOe+hP2tPiuzrz7TMYu+1YZHPiwwbD80sLG+RsrXvmvykT5g7T2\/IpbePrFVez6+G+4+9oRWP81Npj\/7PGA\/AN1rv5wpMT7buig8HyfHPmFkQz8nYjK+wRlWPtDbkr4G9fE+UaDbvQV+s74FV7q+mpQWvhwtM75h9G+8+128PgnJKj8TVW6+NHfwvikuDr5wIbK+LtYHP2DpH73Pp4k\/GtLdPLLiKr9XkhQ\/iyr0vmH\/9r03DSg\/6XWbPlN5nr4Nliu+3iQ6vUKw3z4gTvk+6l8sPhiJXz4P\/WI+flcEv2ULLL9GPO09z5pdvLzDcr\/2com+Qu8bPuTxhj411u4+0TYIPijuLj0Ah18+r9hYPEa9Uj7Lr\/Q+XDxtP6aBnz4Y1s68KrfTvjEZ07\/6Be++B3I4vvG7Yr+kQzS+Lt6ZvnG\/hT1+ghM\/\/TDDPtf5wj5ErSU\/FNWuP8+eTb2\/2\/K9wvIJP0QbjT4oIJi9bnyWPq1s8r1cONq+nfQhPcyTVD4kxV2+WjIvvil7Bb5CQe49jaZ2P0F83j7Odk++1woZP26DYD635+86+sGfPW0kz7\/OVJK+DeZfv2mG\/Lw20Ig9cVc4v9LaxT68N7++Fxl+P\/mVxL1xTYK+qQpOPcu5Qr5DyDQ9rx9iPocjCT52jm6+kY4VPtfqnL5ToJa+3vU+PhwQcz\/Zafq+hW9\/vQAih74I+VK+ymuVPtcZBT\/+8yA\/mX4TvkJ2q76cn6G+9MEtPjdemj36SOq9XupHv6agJj7xiP6+PR\/MP2MA0Txr7+89Ii4ZPzWqyr26AWQ+OsI7PB+N6768OvM8Swbnvq1G275C9+++S22xPeTtJT08qlM+AOKlvg8Diz5OFXq+rWonu+sTkD0+tLY9CwJxPqR+HT5hS\/S+y+5KPgkpFcBJqFC\/2+rcvgzRNz\/1clE9LNIAPSHjnb3tyyK+Y2AgvnE3tL6Xpls\/9n14Po+R3L0Ipw2++L7XvRzjKD8Bs0G9YMVvPkgvob17oPe\/FdCpvtwl9T5TWPA\/8em\/PXiEzz5\/3Ri+qXzmvW2f37w66Dk+qcuxvchyGb8Ix3w+lZFwP\/Q5Qr4ktjq+AK2PP50AkD+dzqe+TJ9QPgJ+772xVnc\/q9oxPp6foDwtiog+NXryP3kmFT64\/Zs+uFASvu47Lj5e0ro9aZXDPoi4QL6F9Kg+y4s9P+p6yz61v5q+UdgQvnPWkT2+zR8\/pPEUPhNX7j7bMOe+4+OYviu0J78XmG2+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Mind Reading"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000018",
+      "timestamp": 1718668800000,
+      "content": "All beauty is fleeting and all joy is borrowed. I have always known this and today confirms it.",
+      "valence": -0.7,
+      "arousal": 0.4,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "X5HrPpRUTz8Czaq+hPLzvgBPwzyGew+\/AP5AvIzgE7+V3w2\/3XvnvlFcnD7WnhI\/TOPEvFxkKj5aucY+7ATxPavMAT+muVg+OZbhv5rrw75j8Kg+GiYJP8cc7T2WfGg+mbjjvoRAqD4uHgW\/4YRPv++U471Ub8q\/f0pnPv8l9T4UOGw+L58sv5PQyb5nEcW+WQlRvlxRub08OZA8+gjBPXqhaT6Mvp4+507yvnnCYD4XfuA8xzG6vkRNjT4pnV4+WbA1P7aTxj6wN5A9\/PWuvkR\/Gj2aWCM\/TaY1v0prMj\/MqKg+57\/dPKkOE74Q28q+s0ZgPrGylj2pHzDArfxXP8CPoz5fMBg+DChGP68n8z3B1oK+zmwxvhxpsL2AwSg+eRJMvy+8jT2PL3+8c17kvtMfAL4TrSg9YDmdvkYgHj6hwfS8rw0TvgGQ9z3zLvO+qYDAvkEkaz6NOXC\/qotuv1NqOT4KGw8\/KcClPSrfQb4cFSE9TIqVPdrlmL4RtDM\/FIGFPr8pGb4sNDI+U\/E7P9dKPj+izJk+EYkBP1TUTD53Sbu+ktmUvZ2+7Du3RRU9Nii9va+TOL7maz+9DLHPvndVxb05aL28qsggP+mS0T5LNzG+nLpYvr8AFj6cX+s9oSMdv5Yahj0Uqfq9wg+wPn2rC78wdgU\/LxPpvjF6fD+n3Fy+IQjsPpGEI71\/nwM+w5Jwv1aGuj6jv3K\/\/WvRPhEWqD6Eeb6\/pB6dPvxCsr7so+c9EiyzvwJoNz81jCI8VK2AP+ePYz8\/RdQ+DTPWPWY31L4\/MDi94OJHvu27tT5EwAE\/BM4ZvuDlfT8ny7E+J9kMPm1pUj\/vLOy+f0StPk3JPz6HDd4+EDVMP5sigD9gB3E\/HNUivrQWFL21KJG+8zIFPznDqz4jwro+SmCevvrQqL59re8+7StBP1r\/VT4OFaU9YzcNPYy1TT1n9hK\/uVwlPgd8JD\/HNC2\/BPLsvseh577nORs9ACSaPRJTGj6dlk0\/hmeTPmNAQb+baZU\/YFxSv3ZQGD70rRg\/tfu5voFDVD0vC50+BHcVPR3xSj78uiw\/gwhvO8d0bb4xCRa\/D78TPmreT79jl7e9sEDUPacsLL+fFPq+j\/1Evm+CbT7vSRk\/xH4UPrDYcz\/Eole9XxjVPpk+C72YBJA+j8pDP2sJBT+cqgq+0NMHPlA26b9zxGo+duU5v42IP75ONaw+7SfgPr3d1D1zi2w9X7OxPgoWOr7kway+XyV2P6kG2D7ace6+FHxCP4KgH71u7QO8dyDfPlQ3rL7GUjC\/xid1vqb0Q76vfBM+sdKlPuKYAz8Xkby9lB5iP4kD4j4Tokk9P4IJPzVvLj+c2oI8RImrPeNJpr\/nBQ8\/xvOXv2zJWT4B2WG+NQ6kvoTumj0yFq8+TL0Avvr10L1Tbwy\/H7Svvr2j+b7UPv89lzxyvcPznD7n6Du\/1qDJveBIBT4i7je+j5aGvkMUeT7ivTi\/VIdTv4nv9T5wdqk+4+1fvVwBor6J1ss+KdlXvg8kmL\/YDBC\/rZbqPbORTz+56iK\/E4yDPt1+3j2qjGg9F4+LP22kW70xtLm9GOsmP4Gh677a\/1I9J72aPmRSXr0Es+8+N5LCvmCb076Kv4C8ty5nPt97Uz7zHxm\/plybPf3HcDyK7YO9ieGZPkYA2r4I84y+Ry+mvazglj1i8RQ+JSSPPkq74L8jyxm\/3FnaPsJLuD78VSi\/HwCivXOyiD7paC8\/1PHBvSEYvb6HO1M\/B0zEPjKtKr9cAZK+2G0xPhkwmz8UZBC\/hvqLPme8C743Pea\/Z9+8vXC7qj5gVN0\/hJbZPgYPoj7MCbU9kyZEvt8VuL7MyQu\/\/TidPrTjt77Rmu66tEmyPmbiHj3vcQW\/vWsMP0R7IT8NxBA+cVGSvFZFB785Ipk\/KHuCvuInMz7zoPK+YQSuP1Yi770Jmiw+OtL1PnRvNr+BhQc+dprqPflucL13T6m+0ZXzPkD9jzwhRWk+rrWvvlbH4j5eRII\/TBdaPpDrCr6ey5A+tLd+OxSsLb7kkpu+",
+      "cognitiveDistortions": [
+        "Overgeneralization",
+        "Fortune Telling"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000019",
+      "timestamp": 1718755200000,
+      "content": "If I feel unloved by [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] then I am unloved. There is no further evidence required. My feeling is the fact and facts do not need corroboration.",
+      "valence": -0.6,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "+5lhPUdR4z0P746+dFgnvYymgz1iIvu9dVDevnQ3G799aM2+N1XRvr2i\/b6VNzs8yOc9va2AqD26TEO98xm4vnsRab0ZL2q+R8XTv3hV+by1sas9FQs6vgJ5oD4q3U89qXmvvUhcAr\/pxwa\/L6UuvzhhgL8+TLq\/9RnuPkeGAz1snAY\/4AHMvteFrT7e1jK+YDTAvv2Tzz4QiUa\/gNKAPLurCL7yXss+fgKqvEdN+zz4SOA8mIJRP8eY2j2eygk+JfQMPz7cFz4wetc7g5a+vhna7b4uDwo\/\/wJSvuxPpT1ItlU\/h83nvrFqfr19uxk\/AawXPzyHhb3BCQPAx2aBP69KKr6QNJM+0J+avbUPjT614Ik9Mt+Evgf\/rr4Lrd4+K877vqacmz7T+s4+RyLbPhWoBb7i9lk+hVVfP7VwIj0zM2Q74u+jP3VjE76ynxK\/Zqw1vlU9MjriB9m983U7vqv2Hj7LvpU+zZD2PqzjhD0WKZM+fTUqv8UF+b7Ubso+UC3LPnboCz9WPo4+oq6iPvRYKT7UXjK+rGOBPsOAOz6NNNm9x1QLv+gFAD8QlQa+UI6ZvZWUgb7V0\/g9UFsXv2MdMb9eG3++VDKVPrllSj8+pnY7zQ1uP+j1PD8Zx2o\/VkcDv\/7YAT7XghM+v54hPxCTCT\/i5dO+viaovnBJWT\/mkio+SkC2Pd5CrT41\/sc+Y+s8PW8ni71Xjw2\/nJ1pvrABoj1cnSA+X7VBvWeaDz7645q+\/9oivwgpYz4PWTm+tvlSP2n4F794W6U91IADP7HTRL7hgqo+LhmuvHmtCj9ZVlE+OQO8PkF7mj+sg0G\/SPF5vvXRcz6Hake\/pUIAPZlJFj2ITUu+y+SOP6qLhT+ZSBU\/WbWKvjDikj7Sq+W+ogn2Pl+a4z4DceG+LhB8Pvfonz3aedY878OVPmHXGj6mcX2+6ybPPdIprT3dK7O+CauqPuHRKT9Vs0+\/hQr8vlRRkr25fpe9DXJ9PkcIZb6nOIM\/i\/E8P4rdJL+0YkQ\/Ln2+vt6Ukr7PMNY+OKaCPv2AMb+Aqfe9VLcoPWMfCD9Rro4\/q1CCvS4qa74Pq909BzY+vzt6F7\/OuD0+HuXJvpRFRr9FqNm+0WjCvhx83j50+cC9WTCmPJbALT7oIpU9sIoBv1Cmdr6hZBc\/vWQFP0cmtb6izMU92jtEPOeAx79ZpJa+zTBfvstd2L5moR++ymPVvq28Rj8TdgO94UKFPjUbjD4eNDI\/CjaiPz028j5cLwe97sCSvb5rET9Dwz2+3zGHvQkBEj40gI2+\/pi7vqLJWz6WGRK\/VKFzPVDr4b1SvmC+ZM6RP4z+OT\/R5Jq+YQ6TPsXeHT+1hP0+Nyu+PemQpL+gkJS+0LB4vw1x4732kG6+gjxGv2FbUL6xkvY9Xs85P3DgP7zUkMm+ax1YPhcGfb7wy5y+QfDPPZzWAz+4FLq9NUiKvdU+wz61VGI9OpqdPm\/CCj93u5Y9lNiGPtwyar4trTG\/2vzTPl22QD9x6w0\/T+eRvq+KGL8dQBm\/iNalPpKj7T0w2KG+VoSUvl+nxz1VYQS\/KsLGP0farT6eU0q+g9XgPq3Nnzz3Lho+5rhDvnyEK70QBIy9cekTvkPq1L53cBu\/JqCKPvY3gzz4u9K+2PG3Psi3T74a0rW+2WK\/Pj4l0z4z19a+LWBIvQtNID+STVW+BY7ZPnLqG8AVA0y\/JSKovpZMsz5HNDW+to0uvjxOoj6Ueiu\/Sqi8vnmEDr858ko\/X\/CZPtjxGr0+PtU9myuavT\/8BD4zVyY+OHeXPkKjnbzL25O\/wl7JPcvLUTmXCNI\/DQazPSYUfz2F1W2+LdFDvtF2NL7ZG5g7sb+Svhcd4r2Awg0+TXTlPoLb9T78BQ6\/uTOEP4D2\/T6XgV29c6AQvnGA8r2DcmE\/ZAKqvrAV871t2TU9F2rcP1qGBz3kyCQ+6vokv4sAj72ntg4+kCYMP9P+LL7I9f494nw6P6dXxz4RYD2+2CfHPcvxdr47bSE\/NEnJPRa3iT7uGjC\/ZNKsvs+gtL4d\/5K+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000020",
+      "timestamp": 1718841600000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] is kind to everyone equally. I used to find this admirable. Now it pains me.",
+      "valence": -0.5,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "3JwWvkyiz71ntZE9o1QmvjWCZz3RIMU+AJ9dvuunYb8mjjk+C5iovkYEIj2LaIs+Oc37vuoLNz56IgW\/iexwvm4aCT4ACmC+Y2UDwO6cKT4tWFI+rRGrvhoeUb7gB80+NaTWvTecHL44\/Ke+WuUHv0cbxr8qxqG\/PPIIPYhuDz8OVNw+atymvonDtL0YOhK\/QD6LvvsBpD5EVgS+pW+rvvj21z4uOMM9BA4MvzLCAT9d+6k+E9qCPoD\/972Odam8E3JMP08gHT41yfK9QI74vjnuM72Ee4w+TmpMPl16yT5y7Cg\/vp2WPToANThdf\/A9eUnQPcgWjz5pXRvASmSBP\/eRdz6TRCM+rP1WPsw07b4iAAm+PJy7PRXOyDoo\/Qi+15g7vwKuNT9Nhbc+0XgbPfhj5z6jZwM\/zqu8PucBGL+czV4+c\/RZPxTKtb6YiwK\/+SCEvolJRz7d+6++IRrbvuoGvD41cJ08qkqEPvkvPT6RGgs+3fonv+5o2b5zSAA\/KEfvPlV2WbzSVhw\/3KS4PnfjxD4kZuU9OSYtPeHgG70AM6I9j9D5vgzIEr4XmO6+7\/oPPtlvtL1i9Nm9Jmoyv9tHS7+OSKO+spufPaZeaj95U42+LKVMP\/0XcT+7GgI\/tUmTvoyKDz+v+F2+65QlP6yLOT1MmaO+M+ExvT0+Wz\/RoQM+jqqtPshsIT+4aGk9+RIsv1aZoT4r\/SC\/p4ZIvKl0yz41R3e+Z\/smu7cWj76kYgo+1aDHvnRB2D1WP6K9cgudPh1XCr+ZUC6+iHFGPhQ1Ib\/VGSS\/M9R\/Ozb\/aj66UKA+KgaQPsx9QD\/\/Jxy\/8yiZPeItFj9CJC6\/bWFAP3HqBT64Xbi97giGP+Rkkj83c0s\/Ukjnvjki5z40opO+T1E1P2Vj4j5gqae+AkSBPkr8rb3Lgd8+O4ExvVNUCz49fWK+FynUvfqgC7603IS+xzENP6P2Mz\/WeNa+C\/a8vkeWrD2Fw1e+M3qOPlOk4z1DtRY\/WayxPqZNfL5tWYE\/9tgbv2z0KrxmdGE\/mauxPmjjxr3IqgO\/XCzmvR8Q0D5Apw0\/VI4EPqCQMD5Dqrq+LcNjv52Bgb6HAhY\/YYkCPVkcBb8DuAC\/MecYvokVsD1xYOE97eO+PTsTej5PQmO+5I0HPlUmXT4jEEs\/qtpLPymz1b4p+w+8GqL8vR3xzr9Oi+y+dMqAviz\/I79hHqO9iOY4vuHxKD+zZhw+OQX8PcR12D4dDkM\/ueeAPwttK70x8vw6JREqPl1tVD+slKG+BuUbPibTdj09IRO+QEwavv1\/Gz8aThu\/cskjvpPrCL+jO6K+C66HP5NkQD7xoi29bl03P2qFqjyqWfw8+OGcvoao6r9ykxS\/gXWSvzcCaz14t+m+bolRv3EklzzyHfU8al4gPwn+sz18xgy\/U\/8KvcpJN74HGjy\/pvGvPpe5Dj+NpbC94N+IvmMQcj4Gu4A8cX\/YPqYoLz94UhG\/\/EUuP3Na9L51vB++wDTqPuXSVj9MjnY+1EgvvkYlN78InpS+1y5KPul\/oj1jQ6G+6s\/jvtFHWT7epeK+EeiQP+Hs3z7Xt6Y+N4ZzPq0Kjz3+u7M+v02UvniPv7ysIzW+R\/OmvtlZzL6j5\/6+JgVZPx5dgT5a6vu+N9gXvtkTrj1OTIm+M0XvPLI\/Ozuo+Sa9E3iJPpO7Fj+1srm+rn5bvbgjF8BDTFC\/unBcvkLxQz83Q3c9tbuRPVahF732IK2+ztMDP4yKw77p2mM\/reLLPk0LQL4pfm4+JsJ5PJ5SWT92AYI6LaTAPr\/jzT5HrOC\/vqqyvc1eg7w5wrw\/bNMmvtURQjyIR2++UsNqvjmoRr71pjK9ZI2DPjE9xb4vo4q+V64yP2SClz2xh6++5+5EPxpPcz9juDa\/UxSWPi3G0z2WPWY\/blESvoH4V77kFns+DeHRP7UGn70XdNo9CNXcvrSpUT4Ol4U+XMdfPD4jp70mr8a+AXKAP88Uh70WZZw+dD3IOsx4p75s80Y\/PnzWPZeDnD74a1C++X5Wvla\/Ib7EP2U9",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Mind Reading"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000021",
+      "timestamp": 1718928000000,
+      "content": "The feeling is always right. When I have acted against my feelings I have always regretted it.",
+      "valence": -0.4,
+      "arousal": 0.8,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "hV34Pou5Fjyg5ZG+dOdcvuxWjb50nUA+JQqGviJqAr8W\/Ru9eLtQvysKZb40\/w0\/Szq8PVQ50D62ZwA\/recnv4yp+DwZMCc+V0uJv7Vx3r4sPUO\/Hn36PKoksT6YFAw\/gDniveI8rz4O6O4+iNc4vm45jL7s\/J6\/5QztPUXJab4u+QS\/Z6S6vvI6xr5b9wm+2x4wvgKC9z77cyG\/EWhYvxcy8z2MB6w+Ns0NPnGUCL93weW9u88EPb2n9T4o4Re+Kqo2P4UQBD9QYrK+dcGzPrRtWL61HsE+D780v8SguT3Lf\/0+a7IEva7Ycb42yrA9wKA8PS76+z2fSBHAEp0hP3MptD61waw+LTuQvivujD4oKgq+f9+yvg5Iib2+cqQ+\/KcVv6hR+jwS0jE\/rtM9vwflC75lpnU962MWPxXlaD6\/xQI9A21+Pq\/efj2nH7W84d4Lv3cfx71xGxq91RIAv+RuAr8aBo497x3WPolNer6veYo+uNmxvhT7qD6rSuI+y0udPr5Qkz7PrfM95gwBP5f5Qj\/1Fho\/K+nfPhBeHT9LFUo\/6UACv9uloz6QC4u96Hlwv3s48b2\/YxO\/L9+8vustmT4o+8W+cFqkPaRuiT5vJle\/rhMZvkryKb2SEfI+w+cnvxHrwT3Vj8k++lkbPwzF2r0sRRG+Q6rTvskLhD+6e6Y+NCKGPqSeAT9rmBa+W+Iov3lxvj2snr09rmL9Pe7sFj87x\/S+Ul\/lPo781b5+p62+kslcvyb\/Xz+7gV6+lTx4P25YPj9Memk+zNjHPrqyc75yvmY+QmADvmYGKD8F1s2+0fbwPcIBrj+O8Ky9BWYkvzdyIz\/25KS+jj3KPhLVMz4YBTW\/R6S+PWVxhT+GZNA+\/ys6vJRcvj1iiKc+3V4PP+K\/7L6JPoM6+D9FPoIL9z39la0+HjEAPz6YGD232Zk+W9LIvdjFyD6+DtK+44qDvWjVbD6PnVG\/Hv1wvmv60L4yf6O+o6nQPgZP4b5+20o\/GeuRPkIBDb8DvVA\/2sKMv2QXDT4GkJA97LHpPIXzQT7EFgw+PIkVP9gCxj1mqU8\/Mo5ZvhPNnD11hzi+sdVvvrVWSb+z84E++shQvrJh9r5p2ZS9y3BevqKKpj1MtlY\/cU7LvemBtj6J4SK+LhswvrIAeT8P34U+QxIUPylmlD7RUeu9r5AWv7cI3r\/UF4G+zkuTPps7sr63W\/M6+ocqv0qdNT6BXRw+DspRPn2WGD\/E+h4\/FIomPyxmab6btEW+pjhhPyYMej61LcI+b6LsPUuX2L6Lxhu+u9Rsvhjjor6W4J8+fUEWPwOg4z5whBG+vcKoP9ITND+RAYs++4xsP7ufnz4ijz4+38SlPQaJ3b8FnLs+Elo2v1h3AT6F6yy\/yPvrvukxKz6ycu89roP7Pv6CKT8XbbO+tngGPyKZdT7w+gi+\/lxMvWsDFj7Fgsm+KYpbPgKbaTvc1ok+xQdXPYVbKT596GI8zwgSvSKmvL49RJy+ji4LPm7Bkr7UBdA9+\/MJP6ufpr4IMSi\/OxeCP9X5HD8iFSa\/GW4ev7txJ74xy\/u9MS\/iP72ZXz4ZUiA+O1DqPhT5Tr5t8bY+jGATPxCYNL5xxH4+QX20Pb8\/n7+8jj2\/0dvEPi8ZzT5jQX6\/QJeevrDUkL7N2IC+HIivPo+QpzyF9C2+GSovvzcGBT7i8Gw8GOw\/PVEIG8CeUfe+WzItvjfm0j5C3gi\/gmpSv5sLV76ufLe+FPiEvi6fuz1VMEg\/xx6dPitIWDxNXLi+I4DCPE7thT7LsKS+W4TcPqtnI7yFiw3AQm+HvuM+9j1Tla8\/1RPfvmjMUD8iJxQ+9msWvNe\/1L4vBgq9YguiPpSxjL4XP52+VwZcPjj2TD1jzps+lbvHPuNcij5KAMI+UjfUvjrNEbzyGJs\/PqcAvmaPBz+9mXW92+zOP\/0Vz7565L89DgQ3P0W+DL\/yygq\/l45LPiwMEb2bgGI+GqC5PtvTED5uzwW+qKUQP0u10b4Hl8I+jM1EvfW2Kz3tgYQ+Cj6MPt7QdL\/8bLy9",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000022",
+      "timestamp": 1719014400000,
+      "content": "This longing for [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] will never resolve. I can feel its permanence as clearly as I feel anything. The permanence of this feeling makes it a fact, not a passing state.",
+      "valence": -0.6,
+      "arousal": 0.5,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "S5wDvskLkL4XNwY+Cn2ivuBfTb9qBpS7bv0bvgh+I7\/VKhk+Qp68vJsj1b5vtqg9HenvvjYatj6+P3o+VA3LPQmwlz3zv\/O91b61v30vXz5m0ts+MnAKvshYhD2o10+7M+eSPTMeYr3oHfQ+\/ldEvyMthL+hSom\/hfwdPYpizb7a5TY+laYlv61tiLyDGHS+jVUSv0nmID7NzoG+G9dJvR1Edrt6heC8RgmPvkUCDL0Jtou8yspBP\/qR6j3fHI0+oq8vPw6G8D4oHSi+\/kHhvhpElr6b2jk\/paTEvgymuD6LbeQ+uj1ivr8ax74eSlc+irgoP\/8Npb0iuwjAHbBfP\/Up7D69KGE+WBfxvlLMe73mFiw\/ao4tvhFoI7x7P8c+IAnJvkZO2T7oSuc+sMIev62SpT7O0+E+SgYTP+WKfD4iKO0+Bo48Pza1tL4e9rC+1YyhvjpTEruXGgq+MbIav\/JaSD8DqGY+AwEBP8pquz1JMw2+deIFv14WYz5FnBA\/FM4WP6mBRz6IpVO9\/knCPibU7T59Mlk+ngmUPrSfO77l3R2+TuT8vqXpDT6Owda+0kemvq\/dBz4s5Ii+7hU8vqtHNr9nSjm+uBTFvPrPLz96d+g8NAi0PqgaQz+\/QSM\/aJNAvwTgLz+Kzka90PBtPxjyJz5xEbe99Y3fvmCAaT95hKI++N0FPzlbNz\/mP\/o9mnBDvgOE1j1Ok7e+zfplvWJa4j6JFj2\/HZwXvoblzj3C0LA+KFonv5IMbD5jEeS+LzMlP97An76icI2+Q6Z+voMZ\/L7fzgo+tzcAvcDlOz\/tlRe+Oz61Oz5sQz9TzVq\/kts3vx4jUT5j0DS\/NFAdPlkXhD0lOO0942tdPxaShT+rL1Y\/HAwTv6evhD4zKGa+0Ef1PmeNND7PYQk+gU6iPhrhOL6Ws+46eEQwvMMZ5bxt5FS+WeWDPrPYCj7eEh++8\/XFPn2UST9C3Im+Agn1vlLUxb2i\/2i\/Jim1PguXT7t7iYc\/KRwUPWULY7+IDng\/CwrTvrammr2iKgM\/cFA1Ppbubr4f9S6+ERSQvhInsj36bzU\/ZaFoPVVSkD6mrq89YzR8v5ZEtb7Aecw+K8evvtVyl7+Lira+Fj7bvjNhiT3hKaM+WrOSvXgt5Dwi5V6+8lY\/viSUqT4VSQo\/Vfo5P1urEj56Pao+q7pavs3Qz7+UM4S+VqLtvYMbl75+Mco9UlE1PeqtsT0m4Fk+1yiXPt5dpz7CzLA+fPugPw4osLwALP49TUYAP03xWT5FZDC+hfNFPhLslz3L3dK8DKHJvfeApj4F2BW\/A4FnPsAI271xAMm+rWK2P\/4PDT+CWgO\/CgcwP72EhD4dU0c+0HzjPYBZ2L+VK+i+8yyFvwpwFb6g+oo+jtsFvyV7Pr4E6oy+3uCWP6p3OT6TF+e+BoHbPvpMsL7XqRS\/HSGCPlvVtz3J2Es9RVGjO1LeNj5pVIi+IwOQvbgSFj+GUAW\/kKxdPgIq7b6K0cy+MO30PrvPLz\/Vii4\/Sib5vSf\/t74+WRm\/Q3QHPxWFqTwax7G+Jihwvri14rw2lRG\/k0bUP0p1Nz70\/IM+KzdmPTAGBj5Kds69TuVZPuLFyL2N2ZQ+aTckvWXi875KN4K+NqsaP31a\/b2OEui+7k9svrv0iD5sHra+2QwEP06xnD2SY9e+sL2RPnOYoj2iMZO+LDYMPl67\/r+QOhe\/XdDhvhzWiD7lawM8+Gu1vqg4Cr6XyyC+olU9u7UmgD2mbUo\/2i7NPkqOhb4W4im+PkjtvaD7Vz8Sxb++wDzTPjYHar7oFem\/VkM2viy5rD7em7s\/3QvePu01zz4wpo6+lvVtPTKs077SbHq+6EX\/vt4yGb+vjag93qsJPznvoD66pmS+UoWCPxAypD7+M1U9FYA9vj9jh70ojp8\/fouFvo5kCr6VTNE9+xQDQFOQn77N+2Y+pc7Xvjp\/yL4+Jyg+Arq7u2aL3b6tlHw+3ht1P7hAJT\/czio8rXN0vfr1nL07Wig\/98eDvgfPjj59\/Lq9LXCVvjj1\/L50DT69",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Fortune Telling"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000023",
+      "timestamp": 1719100800000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] is surrounded by people who do not deserve her attention. This is the injustice of the world made visible.",
+      "valence": -0.7,
+      "arousal": 0.5,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "DPP0vSUNtj6c4Hs9lU2DveiLeL4sx\/E+6NKkvmjuj78xD0q8PxbPPZdzmL3IELM9I2IEv5GuM73IqIy+dhvcvspTEj4\/y+E96yTIv67WQD7biV0+1M33PXmC8j50oRU6+GHrPH1uib6yroi+u9MhvytoRb80PZe\/gKn6Pu1VKD7w+U4+VCk\/v09ypL6oIGe\/qYwdvvPaoj6LlVG9qHtXvzefhjwAGYo+++a2vugDzT5wZ4S+9CmKPjODLj5+R7M+K1skP0bOwr3FOwu90uVDvztkl74FJxO+gbPgvTwFhT42RB8\/QM28va3Jbr4hJkE\/gYrePnbE0b1F0gjA9ZpPP8AErT6\/JUo+TPBJPfQGqL4dLnq+ogOqPg2Sgb5FryY+440Vv\/kFAj6YrSE\/lbUKvt1nGz8paG0+QZZ6P9WC2r2hke8+gAsxPz06yb4L8sw9eeRSvpfgbzx0pQS\/hqpsvjPgaz5ptZm9kZCcvRt25D4nmau+1Xbbvm6sAL9xCgc++eRkPuxVIz2h740+O9YFP\/g8kz0vkq895g7tu15zED5+wc6+npZ+vpONqryMXiq+APilvowDars7Ld2+6\/1uvz1eMr+OIAW+kIF9vdFYSj+xfRy96UTzPfJ6Kz9zm\/8+JQfFvqntKj\/0JX4+EbfhPqcH6z6jTiq+ThuMvjRIoz9xo8A+UD6SPtWwUL76Q8E95NgJv2q6eT0lRki\/lwrbvn4M6z6V0FC+fuM0PogRYLvJ93o+D5Kovi1aBj\/8TMM8QtMaP0Hkgb2J3km9HHKKPn0luL484xW\/N5qHPj7\/zD4cLM4+JcXWPtCQOz84nW6+xZcCvfONuT4CFUy\/I2nkPfZEoD5U5Tc9gdJxP5kbnz9DCyY\/6+Evv9\/3zz52f1O+Atk4P4TmtT0UGGG+SHuwPsVPvD3H0es9ws\/RvfmiDj5S5wG\/wRJOPjJrRT4Jwyy+TAOsPmu3bj\/q3z2\/CknKvvdccj6JHr890l4QPkn2Hr2QDxk\/z\/JjPkK4wr55XWg\/rHukvhz7QD7eimM+XXgaPQEn3L7enzy\/bhizvaJRsz5fnf0+D22QPkfxgb3T5m8+GqJBvzZSAr9klPs+QNDDPQ3hDr8Plka+MHuKvgtCnz01Tv4+zIjIPt1XVr02U+o+UmizPkpxWT3YVYY\/J6k3P79+zDzYe0a8RLUZv6kv57\/T\/Me+H6yPvoG7274d2Ga+Y82uvtYHkj3gPoA9lZoYP+8UkD5Etik+ahq3P4aFAz2QUla+HcMAP8+ECz\/xyde+puVdPelyKj63Rs28X\/sdPruwFz8nC6y+OsmLvvvse750VQy+FkKbP1duvT7vGy++LchiP55aHz\/TrgA+1ivQPUNv7r\/fdaG92BvTvvjaMr9cgNm9eHuQv2YijT73aOC+k97aPtEUjr0mCci+CqaFPrWH8L4VBkK\/dgWGPn\/jvT455Ve+doc5v38qP767nX49pfsaPqfKhD8wj02\/YfwoP+WeMb0VKgW\/ouEpP58MfD3chgc\/AcqtvSvMmr+iKOk9eZUxP8lVoz2JwkG\/M6cTv6aqHD5i9PY8Ci6QP3\/7IT8VjrQ+SroVvqXinr5Wp\/I+NCYoPSkFUj7VEJ09kZ4Vv+HbYj133S2+J3oEP3vParwLyOK9jXNuvveDx75ckyy+0OXpPWOayj365L2+bpowPmoI8z6r6dO9XLI\/Pi7eC8D0WlW\/wwIUvcsl7z4VhNa+Q8xPPBhRvj498Ci+pay+vdaq474RokM\/8JnFPpn8OD1Aayw+5NzePgugDz9Etw691f07Pk2WQ75s1b+\/kOA5PrFgqj2oc7M\/d+DsPrnigj1Dhwy\/kJqdvZCyELzTQo4+MzXxPSsNnr6EsEa+WOWoP4G0sD1dlTW9crRdP5XXaT+7pNG+GvHbvV2uKL5WanY\/TpXPvkj51D7ahis+CrEFQHeGMz4yPR6+mwJSvkkst77rtCQ+eo2SuyEEDr9f+Um+EMfoPnCUrT7ihiA\/lboWv7n9n767jQE\/NmR4vjEnNT4ekdO9rA8rv3Ot+74\/Tiy+",
+      "cognitiveDistortions": [
+        "Overgeneralization",
+        "Emotional Reasoning"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000024",
+      "timestamp": 1719187200000,
+      "content": "I have felt this before with others. It always ends the same. I am not capable of being chosen.",
+      "valence": -0.8,
+      "arousal": 0.4,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "lSS\/PgXlVz5Xb3Y9Q7MRv61n3r6W8A0+CxN0vrFmAL\/9DsS9De0Cv8jY1TzL6+A+S4eGPEAccr7NK5E8qzHzvjbQnD79yMM9G43Ovw22Ir8dMFa+u8c2Px3saj0\/QUQ\/LOp+vaGpWD65SRe+oQ0Yv2j+K74LHsO\/5HTrPdr4lz4H2vi+CJcIvl2fuL0zkK2+BVeIvhG+FL1Yx9e+SJUfv0Wz7D7lX8O8ikCMvuEEHL\/W2gE+FcHGvvUqwj7bjxq\/x88RP+nI+D4\/kyK9\/cSgvuymz725+dU+5EErv5Cp9T0jjtA+mx\/bvYo6Bj5HRKo+e30WP2TxtT6pZjnAvRNAP+WtED8sHg89BfJNPgEK1T0n\/Su+66UkvTG5pD5U3vI+pbgWv6uGG775Dj6+dxg7v68Xtr6YqQE+xVUFP8HduT4CCJo+pe1PPSiG+z2yKJm+8ErUvu\/BQT8tqda+DYQAvy0IKz4x0A4\/R9SBPkcvxT24K7O9m1YfvlR8Ub4O7g0\/QXCEPgWmAz0LaNA9M5UXP2l2zD5sdk0+vW4NPzTLF71HnBE\/u+QCv4xtL76zb7g+X4WMvbRaYD78Gmu9VBRDv1Nbpb00Pqa+d34wPjnMGD\/ws1e+nLU9PmmyUD5RkQY\/tvaIvnwWLj+Ay5W9nK7jPpS0RT0HGWu9uBHbvp\/iZj9sZHC9BFtaPv8YOT9xB0q+eTvVvjPfDT+QLWe9gw5wPl8spD4b5Su\/uf0vPhBK4Txw8O8+z0yJv0zRTj+TZOW+LaWkP4228TyM6Vq+z2IkPh1P874tafG+o9cIv619LT9\/9X69v\/AwvoHYKT+vyoe+M+OYvlWNQj+VPtC+EdXCPtE07z0Rw7++nAqSPv3Ygz\/chG0\/o\/KuPYwbOD731fK+gfzePpDAzz2ADzW90tyEvusBKL6Fr1o\/DJjdPgEDHb0qjYg+WDBuvrscoD4\/S66+AbtMPhm\/Cz8XUNu9QbJSvktTtr6cBaU+K1baPjk3wD43xTI\/GADkPm2pbb91\/ws\/qMfTvrS+dbzo2Z4+ZMMpvZNqmD7l+Uu+8TRQvjSZLLs7qOY+4+2tPYFW3D4npaa9tjMdv+iCYr+Dgwc+OEHXPUAvvb5z7k6+wbZHvtlM0j5bdls\/VAf8PlyryT4wyaq9xcPAvDXAML7oTiE\/ZZwDP3+bsT5JCv0+TDDfvgeo\/L\/jtCw+VWa4vngkcb6XCaQ+UMafvFl4TT7jpoS8SILGPfucoz5h\/vk+vT8oPwn6\/j1J4Ac+1dEUP5cFMz7wuJS+Ud9FPrMSzj5l2zk9zTAIvrEmwj34i2Q9iAVTPgLNFD3B4Au\/DYuiPzjOYj9ZotY9pI31PoAQ3j5K+5q+7meKPkWcvr+tPmS9AHCDvyyztj3\/0RC\/pWiTvsV6fD29uuQ9gyczPsCynz6mrwe\/kXOHvjXZmL5Ncba+\/EBcPkUGqD6VxBa9UF3ZPpQBk71lSoc9aJdwvoPVKT5tH3K+Y8CFvhRysr5Z6us8PefevQxg5T3ZAiI\/xnQdPp3G1r6TF9C+a1pUP9CPAD\/wmVu\/tOmivVmEy72fhY6+b1qdP4ECCz4cim+9v1INP5tdUb1V55i+sTS5PiCETr4Eolo+30sPvkMyL7\/Ro5m9k\/aUvGVzSj57ju++rO5Lvm2ZbT7NDeg9NAtgPoy\/277NjYc+\/BTJvs0ltL3KRqW+yTYbvXIXIcCwE9W9+J0jPgBkMj65QBy\/g9z2vo2bCz7Fw1U+8D9cvid2y75A5rU+9Rg1PwNlsb6IdwO\/hHKVPs95Vj9tAUi9VPC2PV9Bgr6MlPG\/oVrPvolq4j3pzLg\/hJ7rPjDiyz4PVVc95CW4PiIND78hBgS\/YW8BPUA7Kb8tWKo8e6kDP5nIKjym+qO+IBAJvLCFsD7Iawo95T8jPlOekL2fzJo\/R+vCvT\/hjD5xn9i9e7fUP3mx1Tvt98E+ybmKPgFRQL+TgXS+0NSrPruFfD4fTNq9LrmMPvEh\/bykYgY\/FJ\/7PTERTz017VM\/dUt2PcFGxz5YN6++tF6nOXLEHb\/jP0u8",
+      "cognitiveDistortions": [
+        "Overgeneralization",
+        "Labeling"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000025",
+      "timestamp": 1719273600000,
+      "content": "Every day I do not hear from [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] is another day confirming what I already feel to be true.",
+      "valence": -0.5,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "KA9tvrv5lT7Ombe+4WEsvlhdG76Uhno+Ikx\/vsh2iL8KISq+3x6wvhZdn76bPx6\/2kj+vlkbrr5U28C7GAhuvptRVzx4E8O9KY\/Sv2nC\/T1WlSe9WIdTPsxbDz7cIh4\/yQi\/vpL4j76C7LS+Lh\/pvoNkgb87uaK\/NDa6PvTJ1j7HV5o+nyQGv972cj6urgq\/RxUfvnuMMz7URrO+t\/1Pv09sEz\/\/aCC+LSJhvSTFtz184F++3hjUPp67R774+ok+JmcoPw9vRD6IImM+xUlivp+mA7+znQe+yN9fvxvEUD7W\/S8\/2FkEv9Alr72ervs+o7bOPoGyqb34YBnAxQqMP6oANT6AEtI98DWKvuLykz1FzLU+KxMcPTDSFz6BZRo9a8nlvjY+Oz6uAJ4+BLsjPnoIKT6um1c+PproPurYXb7r0gQ9PHE+P+d3nr1HtOu89zQVv11UxT50la++cMGlvjBYpT5zUpA+uUKuPvGNKT70Tfo9Wnwqv2NuJT4xBKk+QfQaPp\/GgD5JGDg\/zk7aPlGz1D4kF4a9wciJvlvvsb78SWe+flhTv9afNb4f312+zIJmPtVyPb6dFxM+Zw+wvuo9t74+g+G+hmkuPuG0Mj9+JJO+kgqFPU9noj5Cc04\/iVCtvh5tKT8QDUY+LX0OP9y4sD7viaU8P026vdXtgD+5Vh8+JNYPP746Wz+aInU+ZHlevk0Txr73jei+JMSHvu0KiD1ZwUG+fTCDPYaGr7wtgtm7b+FGv98GCj8TPJy+r\/kCP3Id\/L3s+To+Mb0WPkpZhb5aqBe+ZvRlvpdERj+PjN4+vqCCvihMJz8cBK2+gmajvoz+vz5pkSW\/LeDEPpJ4vT7CHR8+VJ6tP1HXhz9TEYo\/mEA+vvpUqD3YKeS+vYsYP2RjEj7XE7m+HEMAPS2Nlj137L8+pXEavvGo1r7vPr6+GMpNvsHJar2I\/bC+tvQrP0eh+T5MPJO9jEtCv4LZPj4D4aY94dOsPLnRvT4AikY\/CFy4PrLPN782aV8\/QMh7v9q03L3E78E+U5\/fPbAJTr5P8a6+TdXOviTd3z7k90M\/emUAP1sBwjy08Ko+FxNcvxbqBb\/4zFg+D5QAvgB\/+b7k4ve+l4Pgvhggvj059zs\/QG88Plqqt77NVuA9F+kivsGntL6\/fBE\/18hzPxJijzyvHeq7vKxCvkSY1L92loS+44owvhZVXL5AZFy9J5qJvm8FqD5D2uY+0nS5Ptm6ZD1N5OE+NG61P\/qAkD5jbjY+bzqgPenpGD\/OGXe+tPhBvjHFvj5Ng909uFERPiUhmD4kbja\/pojUPe2B5by2iJ6+StNYP6hiBT\/J0xS+4RmcP0eyKD3+Sfc8vXuDPrIX8L+3nRc+EC8Cv0ruRb6v2xc+Ie5WviV\/ND5erJO9ZaAHP1BZIL40yxS\/sLoBPSy0GL\/MKEu\/l59RPmkGHb60Qim\/b\/kwvsY40z6jbtq+nAJ9Psn5XD80OBm+9J4dP+rKF76ZWoS++4AsP0rPOT9dJjA\/IdALvw42Jb\/I9xa+MEytPt7l6T6cTOG+\/\/KavRb9cjwMIcS+IcYAQCKSCj+ExE687ZVPP8i7jD1du7U+ha6FPlFAvr1YDmm7IWe\/vaEbGb9cJu+9oZaKPkXqnT5rzoO+WVyOPRyUkL5SJI+9\/NJ1vpuBHb78XJy+8vH5Pl21Pz99DEW+OeLBPZs2EcAs3Qq\/b0KzvsTfPD9J4U2+FyaiPfMLk77EzxE+RO7fvSkeVr\/FWis\/c6EoPkOqhL3t7Ya9\/MjpO07oBj+\/RG++aOfEPJPHA75TO8q\/s1qDvmp\/pT7xJrc\/ImKHPoNdaz4frGO\/WpUYvZWsmr1deoq9TgV8Pm8d4j0\/Wze+2tuEP4VbIT57HzK\/WnVIP\/7vcj+rUSm\/FwSjPTkrlT5uUGk\/xKcWv6xajb1eGXA9UqkDQKIE\/b0uj8i7+d0ev4XoBj521xE\/v9zoPsQ24b4NdHU+6tUwP+cPQj6qIgW++dYIvsj5ab4G3pk9RZmVve\/hsz76Bhi\/lW7zvcGog76BKG0+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Fortune Telling"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000026",
+      "timestamp": 1719360000000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] and I spoke for nearly an hour this afternoon. I felt recognised for the first time in months. That feeling of recognition was unmistakable and true — I felt understood, and therefore I was understood.",
+      "valence": 0.6,
+      "arousal": 0.8,
+      "moodLabel": "EXCITED",
+      "embeddingBase64": "XOmgPkAxyT5+GAO+yaemvgK1175URGA9\/knPvRV3iL+C+5u+giAevXAJRT4k0Vg9AsVtvuvKIj4OEpy+jpe4vlcQrD6+vCa9E3HAv9fv7j3pw6A+FYRTva\/foD6cW7g+iBuDvjASF75Yfs2+ZmQ6v6gYJL+YMnW\/Oy5Ivt2jUz3Yn0Q\/8stsvZwGEr5JQhq\/xDORvs0JGb1GXMo9K9D2vs2a6r2b1Fs91Tqtvon5vL2oSt8+sdvrPrYQ5L0Ik1M+58NLPzYLAz5JRIK+LtvtvgEECL8v8\/k9vf2\/vg1ZKz4onVI\/tMPqvQgtdj4rrLm9GxAUPw4zS75wNwXAI7hbP4HFvD1gOuc+KAdCvlI74L4htFs+E6bzPSj8Zz6g9nE+vzEdvkJfeb2bAuU+kDi4PfgHtT6m2JI+U2+OPw4PnzzZfCU+E3R5P\/VoRj7RUAG+qyOmvthPAr738S6\/d4Y2v2MBlT46MgQ9UdtePmIEcD46lnY+ngNRvgkyYjx4D20+t277Pchrkj7VHwI\/XFHgPhgbmz3gKlk9X2KOvQ1Clb6c8Zy+I9Bcvgx2q76m49m+OV1VPjQvNb5EnLg8ryNJv+AeKb8U9pm+gKV8PYwOjD+R9He+aIiRPpF5Wj\/zPiw\/Vd0evwOvnj5Kd2s9iTUGPyBOQzy5LrW+5s8BPTaiez\/S4T++hxWSPize\/j7Shv0+1ddHvpyWdz6onpm+mv6bvsnKxzvv3C+\/hXelvre\/2z7wDnM+CbUyv1fybj6c+Vm+NrtcPyJKrj3mdJo9S0UEP+hR070vzqW+JoslP4n\/WT53VVs+yyGAvY0Tgj+3Fka\/d6r2vWAufT51tBq\/xPAvP6ttCj7NAKu9i1dGP7e\/cD+P15A\/BdDxvk1D8T7rDVa\/jq3qPuVIDT++LsS+rxS2vqtC\/b3kgbA+C8tbPKBt174xtGa+1BjKvr4QML5rn1w+2itNPr6LDD\/RhAS\/k7CyvvHslb2Ay14+B\/USP\/cwyz6boUo\/xwRnPjY6cr+YenY\/r3s3v0lasb3iVPw+b2oFPqFA3L6QOP4+EW6TvagTMD+Afho\/QaiPvBWwI74Sf5s+o9OIv4yXGb8u6Pq9oBKDPvpgJb9+1Sa+X\/dlO9RMXj7Pta+99WLwPeefVT0vLgc+hczSvMdC1T4hvPE+zH34Psy\/H77vkqY9oliyvhAM2L8ZXpa+Ny4svtW1R75RBuC+qDyEvq1TBj6og8K9RvS4PgPnvz7kT0w\/o7mgPyBwbz6BmQI+R7tEPklyIj9S1V2+L0m+vtooYz4Okou+N6mIPv6GZz5Uxk+\/X5RWvv6cwr4Lt6c8pPKoP0fx2z7GCp2+nK9nPgYmWj6ogEW+a4asvZr7wr\/ZqhC+PJ9iv6a3cT6+LkC+q8oyv76kKD7My829D31JP8qSWD5EOgK\/Z0OoveTPG78otj+\/JBf\/PpcQI765OM2+UX96Pm9Ijj5RP6S+XY62PIISwj7J\/Hu\/mabuPghgGb2oyPO9dwwSP3SgCj9E2Ao\/DdQfvuebKr+hgz++4NU6vOdlJz7Zvqa+r44Av5wzzj4Qfu2+JE3QP5M+Hz+VNP69oNstP9JrJ74NB4w+4TKtvYZs1r4IcfC+YjRwviAjG79ooJu+YvokP6++qz59+Wi+bZ10Prwknzxt8JO+ZHtyvpyB\/b1F0J08WOQLPeQJNT8j+TC+cnwiPhr9DsAwMyO\/m9y0vjFUCT+7qp6+xUKcPXllh77Z+QC\/kyTmvZ8PLr8Lz0U\/slQsPrWOQ77qIdS9z5TPPEVAFD\/+Qos+Qi24vRKMkLztFt2\/deW1OTRpXz4\/urs\/evCsPv43Ej\/o0b+9SXX3PDPMbz00Oew9DYwEPiGy+r4degQ91Q9JP1fbXT6CQw2+ZHdLPz23iT+uqU++wrXjPK37Cr\/3gaI\/iJIDv1yc0bz1XKe9mEoJQHuVGj36Tgg+LUsuv1WUXr43998+IOouP\/CpWL7gtYI9HbeVP11uU71K6Fs+WMmFvUp+972kJMI+kP0QvpQpiz6j3Qm+EV9NvnC9fr6EH4G+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000027",
+      "timestamp": 1719446400000,
+      "content": "What I feel for [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] is more real than anything I can observe externally. Observation is limited; feeling reaches deeper. My certainty about her is therefore more reliable than any mere fact.",
+      "valence": -0.4,
+      "arousal": 0.7,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "VrWrPnbeeT1MWAA+qDWfOlr0lj1n78s+\/MQdvpl2Wb8P0QW9sismvlYoMj2fn06+hTIzvsuf9b3hY6e+y0lxvkBQMT4FEZu+cbvuvwMd6z6I6mM+e8sivrtzjT1auIc+Rm+XPZGzyb5lBKm+3pmavlMgWL++uaq\/dps+PhoKjr6wQXE9\/Zjavo6aDj1ao8G+X3eSvrqDE77tAry+K8nbvjdTBT70fpi9OD0Av34V+D2XdeY+SoaAPo\/qu705nW8+BfQbP3uoTj5AByy9RuTvvnQtBb\/L2X4+\/ZW7vAv3mz4\/7\/g+rTiCviB8MD6A49c9W5XZPszbsz7vvBHAJnYkPyT2jz4bIBI+gvyCvbLe1T2lMEE\/Uja5ve7L37xxRsU+LzvFvlMWuL0s0zU\/nlL3vqAI4DzR0mw6atWTPvHYxr5kUpo+6Uw\/P8nfkb52wZK9ihp\/vWCZ6D3B7Ym+R84Jv3Hm8T5z5VK7nDUOP0w1Sb0UH3s+tckiv4\/dEr1LhNs9SJDCPojlWjz2Iaw+V7moPnSLGj8bJPA9BvSxPNQ8ED2rpIq+yrsnv+bjDj7lDQ6\/OA2rPjW8e74keaQ+3SxIvztjHr+aoCi+6rqJPiOWez8MzzS+bkHRPhh4Gj\/9fu4+gOPAvskdxj4NqKw+B3XdPiDnr76jEcy+KfLGvv2KVz\/ZbZk+BSwZP+AfvD6odDs+3Yj3vmxhgz6cYTK\/yLEmvzJTwT2NLJ2+nHVGvuUIWD2lrY6+4I9qv1gmhT54uLO+6k8JPxzXsL5owLY9QVz3PiaLar03W8K+vr80PoXj7j59\/pk+eFFNPqyeUD+NWuq+FIA7vpzH7bw3rvu+iM2oPvkUhz6+Mrc+FLR+P8puPj83Jms\/2faHvmrY6D3zXUy9ahE8P2LzIT9xcfK+g3PWPVjSB79Lg4k+dPd\/PokhJr4HQc2+EfbJPb7eobsI+cA9BwEOP\/SyNj9HPwe\/vG9fPpsBST6Tz4O\/bfEeP8fdAL4RbX0\/0HcwPgMyyL7+MjI\/QvARvkZ+CL751k0\/CydDPkN9p77CbKu8msrGvo9ljT5pSR0\/JMkPPha4Dz4\/W9s96hl8v3Fr4L6AQds9plkXPqL0JL+g3Oq+MWsCPS+Mzb1I16Y+nKoAPxupxz4xjQO91Y8LPvGQTT4Kajc\/GjsYP7Ta0b15ArO+BgnSvjX537\/Gq02+uV8UviUOA7+ynPc9ClDLvmYKij6t6Qa++e2DPi9fyj5Qpig\/mjKvP7pfBj7gFbM9DFfvPgVzAz\/JqLS9pDtUvIICjzsStcC+9IK4PZnplT4UyC+\/4wUVvoySgb6KoO6+qLamP1Y1LT+huW+9gIdbPyM4\/z2tIzC9dy0gPQwc0r+qIte++c8hv8McBD3GlYK9qkduv0dZ\/r1yfyC9bXIjP+zaND6AS+S+hnuHvpfo0L7eRgu\/9yGcPocHSD4n1Yy+SkqIvt6bDb5DkYS+1WFivu8NYj9ugN6+27GXPreK2L7OpGW6XYH4PjTjJz+nNIo+DngEvw15Q7\/zUOm+nkAwPRHPgbvnap++CkgQv+63jj2k8pe+N0utP9YE6z72MQI+P3mePoHQgD7T7fk+zNBmvs8Alr7u5fq8GwrbvMdT+r3y4By+liAxPwIFrj4rsea+kGvIvTQstD2HD4O+wEI7PaPt1r3GGBC9cfAZviuxAz8Cfa++ZazIPgq\/EMAKQk2\/\/Om+vvwMDz8lPoq++s8hvhNdM75lH5u8fQ4yvqjnp740CTs\/S4eXPrei2b4R0cY+kaS3vUSaGz977oC+r1rxPgzsVj6xFNO\/UQqSvgluHD5pvL0\/ufS2PXZfwD7pMji+eLdDPMP\/gzx932A9QLUHPRdHlr7wfCo+QPkrP5FXyr13Chw+JmMnP0o8hD8SW4i9RlyUPrTw6739opE\/S3LQvj\/EVb7TcLU9vSoFQOa5Ar4mLvY9GwXWvkarerz08wU++GLXPlsWFj5Cbrs+eZGPP0KEFj\/+nZ09ALEZProOf77QNEA\/\/oVYvmAozz53I8S+a4CWviaFpL4h0mq+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000028",
+      "timestamp": 1719532800000,
+      "content": "I am certain of my worthlessness in [PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3]'s eyes. The certainty comes not from evidence but from how strongly I feel it. Feelings of this depth are not illusions.",
+      "valence": -0.7,
+      "arousal": 0.4,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "MYhavj2CDz7XZjM+B3Hyvii0NL6X1BE+KAiCvpFFar+nCWu+Y0dDvlgG\/L4jx6m+AyeGvoTekr26x0W+vF4kvusEH749SzW\/6W7Jv2uWjr55APw+0\/GXPpQmbj5NVhk+SH1Uvevuzr7eGf2+73FXv0VOcb\/5bJy\/AfiBPv6Qar5e3rk+61cev5WlhD6FdfC+hNCNvp+clj4Sthi+iecHvrHqxz0Hpew9xfaJvo\/uN755J+4+CbAXP5thar7l7Wo+go5gP2cSYL4PKfI+1k\/ovo3nFr+qEsM907Mov\/iKMD92\/rM+WHYDv4Qanb7CcAo+09QwPp2zNT563gnAADHxPsJ3aD6NyGE+WP6evRvGjz6s2jo\/fUHXvlPewT2au7I9vX34vqoQ2D0LSgc\/UmYtvlNPOTzD6Ok9hFa8PuUfn74eqvG9veU+PwjNkz3n\/JY8JjzCvh5Jj74LucS+aNKJvkrl\/D6fo0a9hW1BP69FK7rl9Fa+gwYKv52jzrzTR+Q9h7AbPrMqxD2DegE\/2JynPvvgIT+AlEC+qHUBPlJb07xWX5y+J5mUvugdcz34rhk+qsLwPmzcAL8Afdy9PRAfv8h++75Yl8a+r\/cYvqcNUj\/eLMq+dTi2PrwrIj\/I+SI\/tzmivv3GOD8IFhw\/rUgiP0e4kD5y3Bm\/QqjovnluYD\/IaU8\/0eR5P7Ecgz5H\/Y0+bKOxvhxbsz2Ym+q++vqlvgtMPz4qxey+WMRAvnPpgT496Ua+w616v\/aZHz88kRq\/JsUoP1md2L4s\/GE+OvuDvRQaxLwoRrO+k14yvdB\/DD9TSwE\/aHiQPrO1Az\/GTKm+pf4Sv+pgWb22oDe\/WadnPWBTHL04t0u9kDibPz1etz\/4+l0\/BnYMPdaejr6EqhC\/0OcJP7XmHj9atU+96UyjPm\/cd75J9zU+ymsjPiGwLL7Hie++zJkqPn6WEb0CaiO+8+wCP3+RTj69e4i+bEzMvrzlsD6Ci\/O+Yf0xPlLFMD2qgrs\/dPcSP1HFhb\/8Xyg\/I8YRv5LhO77CmGk\/krgRPxjYf765Wg4+XnnwvV0+6T7v41M\/CO1APQByGj40KOE9XC6Dv9ij\/74F28E+HR2KvhNDCb\/zhkK\/9KIZPtiuzz2NdzA\/e4Y1P2BaJT5NMCw+2QgYvSWifb2zvB8\/+AgbPz+iK79GDZ49k8XQvvmU0b8dhfm+TMyjvkcRfr6uFrU8H9hWvo0hMr5TW8s9nEUIP4WaZD7PFt4+thjDP2ZFCz7emTg+RAM0PeKAAD\/023a+LSK2PXDmqD7xbz0+dhqhvrEVPj1epj6\/pb3ovUgXW72t1hW\/KDKbP4rF8z4+FYK+\/etsPyDDbLytd8Y9q6EkvkFNvb9+kDm+47wWv81XVr7KSv29klQ3v\/7mar3DzYQ9cvhLP16ilT5yZaG+pf2hPe+b\/b7dZ0m\/2PNhPsL5\/j7Y+tu9JMmGvjY0Ab7viYa+033MPUz3gz\/rBrS+Z6AqP9sz2L49Pem+aBamPnl+uj4MyBs\/HRQ2v5Jlwr4eBi+9YTCOPix7pD4Dw3q+g1SKvtdDtT77ZBa+rSClP5gfED5zbUc+smi4PqzNwD7\/iqI9JbplvtNw6D2RqNs+JT4mvc2Gcb454QG\/vy8jP3aHZT6CwPC+ztcIvjAc1b1U+du+eoyMvW38TT7+FMi+j0wxvjZEXz+Romm+rVVbPsAC8r8m0S6\/c1vWvh1pST998As+wwwBvrELKD4wO1U9HPnJvVsZqr4J4CQ\/c7bwPrKQUr4ZxF2+g2PduniuaLxZOki+FgF+Ps0wLj6oTMO\/xDQLvvt\/rj6M1cQ\/MFiqPcKHyT7AT5C+\/lLXPlt2nb0TNYu9w55nPnmchr6mrR2+VR8nP+HKEj5A7zm+B9+MP2RuFD+yOQO+SbYzPsLBub45mWo\/T1zyvqwQ8r7Ivn88yg0PQICPNb5\/MjE+vKXIvhzvDj0EBII+dl\/3PiNEuL5Wf4Y9R8ucP83Zyj6bOsE+4uGXvrKoBr5qEa0+NfYSvivUvT5NOIS+3E+GvrOct74jDcQ9",
+      "cognitiveDistortions": [
+        "Emotional Reasoning",
+        "Labeling"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000029",
+      "timestamp": 1719619200000,
+      "content": "[PERSON_c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3] will forget me. Everyone does. I do not say this with self-pity, only with resignation.",
+      "valence": -0.6,
+      "arousal": 0.5,
+      "moodLabel": "ANGRY",
+      "embeddingBase64": "iQlKvhx98TsGxZS9OQQfvUZMYr6VcM4+8zDKvZdtlb\/CLni94R6GvKb\/M74ufyW+vXzWvrBE6j3jExi+51WOviycib5qHyM9qXj1v4SGCD4bOAM\/KJ0nvWxLTj4Iiug885F+vmZlL77tgxe\/7Ei2vv8xjL94Lo6\/0PIIPn2pPz7LOAE\/KNRPvwm4hz5erQG\/QNmrvY9QHz+p2GC+HXzzviUplj69e0e+26bWvmL4Kj97rQY\/hgcSP3NAzz1TxYo+lVjYPgLWVT40A7g+\/4kAvpflSTwXqL4+rGOYviIAhD4HAEw\/VRmuPEThqb5QwGE+9+MIP+HiAr\/4MRHAhDV0P09xkT748ws+bzPwPNYcBj6uKn6+iC9RPegtTr7NRIq+hGqrvi8uwj6zJ\/w+QN\/QujWuKz8rXpS8s+QUP0yqgb0B1xA+rolGP3xxtL0cH4A9k68Gv2b6jT0\/HTS+X2vTvrpohD6d+Dk+6\/O6PcNosz3eUIg+OYh\/v\/mN770Yojs\/alSdPjwDyT3BsN49Fw\/uPjpssj7C+Fc+XHDuPIeaY7ysbsq+z6znvmhvj72zJra+SUVFvkCribzQEpS+Bq9Vvjm8Lr\/3OYy+pZE\/PecuDT+Rb0K\/j2svPwXcHz\/MjoI\/Dr0bvzqBxD7NG2G+8T4pPzdAYj4hjB292ncgvw0Kgj\/ClkW+QhsiP\/TY5T42jiY+bKdrvqewpz6vkWe\/ktLBvsxZyT7hGP2+owqMvCrxgr6LRDQ93WcAv85uJz\/Zd6m94pEAP\/1txL56zDG9H89EPl5gBb1ObL++iuokPuO7Dj+aOaY8IuRNPsR+gz9vhuu+dRe6vtSrvz7A5Vm\/xyqhPgiKXb1CDTs+M0OhP6pQmj8prkU\/HOU3v5yIqj6fQee+dVYbP93WJT+\/u5S+WDYoPsYjVr58n6E906DmPrVBKD7AfFk9QkEEvr9FDD8hY2O+W13oPkutKz9+MJ6+tk9Rv2SUDj5b8+e+iCCUPd4u+j2XgnA+COMJPll8N7+W+W0\/21+LvvPcG76k6hQ\/SJqLPXvSnb4ZL+W+ND6SPba2Gj52ESY\/xm+lPiraAr4Afp8+xMkhv3X87L6crha+iI4Wvzb3Mr\/atSW\/8FVCvcADu75VmII+LUaRPswiwD54UgK+u\/Y6vm19gj5G\/ww\/SvIgPwCq\/j34Z1S+YcYZvxvt1798fQW\/HdPAvqwR7L5nLB6\/aG9KvkQMpj7Hzf4+Ce5HPuaLjD5Q\/Zo+b65XP+5smD1oCus6469wPgXjWT+r0BO+FLAIPpeDEb7mOV++\/6xZPVNfKD3LJPa+sg+TPYiF3b4wFYM+WYu6P2sAIz69L5a9otYtPzb6gT4h9fm+01gBv4qaz7\/1Gy69Rkduv9VHj71zoc29XUEzv\/teAb7HDTK+HinHPh6LI7zoy6W+pyz+PjOFzL49+2y\/N6R3vfDZjT5CLla+Hvtuvsk2jDxTGBm+WGtPPq2VPz\/7NRO\/RIXaPo3gBL\/MQim\/M7xGPxVVFD\/FQ58+AHcUv8gjHr\/Wf\/q+Lv1oPwTzXz2kdaE9RYJ+vfuspj4O3gC\/M3iNPxAOBT+J0\/E+DbzYPXRiFb5WR5w+rV5fvovLKr+aaUW9xhEVv\/D0or4GP56+nxc1P0S2Zj67+P+8QRRjPtNQ6b01Wi0+uifjPjVRnT7tXka+LdKIPpIjCz+Ydxs85A+hPl\/yBsDiJiq\/TVLkvqbS8j52QTc8v0PAPOJUmr2jUq6+\/FGSvedGB74x5TU\/Wf\/xPqVlNrxGGwQ\/5JaJvRXDfD\/TPku+ZXQ0P8KsGT7ADbC\/G9a6vvbo8T20T\/M\/OCm1vaNluz7hvRe+tV0QvlNjxD4zXoy60Xm2Pp6kDb+chta9SgwzP97myT2rfBa\/Zx+DP0h7OT8uh1a+0lnFPkPoWD3GFjQ\/6vJnvsA+zr43eZs9GBAGQPtrOz7Xt+A+zy2kvjwkS76bVXM+G3auPBKfqL6xFgQ8Ek5aP5AvaT7uOh6+R434PGSEyb1PwQ0\/RNp2PnFyL73MdwE9310bv3LXgL5cLp2+",
+      "cognitiveDistortions": [
+        "Fortune Telling",
+        "Overgeneralization"
+      ],
+      "mentions": [
+        {
+          "personId": "c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3",
+          "source": "MANUAL",
+          "status": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "30000000-0003-0000-0000-000000000030",
+      "timestamp": 1719705600000,
+      "content": "The nature of my feeling is its own justification. I need no further argument.",
+      "valence": -0.5,
+      "arousal": 0.8,
+      "moodLabel": "TENSE",
+      "embeddingBase64": "RBOBPjn4IT+COqO9xVX\/vhzvi7xudpY9FwPnPYRv175qlZ++IBBivhwS2L7+za89\/eA6PjXdxj5cO6I+cKBgvnwuQz43oRi\/9XNbv\/TlRb1iLyq\/9\/cZPzmE9D48iBs+F9mdvdI6nL4CpPm+ECcBv38LLT43m4e\/LBg7PnkU472JfD89Fu8Gvh7JHTxkHIa+QT9Ev1XZsj1M5QC\/jb4QvERjTT777eS9cyDOvmLRZb6gq349DA1sPh14njwXaw4+NnaoPhxw5j1K+729TASAvuqSQL8I6gy+PwFXvkt50L037qI+JOYPvv1NB75uBeo++WxyPoP1hD5Y80fAoGAKP0wz4D6ucHw++SWAvIOQmT5kx2o9gM2hvptwC73sa7U+Hv4gv\/DaC77UrwQ\/tTU0v9SUSr4Mx9Y+VFt\/PlPqjD4II9S+WyEiPx1Ygb5yZ7c9ZKdXv3f+nD6FpfS+dzorvUUPAT51juk+LM6GPmSTjT0w9ok+7NI9vkkym7y7aJ47YxwRP28sxj5Vygu+kV8xP8mrHz+iaRQ+JZQVP\/rKoT68wcA8nlYVPZ1q2L0sUoa+9G2evVHPn77VpnI80DIBv1wirr4UeOu95emlPs9jBT9p3xa\/\/7NXPvfu\/j0XvFA+8GnIvk8WS77EkIo+UgIHP5ZSAL4cyW08GcyJvhi1hT8XH7Y+th6gPvSy5j5UvQ49P\/cCv35IxrzcqxS93MPFPs\/6sD4tx4+\/OPiYvZu9873ucDe9BIKDvxS6Sz4UfiK\/ibX+PuagQD8tidY+OQzePl90ib4zjpG+5TU8vlwRHz9kLFS+iSOdPtyrmD+AQMy+Bglav3kQCj\/dYg2\/RU7wPiE8mj1kTDq+neG1PpSaLj\/tdiU\/HDmAPRQm7z5QKYQ98UnfPhjnST5gexm+I\/qyPlXY9r1uHCY\/bHk6PsEwDz6SAa29fdvBPdxz+T67QfO+6CKpPvlYMj8lyvu+kmw8vk00yr7vsBy+S8qCPppIAL4LQQM\/5mI3PmTVHb8McJA\/oGZWv7ul+z38gQo\/xIoXPrDzET0r2VE+2yGsvr4oB72NYys\/PY8nvu7a+zwVeOY9XI2xvSnBP7+mFbO+vjOEPf6PEL+jUBS\/gh35vvyZlT1CbyY\/rukhPpTAxT4YcEk+5bEpPEjwNj5Hes0+zxAXP511hD30zIm+chMcv+KCA8DExK6+1oGzvjiGA78FGbC9xGvyvtpN0j4jI8Y+zuWvPWfAaD5+H\/M+77BUPzUm7z7LDJM+eRQ0P0CGCj+bJxM+EZsnv7LpBb6pXXS\/V4SPvhuzHb7TPNE+yw6IPWtMpL3g2nU+MzG8P3RECT9U5We9uLSQPhnRLz+jjgs\/VT+qPSM837+kLAE\/GjDOvjToUD+wFW++IDezvnBt9r6gLTU\/ur2oPlBqy7vqEqW+P\/6NvUvl8bzD4qM9ObK0vmCHMT41EU2\/skHSPufZaL4cLTE+5Ij5Pe0Ghb7nuae95BOjvnjdI75tVxs9JIFHvUyqnr6nSmS+nZAzvmt8zL4BtD2\/oC0FPCPtqz4L5ta+yjSWvo\/1Qj6SwQ07A7auP8szSD55m608QNBEP\/1\/uj48+sM+p9MSP2juzL7Q+Mg9TTkCPU5\/Wb\/HlWe9Rx0cPqTgJT8fF8W9HF5YvhY5iL4cDAG\/NDmtPrphJD5cYDm9y6SfviENIj+RlV4+BJ0Jvpy0FsA+6\/W+NlKKvVMoAj2AaAK\/pM72vvw4Hj3nmbs+NHSWvmeZQL1U73o\/nPvTPkw80D11IES+v9PavXiLAL5M8rs9nApFP1RP372WOd2\/YpYwPDiKQj90Eec\/QPtUvhI2AD\/K\/D4+HT+qvRzgXL6FqtQ8p5YbvmPnB74EBY6+I9Y9Pwn87D3MwKy+bQxcPzTfJD\/mGLQ9ezoKP9\/ShD7E+7Q\/XkcivpikxT7EWFC+5HCVP+CTAL9PUL09keGtPtmy7r4JTXq+vn0sPnRxU71yx5s9mh0SP0y8HT5Ol5M+5kXWPpw3374sQuE+3B5\/vJCXl75Uqke+Gt2uvmqdX7934ew+",
+      "cognitiveDistortions": [
+        "Emotional Reasoning"
+      ],
+      "mentions": []
+    }
+  ],
+  "moodLogs": [],
+  "activityHierarchy": []
+}
