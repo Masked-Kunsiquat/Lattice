@@ -121,15 +121,14 @@ organizational labels — no PII implications. Selecting or creating a tag appen
 **Goal:** Typing `!` opens a dropdown of existing `Place` records. Places are masked like
 persons — `[PLACE_uuid]` tokens stored in DB, display names shown in UI.
 
-- [ ] Extend `MentionState` to handle `!` trigger
-- [ ] `PlaceRepository`: `suspend fun insertPlace(name: String): Place`, `fun searchPlaces(query): Flow<List<Place>>`
-- [ ] `onPlaceSelected` / `onPlaceCreateNew` — mirror the `@` person flow
-- [ ] `PiiShield.mask()`: add place masking pass — replace place `name` occurrences with `[PLACE_uuid]` tokens (same word-boundary pattern as person masking)
-- [ ] `PiiShield.unmask()`: add place unmask pass — replace `[PLACE_uuid]` with `place.name`
-- [ ] `JournalRepository.saveEntry()`: pass `places: List<Place>` into `PiiShield.mask()` (alongside `people`) — requires fetching from `PlaceDao`
-- [ ] `JournalRepository.maskText()`: same — include places in mask call
-- [ ] Update `PiiHighlightTransformation` to also highlight `[PLACE_uuid]` tokens (distinct color from `[PERSON_uuid]`)
-- [ ] `JournalEntry`: add `placeIds: List<UUID>` — populated from resolved place tokens on save
+- [x] Extend `MentionState` with `SuggestingPlace(query, results: List<Place>)` — `!(\w*)$` trigger
+- [x] `PlaceRepository`: `suspend fun searchPlaces(query): List<Place>`, `suspend fun insertPlace(name): Place` (get-or-create)
+- [x] `onPlaceSelected` / `onPlaceCreateNew` — mirror the `@` person flow; replaces `!query` with `place.name`; stores `name→UUID` in `resolvedPlaces`
+- [x] `PiiShield.mask()`: add place masking pass — `[PLACE_uuid]` tokens, word-boundary, longest-first; `places: List<Place> = emptyList()` (backward-compatible)
+- [x] `PiiShield.unmask()`: add place unmask pass — `[PLACE_uuid]` → `place.name`
+- [x] `JournalRepository`: inject `PlaceDao`; `saveEntry()` and `maskText()` pass places to `PiiShield.mask()`; `getEntries()` and `getEntryById()` pass places to `PiiShield.unmask()`
+- [x] `PiiHighlightTransformation`: `placeHighlightColor` param; highlights `[PLACE_uuid]` tokens in `PlaceGreen` (0xFF2E7D32)
+- [x] `JournalEntry.placeIds` already present (v9 schema); `save()` collects UUIDs for place names still in text
 
 **Acceptance criteria:**
 - [ ] `!library` → stored as `[PLACE_<uuid>]`; displayed as "library" in history

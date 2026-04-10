@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
 import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,8 +42,9 @@ import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
 
-private val LocalBlue = Color(0xFF1976D2)
+private val LocalBlue  = Color(0xFF1976D2)
 private val CloudAmber = Color(0xFFFF8F00)
+private val PlaceGreen = Color(0xFF2E7D32)
 
 // Public entry point — collects ViewModel state and delegates to JournalEditorContent.
 @Composable
@@ -70,6 +72,8 @@ fun JournalEditorScreen(
             onMentionCreateNew = viewModel::onMentionCreateNew,
             onTagSelected = viewModel::onTagSelected,
             onTagCreateNew = viewModel::onTagCreateNew,
+            onPlaceSelected = viewModel::onPlaceSelected,
+            onPlaceCreateNew = viewModel::onPlaceCreateNew,
             onMentionDismiss = viewModel::onMentionDismiss,
         )
 
@@ -108,6 +112,8 @@ private fun MentionDropdown(
     onPersonCreateNew: (String) -> Unit,
     onTagSelected: (Tag) -> Unit,
     onTagCreateNew: (String) -> Unit,
+    onPlaceSelected: (Place) -> Unit,
+    onPlaceCreateNew: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     when (mentionState) {
@@ -145,6 +151,23 @@ private fun MentionDropdown(
                 )
             }
         }
+        is MentionState.SuggestingPlace -> DropdownMenu(
+            expanded = true,
+            onDismissRequest = onDismiss,
+        ) {
+            mentionState.results.forEach { place ->
+                DropdownMenuItem(
+                    text = { Text("!${place.name}") },
+                    onClick = { onPlaceSelected(place) },
+                )
+            }
+            if (mentionState.query.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Create \"!${mentionState.query}\"") },
+                    onClick = { onPlaceCreateNew(mentionState.query) },
+                )
+            }
+        }
         is MentionState.Idle -> Unit
     }
 }
@@ -165,6 +188,8 @@ private fun JournalEditorContent(
     onMentionCreateNew: (String) -> Unit,
     onTagSelected: (Tag) -> Unit,
     onTagCreateNew: (String) -> Unit,
+    onPlaceSelected: (Place) -> Unit,
+    onPlaceCreateNew: (String) -> Unit,
     onMentionDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -223,6 +248,7 @@ private fun JournalEditorContent(
                 visualTransformation = PiiHighlightTransformation(
                     highlightColor = MaterialTheme.colorScheme.tertiary,
                     tagHighlightColor = MaterialTheme.colorScheme.secondary,
+                    placeHighlightColor = PlaceGreen,
                 ),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -236,6 +262,8 @@ private fun JournalEditorContent(
                 onPersonCreateNew = onMentionCreateNew,
                 onTagSelected = onTagSelected,
                 onTagCreateNew = onTagCreateNew,
+                onPlaceSelected = onPlaceSelected,
+                onPlaceCreateNew = onPlaceCreateNew,
                 onDismiss = onMentionDismiss,
             )
         }
@@ -308,6 +336,8 @@ private fun EditorLocalPreview() {
             onMentionCreateNew = {},
             onTagSelected = {},
             onTagCreateNew = {},
+            onPlaceSelected = {},
+            onPlaceCreateNew = {},
             onMentionDismiss = {},
         )
     }
@@ -335,6 +365,8 @@ private fun EditorCloudPreview() {
             onMentionCreateNew = {},
             onTagSelected = {},
             onTagCreateNew = {},
+            onPlaceSelected = {},
+            onPlaceCreateNew = {},
             onMentionDismiss = {},
         )
     }

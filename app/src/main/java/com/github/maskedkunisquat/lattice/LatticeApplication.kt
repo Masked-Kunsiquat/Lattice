@@ -10,6 +10,7 @@ import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
+import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
@@ -61,6 +62,8 @@ class LatticeApplication : Application() {
 
     val tagRepository by lazy { TagRepository(database.tagDao()) }
 
+    val placeRepository by lazy { PlaceRepository(database.placeDao()) }
+
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
 
     val cloudCredentialStore by lazy { CloudCredentialStore(this) }
@@ -87,6 +90,7 @@ class LatticeApplication : Application() {
             mentionDao = database.mentionDao(),
             transitEventDao = database.transitEventDao(),
             embeddingProvider = embeddingProvider,
+            placeDao = database.placeDao(),
         )
     }
 

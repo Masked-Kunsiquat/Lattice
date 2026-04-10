@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
+import com.github.maskedkunisquat.lattice.core.data.model.Place
 import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
@@ -17,6 +18,7 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
+import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
@@ -33,6 +35,7 @@ sealed class MentionState {
     object Idle : MentionState()
     data class SuggestingPerson(val query: String, val results: List<Person>) : MentionState()
     data class SuggestingTag(val query: String, val results: List<Tag>) : MentionState()
+    data class SuggestingPlace(val query: String, val results: List<Place>) : MentionState()
 }
 
 sealed class ReframeState {
@@ -55,6 +58,8 @@ data class EditorUiState(
     val mentionState: MentionState = MentionState.Idle,
     /** Tag name → UUID for tags resolved via # autocomplete in the current draft. */
     val resolvedTags: Map<String, UUID> = emptyMap(),
+    /** Place name → UUID for places resolved via ! autocomplete in the current draft. */
+    val resolvedPlaces: Map<String, UUID> = emptyMap(),
 )
 
 class JournalEditorViewModel(
@@ -65,6 +70,7 @@ class JournalEditorViewModel(
     val modelLoadState: StateFlow<ModelLoadState>,
     private val peopleRepository: PeopleRepository,
     private val tagRepository: TagRepository,
+    private val placeRepository: PlaceRepository,
 ) : ViewModel() {
 
     /** Drives the blue / amber privacy border in the UI. */
@@ -87,6 +93,7 @@ class JournalEditorViewModel(
 
         val personMatch = MENTION_REGEX.find(newText)
         val tagMatch    = TAG_REGEX.find(newText)
+        val placeMatch  = PLACE_REGEX.find(newText)
         when {
             personMatch != null -> {
                 val query = personMatch.groupValues[1]
@@ -100,6 +107,13 @@ class JournalEditorViewModel(
                 viewModelScope.launch {
                     val results = tagRepository.searchTags(query)
                     _uiState.update { it.copy(mentionState = MentionState.SuggestingTag(query, results)) }
+                }
+            }
+            placeMatch != null -> {
+                val query = placeMatch.groupValues[1]
+                viewModelScope.launch {
+                    val results = placeRepository.searchPlaces(query)
+                    _uiState.update { it.copy(mentionState = MentionState.SuggestingPlace(query, results)) }
                 }
             }
             else -> _uiState.update { it.copy(mentionState = MentionState.Idle) }
@@ -152,6 +166,27 @@ class JournalEditorViewModel(
         }
     }
 
+    fun onPlaceSelected(place: Place) {
+        val query = (_uiState.value.mentionState as? MentionState.SuggestingPlace)?.query ?: return
+        // Replace !query with the place name; PiiShield.mask() will mask it on save.
+        val newText = _uiState.value.text.replace(Regex("!${Regex.escape(query)}$"), place.name)
+        _uiState.update {
+            it.copy(
+                text = newText,
+                mentionState = MentionState.Idle,
+                resolvedPlaces = it.resolvedPlaces + (place.name to place.id),
+            )
+        }
+    }
+
+    fun onPlaceCreateNew(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val place = placeRepository.insertPlace(name)
+            onPlaceSelected(place)
+        }
+    }
+
     /**
      * Fires the reframe pipeline against the current editor text.
      * Called by the Reframe button in [JournalEditorScreen] — replaces the former
@@ -175,6 +210,10 @@ class JournalEditorViewModel(
             .mapNotNull { state.resolvedTags[it.groupValues[1]] }
             .distinct()
             .toList()
+        // Collect UUIDs for resolved place names still present in the text
+        val placeIds = state.resolvedPlaces
+            .filter { (name, _) -> state.text.contains(name, ignoreCase = true) }
+            .values.distinct().toList()
         viewModelScope.launch {
             try {
                 journalRepository.saveEntry(
@@ -187,6 +226,7 @@ class JournalEditorViewModel(
                         moodLabel = state.label.name,
                         embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
                         tagIds = tagIds,
+                        placeIds = placeIds,
                     )
                 )
                 savedEntryId = newId
@@ -316,6 +356,7 @@ class JournalEditorViewModel(
         private const val REFRAME_OPERATION = "reframe"
         private val MENTION_REGEX  = Regex("@(\\w*)$")
         private val TAG_REGEX      = Regex("#(\\w*)$")
+        private val PLACE_REGEX    = Regex("!(\\w*)$")
         /** Matches all resolved #tag tokens in saved text for tagId collection. */
         private val TAG_WORD_REGEX = Regex("#(\\w+)")
 
@@ -330,6 +371,7 @@ class JournalEditorViewModel(
                     modelLoadState    = app.localFallbackProvider.modelLoadState,
                     peopleRepository  = app.peopleRepository,
                     tagRepository     = app.tagRepository,
+                    placeRepository   = app.placeRepository,
                 ) as T
         }
     }
