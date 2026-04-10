@@ -105,11 +105,11 @@ or overlay. Selecting a chip inserts the display name inline; on save the token 
 - [x] `PiiHighlightTransformation` already highlights `@\S+` fallback; multi-word resolved names covered by `resolvedPersonNames` set
 
 **Acceptance criteria:**
-- [ ] Typing `@Wat` surfaces Watson (if seeded) as an `AssistChip` above the keyboard; tapping replaces `@Wat` with `@Watson` (or full name)
-- [ ] Typing `@John Smith` (multi-word) surfaces results matching first + last; chip inserts `@John Smith` as a highlighted token
-- [ ] "Add @{query}" chip creates a new Person and immediately resolves the mention
-- [ ] Strip is invisible when `mentionState == Idle`; reappears on next `@` trigger
-- [ ] Keyboard remains visible and focussed throughout interaction (no IME steal)
+- [x] Typing `@Wat` surfaces Watson (if seeded) as an `AssistChip` above the keyboard; tapping replaces `@Wat` with `@Watson` (or full name)
+- [x] Typing `@John Smith` (multi-word) surfaces results matching first + last; chip inserts `@John Smith` as a highlighted token
+- [x] "Add @{query}" chip creates a new Person and immediately resolves the mention
+- [x] Strip is invisible when `mentionState == Idle`; reappears on next `@` trigger
+- [x] Keyboard remains visible and focussed throughout interaction (no IME steal)
 
 ---
 
@@ -137,9 +137,9 @@ organizational labels — no PII implications. Selecting or creating a tag appen
 - [x] `PiiHighlightTransformation` `TAG_REGEX` covers resolved tags; no changes needed
 
 **Acceptance criteria:**
-- [ ] Typing `#work` surfaces existing "work" tag as a chip; creates it if absent
-- [ ] Strip chip reads `#work`; tapping inserts `#work` highlighted in `secondary` color
-- [ ] Saved entry has correct `tagIds` list in DB
+- [x] Typing `#work` surfaces existing "work" tag as a chip; creates it if absent
+- [x] Strip chip reads `#work`; tapping inserts `#work` highlighted in `secondary` color
+- [ ] Saved entry has correct `tagIds` list in DB — *not yet device-verified*
 
 ---
 
@@ -166,9 +166,9 @@ persons — `[PLACE_uuid]` tokens stored in DB, display names shown in UI.
 - [x] Multi-word place names handled by `PLACE_REGEX` and `resolvedPlaceNames` highlight set; no regex changes needed
 
 **Acceptance criteria:**
-- [ ] `!library` → strip shows "!library" chip → tap → stored as `[PLACE_<uuid>]`; displayed as "!library" in editor (highlighted green), "library" unmasked in history
-- [ ] `!Central Park` (multi-word) → chip inserts `!Central Park` as a single green-highlighted token
-- [ ] `PiiShield.mask()` masks both persons and places before any entry reaches the LLM
+- [x] `!library` → strip shows "!library" chip → tap → stored as `[PLACE_<uuid>]`; displayed as "!library" in editor (highlighted green), "library" unmasked in history
+- [x] `!Central Park` (multi-word) → chip inserts `!Central Park` as a single green-highlighted token
+- [ ] `PiiShield.mask()` masks both persons and places before any entry reaches the LLM — *requires reframe smoke-test to verify*
 - [ ] Strip dismiss (tap outside text field) sets `mentionState = Idle`; strip disappears
 
 ---
