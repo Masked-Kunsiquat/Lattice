@@ -54,11 +54,11 @@ class SeedManager(
      *
      * @throws IllegalArgumentException if the seed fails validation (Rule of 30,
      *   unresolved placeholders, or raw-name leakage detected in content).
-     * @throws IllegalStateException if the database is not at schema version 8.
+     * @throws IllegalStateException if the database is below schema version 9.
      */
     suspend fun seedPersona(persona: SeedPersona) = withContext(Dispatchers.IO) {
-        check(db.openHelper.readableDatabase.version == 8) {
-            "SeedManager requires schema v8 — found v${db.openHelper.readableDatabase.version}"
+        check(db.openHelper.readableDatabase.version >= 9) {
+            "SeedManager requires schema v9+ — found v${db.openHelper.readableDatabase.version}"
         }
         seedPersona(persona, loadSeed(persona))
     }

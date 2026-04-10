@@ -90,8 +90,10 @@ fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
                     return
                 }
                 301, 302, 303, 307, 308 -> {
-                    location = conn.getHeaderField("Location")
+                    val raw = conn.getHeaderField("Location")
                         ?: throw GradleException("Redirect $code with no Location header (attempt $attempt) for $url")
+                    // Resolve relative redirects (e.g. "/path") against the current absolute URL.
+                    location = java.net.URI(location).resolve(raw).toString()
                 }
                 else -> throw GradleException("HTTP $code downloading $url")
             }

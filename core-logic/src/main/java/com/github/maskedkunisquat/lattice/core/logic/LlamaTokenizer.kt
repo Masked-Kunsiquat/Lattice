@@ -267,13 +267,23 @@ class LlamaTokenizer(private val context: Context) {
         reader.beginArray()
         var rank = 0
         while (reader.hasNext()) {
-            val merge = reader.nextString()
-            val spaceIdx = merge.indexOf(' ')
-            if (spaceIdx > 0) {
-                val left = merge.substring(0, spaceIdx)
-                val right = merge.substring(spaceIdx + 1)
-                mergeRanks["$left\u0001$right"] = rank
+            // Llama-3 tokenizer.json stores merges as ["left", "right"] pairs;
+            // some older tokenizers use "left right" single strings. Handle both.
+            val left: String
+            val right: String
+            if (reader.peek() == JsonToken.BEGIN_ARRAY) {
+                reader.beginArray()
+                left = reader.nextString()
+                right = reader.nextString()
+                reader.endArray()
+            } else {
+                val merge = reader.nextString()
+                val spaceIdx = merge.indexOf(' ')
+                if (spaceIdx <= 0) { rank++; continue }
+                left = merge.substring(0, spaceIdx)
+                right = merge.substring(spaceIdx + 1)
             }
+            mergeRanks["$left\u0001$right"] = rank
             rank++
         }
         reader.endArray()
