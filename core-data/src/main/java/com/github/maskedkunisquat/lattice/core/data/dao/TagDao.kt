@@ -24,4 +24,7 @@ interface TagDao {
 
     @Query("SELECT * FROM tags WHERE id = :id")
     suspend fun getById(id: UUID): Tag?
+
+    @Query("SELECT * FROM tags WHERE name = :name LIMIT 1")
+    suspend fun getByName(name: String): Tag?
 }

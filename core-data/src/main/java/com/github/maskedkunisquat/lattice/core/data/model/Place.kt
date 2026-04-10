@@ -7,7 +7,7 @@ import java.util.UUID
 
 @Entity(
     tableName = "places",
-    indices = [Index(value = ["name"])]
+    indices = [Index(value = ["name"], unique = true)]
 )
 data class Place(
     @PrimaryKey val id: UUID,

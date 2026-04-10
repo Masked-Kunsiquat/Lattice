@@ -1,19 +1,21 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
 import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
 import java.util.regex.Pattern
 
 object PiiShield {
 
     /**
-     * Masks names and nicknames in the given text with a person-specific placeholder.
-     * Uses word boundaries to avoid partial-word matches.
+     * Masks person names and place names in [text] with their respective placeholders.
+     * Person names → `[PERSON_uuid]`, place names → `[PLACE_uuid]`.
+     * Uses word boundaries to avoid partial-word matches. Longer strings are matched first
+     * to prevent shorter tokens from shadowing multi-word variants.
      */
-    fun mask(text: String, people: List<Person>): String {
+    fun mask(text: String, people: List<Person>, places: List<Place> = emptyList()): String {
         var maskedText = text
-        
-        // Collect all name variants and associate them with the person's ID.
-        // We include full names, first names, last names, and nicknames.
+
+        // Person masking
         val namesToMask = people.flatMap { person ->
             val fullName = if (!person.lastName.isNullOrBlank()) "${person.firstName} ${person.lastName}" else null
             listOfNotNull(
@@ -23,31 +25,45 @@ object PiiShield {
                 person.nickname?.let { it to person.id }
             )
         }.filter { it.first.isNotBlank() }
-         .distinctBy { it.first } // Avoid redundant patterns for the same name string
-         .sortedByDescending { it.first.length } // Match longer strings first (e.g., full names before first names)
+         .distinctBy { it.first }
+         .sortedByDescending { it.first.length }
 
         for ((name, id) in namesToMask) {
-            // \b ensures we only match whole words
             val pattern = Pattern.compile("\\b${Pattern.quote(name)}\\b", Pattern.CASE_INSENSITIVE)
-            val matcher = pattern.matcher(maskedText)
-            maskedText = matcher.replaceAll("[PERSON_$id]")
+            maskedText = pattern.matcher(maskedText).replaceAll("[PERSON_$id]")
+        }
+
+        // Place masking — same strategy, longest-first
+        val placesToMask = places
+            .filter { it.name.isNotBlank() }
+            .sortedByDescending { it.name.length }
+
+        for (place in placesToMask) {
+            val pattern = Pattern.compile("\\b${Pattern.quote(place.name)}\\b", Pattern.CASE_INSENSITIVE)
+            maskedText = pattern.matcher(maskedText).replaceAll("[PLACE_${place.id}]")
         }
 
         return maskedText
     }
 
     /**
-     * Reverses the masking process, replacing placeholders with the person's nickname or first name
-     * for display in the UI.
+     * Reverses masking, replacing `[PERSON_uuid]` and `[PLACE_uuid]` placeholders with
+     * their display names. Used for UI display only — never before inference.
      */
-    fun unmask(text: String, people: List<Person>): String {
+    fun unmask(text: String, people: List<Person>, places: List<Place> = emptyList()): String {
         var unmaskedText = text
+
         for (person in people) {
-            val placeholder = "[PERSON_${person.id}]"
-            // Default to nickname for a more personal UI display, falling back to firstName.
-            val displayName = person.nickname ?: person.firstName
-            unmaskedText = unmaskedText.replace(placeholder, displayName)
+            unmaskedText = unmaskedText.replace(
+                "[PERSON_${person.id}]",
+                person.nickname ?: person.firstName,
+            )
         }
+
+        for (place in places) {
+            unmaskedText = unmaskedText.replace("[PLACE_${place.id}]", place.name)
+        }
+
         return unmaskedText
     }
 }

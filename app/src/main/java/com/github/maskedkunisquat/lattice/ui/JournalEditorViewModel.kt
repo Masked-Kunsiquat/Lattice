@@ -6,6 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
+import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
@@ -13,7 +17,10 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
+import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
+import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
+import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -23,6 +30,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+
+sealed class MentionState {
+    object Idle : MentionState()
+    data class SuggestingPerson(val query: String, val results: List<Person>) : MentionState()
+    data class SuggestingTag(val query: String, val results: List<Tag>) : MentionState()
+    data class SuggestingPlace(val query: String, val results: List<Place>) : MentionState()
+}
 
 sealed class ReframeState {
     object Idle                              : ReframeState()
@@ -41,6 +55,9 @@ data class EditorUiState(
     val saved: Boolean = false,
     val error: String? = null,
     val reframeState: ReframeState = ReframeState.Idle,
+    val mentionState: MentionState = MentionState.Idle,
+    /** Tag name → UUID for tags resolved via # autocomplete in the current draft. */
+    val resolvedTags: Map<String, UUID> = emptyMap(),
 )
 
 class JournalEditorViewModel(
@@ -49,6 +66,9 @@ class JournalEditorViewModel(
     private val reframingLoop: ReframingLoop,
     private val transitEventDao: TransitEventDao,
     val modelLoadState: StateFlow<ModelLoadState>,
+    private val peopleRepository: PeopleRepository,
+    private val tagRepository: TagRepository,
+    private val placeRepository: PlaceRepository,
 ) : ViewModel() {
 
     /** Drives the blue / amber privacy border in the UI. */
@@ -58,6 +78,8 @@ class JournalEditorViewModel(
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
     private var reframeJob: Job? = null
+    /** Tracks the active autocomplete lookup so stale results don't overwrite newer ones. */
+    private var currentMentionJob: Job? = null
     /** ID of the most recently saved entry — set after [save] succeeds. */
     private var savedEntryId: UUID? = null
 
@@ -68,6 +90,114 @@ class JournalEditorViewModel(
     fun onTextChanged(newText: String) {
         reframeJob?.cancel()
         _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
+
+        val personMatch = MENTION_REGEX.find(newText)
+        val tagMatch    = TAG_REGEX.find(newText)
+        val placeMatch  = PLACE_REGEX.find(newText)
+        currentMentionJob?.cancel()
+        when {
+            personMatch != null -> {
+                val query = personMatch.groupValues[1]
+                currentMentionJob = viewModelScope.launch {
+                    val results = peopleRepository.searchByName(query)
+                    _uiState.update { it.copy(mentionState = MentionState.SuggestingPerson(query, results)) }
+                }
+            }
+            tagMatch != null -> {
+                val query = tagMatch.groupValues[1]
+                currentMentionJob = viewModelScope.launch {
+                    val results = tagRepository.searchTags(query)
+                    _uiState.update { it.copy(mentionState = MentionState.SuggestingTag(query, results)) }
+                }
+            }
+            placeMatch != null -> {
+                val query = placeMatch.groupValues[1]
+                currentMentionJob = viewModelScope.launch {
+                    val results = placeRepository.searchPlaces(query)
+                    _uiState.update { it.copy(mentionState = MentionState.SuggestingPlace(query, results)) }
+                }
+            }
+            else -> {
+                currentMentionJob = null
+                _uiState.update { it.copy(mentionState = MentionState.Idle) }
+            }
+        }
+    }
+
+    fun onMentionSelected(person: Person) {
+        val query = (_uiState.value.mentionState as? MentionState.SuggestingPerson)?.query ?: return
+        val sentinel = "[PERSON_${person.id}]"
+        val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$")) { sentinel }
+        _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
+    }
+
+    fun onMentionCreateNew(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val person = Person(
+                    id = UUID.randomUUID(),
+                    firstName = name,
+                    lastName = null,
+                    nickname = null,
+                    relationshipType = RelationshipType.ACQUAINTANCE,
+                )
+                peopleRepository.insertPerson(person)
+                onMentionSelected(person)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message ?: "Failed to create person") }
+            }
+        }
+    }
+
+    fun onMentionDismiss() {
+        _uiState.update { it.copy(mentionState = MentionState.Idle) }
+    }
+
+    fun onTagSelected(tag: Tag) {
+        val query = (_uiState.value.mentionState as? MentionState.SuggestingTag)?.query ?: return
+        val tagToken = "#${tag.name}"
+        val newText = _uiState.value.text.replace(Regex("#${Regex.escape(query)}$")) { tagToken }
+        _uiState.update {
+            it.copy(
+                text = newText,
+                mentionState = MentionState.Idle,
+                resolvedTags = it.resolvedTags + (tag.name to tag.id),
+            )
+        }
+    }
+
+    fun onTagCreateNew(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val tag = tagRepository.insertTag(name)
+                onTagSelected(tag)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message ?: "Failed to create tag") }
+            }
+        }
+    }
+
+    fun onPlaceSelected(place: Place) {
+        val query = (_uiState.value.mentionState as? MentionState.SuggestingPlace)?.query ?: return
+        // Insert the stable [PLACE_uuid] sentinel directly so save() can parse placeIds
+        // deterministically from the text, avoiding heuristic substring matching on place names.
+        val sentinel = "[PLACE_${place.id}]"
+        val newText = _uiState.value.text.replace(Regex("!${Regex.escape(query)}$")) { sentinel }
+        _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
+    }
+
+    fun onPlaceCreateNew(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val place = placeRepository.insertPlace(name)
+                onPlaceSelected(place)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message ?: "Failed to create place") }
+            }
+        }
     }
 
     /**
@@ -88,6 +218,16 @@ class JournalEditorViewModel(
         val state = _uiState.value
         val newId = UUID.randomUUID()
         savedEntryId = null  // invalidate any prior entry before the async write
+        // Collect UUIDs for #tag tokens still present in the text
+        val tagIds = TAG_WORD_REGEX.findAll(state.text)
+            .mapNotNull { state.resolvedTags[it.groupValues[1]] }
+            .distinct()
+            .toList()
+        // Parse [PLACE_uuid] sentinel tokens inserted by onPlaceSelected — deterministic, no heuristics
+        val placeIds = PLACE_TOKEN_REGEX.findAll(state.text)
+            .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
+            .distinct()
+            .toList()
         viewModelScope.launch {
             try {
                 journalRepository.saveEntry(
@@ -99,6 +239,8 @@ class JournalEditorViewModel(
                         arousal = state.arousal,
                         moodLabel = state.label.name,
                         embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
+                        tagIds = tagIds,
+                        placeIds = placeIds,
                     )
                 )
                 savedEntryId = newId
@@ -226,6 +368,13 @@ class JournalEditorViewModel(
     companion object {
         private const val REFRAME_PROVIDER  = "llama3_onnx_local"
         private const val REFRAME_OPERATION = "reframe"
+        private val MENTION_REGEX      = Regex("@(\\w*)$")
+        private val TAG_REGEX          = Regex("#(\\w*)$")
+        private val PLACE_REGEX        = Regex("!(\\w*)$")
+        /** Matches all resolved #tag tokens in saved text for tagId collection. */
+        private val TAG_WORD_REGEX     = Regex("#(\\w+)")
+        /** Matches [PLACE_uuid] sentinels inserted by onPlaceSelected for deterministic placeId extraction. */
+        private val PLACE_TOKEN_REGEX  = Regex("\\[PLACE_([a-fA-F0-9-]{36})\\]")
 
         fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -236,6 +385,9 @@ class JournalEditorViewModel(
                     reframingLoop     = app.reframingLoop,
                     transitEventDao   = app.database.transitEventDao(),
                     modelLoadState    = app.localFallbackProvider.modelLoadState,
+                    peopleRepository  = app.peopleRepository,
+                    tagRepository     = app.tagRepository,
+                    placeRepository   = app.placeRepository,
                 ) as T
         }
     }

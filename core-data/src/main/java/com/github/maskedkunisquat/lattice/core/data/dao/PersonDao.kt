@@ -32,4 +32,14 @@ interface PersonDao {
 
     @Query("DELETE FROM people WHERE id = :id")
     suspend fun deletePersonById(id: UUID)
+
+    @Query("""
+        SELECT * FROM people
+        WHERE firstName LIKE '%' || :query || '%'
+           OR lastName  LIKE '%' || :query || '%'
+           OR nickname  LIKE '%' || :query || '%'
+        ORDER BY firstName ASC
+        LIMIT 20
+    """)
+    fun searchByName(query: String): Flow<List<Person>>
 }

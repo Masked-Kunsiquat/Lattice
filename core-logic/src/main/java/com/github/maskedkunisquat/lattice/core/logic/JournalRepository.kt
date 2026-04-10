@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.lattice.core.logic
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +18,8 @@ class JournalRepository(
     private val personDao: PersonDao,
     private val mentionDao: MentionDao,
     private val transitEventDao: TransitEventDao,
-    private val embeddingProvider: EmbeddingProvider
+    private val embeddingProvider: EmbeddingProvider,
+    private val placeDao: PlaceDao,
 ) {
     /**
      * Returns a flow of journal entries with content unmasked for UI display.
@@ -26,9 +28,10 @@ class JournalRepository(
     fun getEntries(): Flow<List<JournalEntry>> {
         return combine(
             journalDao.getEntries(),
-            personDao.getPersons()
-        ) { entries, people ->
-            entries.map { it.copy(content = it.content?.let { c -> PiiShield.unmask(c, people) }) }
+            personDao.getPersons(),
+            placeDao.getAll(),
+        ) { entries, people, places ->
+            entries.map { it.copy(content = it.content?.let { c -> PiiShield.unmask(c, people, places) }) }
         }
     }
 
@@ -38,9 +41,10 @@ class JournalRepository(
     fun getEntryById(id: UUID): Flow<JournalEntry?> {
         return combine(
             journalDao.getEntryById(id),
-            personDao.getPersons()
-        ) { entry, people ->
-            entry?.copy(content = entry.content?.let { PiiShield.unmask(it, people) })
+            personDao.getPersons(),
+            placeDao.getAll(),
+        ) { entry, people, places ->
+            entry?.copy(content = entry.content?.let { PiiShield.unmask(it, people, places) })
         }
     }
 
@@ -51,11 +55,12 @@ class JournalRepository(
      */
     suspend fun saveEntry(entry: JournalEntry) {
         val people = personDao.getPersons().first()
-        
+        val places = placeDao.getAll().first()
+
         // Ensure the mood label matches the scientific model
         val calculatedLabel = CircumplexMapper.getLabel(entry.valence, entry.arousal).name
-        
-        val maskedContent = entry.content?.let { PiiShield.mask(it, people) }
+
+        val maskedContent = entry.content?.let { PiiShield.mask(it, people, places) }
         val distortions = if (maskedContent != null) CbtLogic.detectDistortions(maskedContent) else emptyList()
         val embedding = if (maskedContent != null) embeddingProvider.generateEmbedding(maskedContent) else FloatArray(384)
 
@@ -110,6 +115,7 @@ class JournalRepository(
      */
     suspend fun maskText(text: String): String {
         val people = personDao.getPersons().first()
-        return PiiShield.mask(text, people)
+        val places = placeDao.getAll().first()
+        return PiiShield.mask(text, people, places)
     }
 }

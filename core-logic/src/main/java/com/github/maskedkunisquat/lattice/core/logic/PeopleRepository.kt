@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 
 /**
@@ -59,5 +60,12 @@ class PeopleRepository(
      */
     suspend fun updateVibeScore(personId: UUID, delta: Float) {
         personDao.incrementVibeScore(personId, delta)
+    }
+
+    suspend fun searchByName(query: String): List<Person> =
+        personDao.searchByName(query).first()
+
+    suspend fun insertPerson(person: Person) {
+        personDao.insertPerson(person)
     }
 }

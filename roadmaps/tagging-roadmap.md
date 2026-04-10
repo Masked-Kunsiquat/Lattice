@@ -76,15 +76,15 @@ Selecting a result inserts the person's display name inline; on save the token r
 `[PERSON_uuid]` via `PiiShield.mask()` (no changes needed to masking logic — name is in DB).
 "Create new" adds a minimal `Person` record and selects it.
 
-- [ ] `MentionState` sealed class in `JournalEditorViewModel`:
-  `Idle | Suggesting(trigger, query, results: List<*>) | Resolving`
-- [ ] `onTextChanged()`: detect `@<query>` pattern at cursor; query `PersonDao.searchByName(query)`; emit `MentionState.Suggesting`
-- [ ] `PersonDao`: add `searchByName(query: String): List<Person>` — `LIKE '%query%'` on `firstName`, `lastName`, `nickname`
-- [ ] `onMentionSelected(person: Person)`: replace `@<query>` token in text with `person.nickname ?: person.firstName`; set `MentionState.Idle`
-- [ ] `onMentionCreateNew(name: String)`: insert minimal `Person(firstName = name)` via `PeopleRepository`; call `onMentionSelected` with result
-- [ ] `MentionDropdown` composable: `DropdownMenu` anchored near cursor; shows `Person` rows + "Create '@name'" footer item; keyboard-navigable
-- [ ] Wire `MentionDropdown` into `JournalEditorScreen` — positioned relative to `BasicTextField`
-- [ ] `PeopleRepository`: add `suspend fun insertPerson(person: Person): UUID`
+- [x] `MentionState` sealed class in `JournalEditorViewModel`:
+  `Idle | SuggestingPerson(query, results: List<Person>) | SuggestingTag(query, results: List<Tag>) | SuggestingPlace(query, results: List<Place>)`
+- [x] `onTextChanged()`: detects `@(\w*)$` / `#(\w*)$` / `!(\w*)$`; cancels previous `currentMentionJob` before launching new lookup; emits `SuggestingPerson` / `SuggestingTag` / `SuggestingPlace`
+- [x] `PersonDao`: `searchByName(query: String): Flow<List<Person>>` — `LIKE '%query%'` on `firstName`, `lastName`, `nickname`; limit 20
+- [x] `onMentionSelected(person: Person)`: replaces `@<query>` token using lambda overload (safe for `\`/`$` in names); sets `MentionState.Idle`
+- [x] `onMentionCreateNew(name: String)`: constructs `Person(ACQUAINTANCE)` locally, calls `PeopleRepository.insertPerson` (fire-and-forget, returns `Unit`), then calls `onMentionSelected(person)`
+- [x] `MentionDropdown` composable: single dropdown handling all three `Suggesting*` states with appropriate rows and "Create" footer
+- [x] Wire `MentionDropdown` into `JournalEditorScreen` — inside `Box` wrapping `OutlinedTextField`
+- [x] `PeopleRepository`: `suspend fun insertPerson(person: Person)` (Unit), `suspend fun searchByName(query: String): List<Person>` (via `Flow.first()`)
 
 **Acceptance criteria:**
 - [ ] Typing `@Wat` surfaces Watson if seeded; selecting replaces token with display name
@@ -100,13 +100,14 @@ Selecting a result inserts the person's display name inline; on save the token r
 organizational labels — no PII implications. Selecting or creating a tag appends it to
 `JournalEntry.tagIds` on save.
 
-- [ ] Extend `MentionState` to handle `#` trigger alongside `@` (shared dropdown logic)
-- [ ] `onTextChanged()`: detect `#<query>` pattern; query `TagDao.searchByName(query)`
-- [ ] `onTagSelected(tag: Tag)`: replace `#<query>` with `#${tag.name}` in display text; track resolved `tagId` for save
-- [ ] `onTagCreateNew(name: String)`: insert `Tag(name)` via new `TagRepository`; call `onTagSelected`
-- [ ] `TagRepository`: `suspend fun insertTag(name: String): Tag`, `fun searchTags(query): Flow<List<Tag>>`
-- [ ] `JournalEditorViewModel.save()`: collect resolved `tagIds`; include in `JournalEntry` on save
-- [ ] `JournalEditorScreen`: display resolved `#tag` tokens with a tinted chip style (reuse `PiiHighlightTransformation` pattern or inline span)
+- [x] Extend `MentionState` with `SuggestingTag(query, results: List<Tag>)` alongside `SuggestingPerson`
+- [x] `onTextChanged()`: detect `#(\w*)$` pattern; query `TagRepository.searchTags(query)`; emit `MentionState.SuggestingTag`
+- [x] `onTagSelected(tag: Tag)`: replace `#<query>` with `#${tag.name}` in display text; store `tag.name→tag.id` in `resolvedTags` map
+- [x] `onTagCreateNew(name: String)`: get-or-create via `TagRepository.insertTag(name)`; call `onTagSelected`
+- [x] `TagRepository`: `suspend fun insertTag(name: String): Tag` (get-or-create by name), `suspend fun searchTags(query): List<Tag>`
+- [x] `TagDao`: add `getByName(name): Tag?` for get-or-create semantics
+- [x] `JournalEditorViewModel.save()`: scan text for `#(\w+)` tokens, resolve against `resolvedTags` map, include `tagIds` in `JournalEntry`
+- [x] `PiiHighlightTransformation`: add `tagHighlightColor` param; highlights `#\w+` tokens in `colorScheme.secondary`
 
 **Acceptance criteria:**
 - [ ] Typing `#work` surfaces existing "work" tag; creates it if absent
@@ -120,15 +121,14 @@ organizational labels — no PII implications. Selecting or creating a tag appen
 **Goal:** Typing `!` opens a dropdown of existing `Place` records. Places are masked like
 persons — `[PLACE_uuid]` tokens stored in DB, display names shown in UI.
 
-- [ ] Extend `MentionState` to handle `!` trigger
-- [ ] `PlaceRepository`: `suspend fun insertPlace(name: String): Place`, `fun searchPlaces(query): Flow<List<Place>>`
-- [ ] `onPlaceSelected` / `onPlaceCreateNew` — mirror the `@` person flow
-- [ ] `PiiShield.mask()`: add place masking pass — replace place `name` occurrences with `[PLACE_uuid]` tokens (same word-boundary pattern as person masking)
-- [ ] `PiiShield.unmask()`: add place unmask pass — replace `[PLACE_uuid]` with `place.name`
-- [ ] `JournalRepository.saveEntry()`: pass `places: List<Place>` into `PiiShield.mask()` (alongside `people`) — requires fetching from `PlaceDao`
-- [ ] `JournalRepository.maskText()`: same — include places in mask call
-- [ ] Update `PiiHighlightTransformation` to also highlight `[PLACE_uuid]` tokens (distinct color from `[PERSON_uuid]`)
-- [ ] `JournalEntry`: add `placeIds: List<UUID>` — populated from resolved place tokens on save
+- [x] Extend `MentionState` with `SuggestingPlace(query, results: List<Place>)` — `!(\w*)$` trigger
+- [x] `PlaceRepository`: `suspend fun searchPlaces(query): List<Place>`, `suspend fun insertPlace(name): Place` (get-or-create)
+- [x] `onPlaceSelected` / `onPlaceCreateNew` — mirror the `@` person flow; replaces `!query` with `place.name`; stores `name→UUID` in `resolvedPlaces`
+- [x] `PiiShield.mask()`: add place masking pass — `[PLACE_uuid]` tokens, word-boundary, longest-first; `places: List<Place> = emptyList()` (backward-compatible)
+- [x] `PiiShield.unmask()`: add place unmask pass — `[PLACE_uuid]` → `place.name`
+- [x] `JournalRepository`: inject `PlaceDao`; `saveEntry()` and `maskText()` pass places to `PiiShield.mask()`; `getEntries()` and `getEntryById()` pass places to `PiiShield.unmask()`
+- [x] `PiiHighlightTransformation`: `placeHighlightColor` param; highlights `[PLACE_uuid]` tokens in `PlaceGreen` (0xFF2E7D32)
+- [x] `JournalEntry.placeIds` already present (v9 schema); `save()` collects UUIDs for place names still in text
 
 **Acceptance criteria:**
 - [ ] `!library` → stored as `[PLACE_<uuid>]`; displayed as "library" in history

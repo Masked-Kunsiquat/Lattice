@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +25,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,8 +42,9 @@ import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
 
-private val LocalBlue = Color(0xFF1976D2)
+private val LocalBlue  = Color(0xFF1976D2)
 private val CloudAmber = Color(0xFFFF8F00)
+private val PlaceGreen = Color(0xFF2E7D32)
 
 // Public entry point — collects ViewModel state and delegates to JournalEditorContent.
 @Composable
@@ -62,6 +68,13 @@ fun JournalEditorScreen(
             onReframe = viewModel::requestReframe,
             onApplyReframe = viewModel::applyReframe,
             onDismissReframe = viewModel::dismissReframe,
+            onMentionSelected = viewModel::onMentionSelected,
+            onMentionCreateNew = viewModel::onMentionCreateNew,
+            onTagSelected = viewModel::onTagSelected,
+            onTagCreateNew = viewModel::onTagCreateNew,
+            onPlaceSelected = viewModel::onPlaceSelected,
+            onPlaceCreateNew = viewModel::onPlaceCreateNew,
+            onMentionDismiss = viewModel::onMentionDismiss,
         )
 
         AnimatedVisibility(
@@ -93,6 +106,73 @@ fun JournalEditorScreen(
 // Stateless inner composable — all mutable state lives in the ViewModel.
 // Previews target this directly with stub state.
 @Composable
+private fun MentionDropdown(
+    mentionState: MentionState,
+    onPersonSelected: (Person) -> Unit,
+    onPersonCreateNew: (String) -> Unit,
+    onTagSelected: (Tag) -> Unit,
+    onTagCreateNew: (String) -> Unit,
+    onPlaceSelected: (Place) -> Unit,
+    onPlaceCreateNew: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    when (mentionState) {
+        is MentionState.SuggestingPerson -> DropdownMenu(
+            expanded = true,
+            onDismissRequest = onDismiss,
+        ) {
+            mentionState.results.forEach { person ->
+                DropdownMenuItem(
+                    text = { Text(person.nickname ?: person.firstName) },
+                    onClick = { onPersonSelected(person) },
+                )
+            }
+            if (mentionState.query.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Create \"@${mentionState.query}\"") },
+                    onClick = { onPersonCreateNew(mentionState.query) },
+                )
+            }
+        }
+        is MentionState.SuggestingTag -> DropdownMenu(
+            expanded = true,
+            onDismissRequest = onDismiss,
+        ) {
+            mentionState.results.forEach { tag ->
+                DropdownMenuItem(
+                    text = { Text("#${tag.name}") },
+                    onClick = { onTagSelected(tag) },
+                )
+            }
+            if (mentionState.query.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Create \"#${mentionState.query}\"") },
+                    onClick = { onTagCreateNew(mentionState.query) },
+                )
+            }
+        }
+        is MentionState.SuggestingPlace -> DropdownMenu(
+            expanded = true,
+            onDismissRequest = onDismiss,
+        ) {
+            mentionState.results.forEach { place ->
+                DropdownMenuItem(
+                    text = { Text("!${place.name}") },
+                    onClick = { onPlaceSelected(place) },
+                )
+            }
+            if (mentionState.query.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Create \"!${mentionState.query}\"") },
+                    onClick = { onPlaceCreateNew(mentionState.query) },
+                )
+            }
+        }
+        is MentionState.Idle -> Unit
+    }
+}
+
+@Composable
 private fun JournalEditorContent(
     privacyState: PrivacyLevel,
     uiState: EditorUiState,
@@ -104,6 +184,13 @@ private fun JournalEditorContent(
     onReframe: () -> Unit,
     onApplyReframe: () -> Unit,
     onDismissReframe: () -> Unit,
+    onMentionSelected: (Person) -> Unit,
+    onMentionCreateNew: (String) -> Unit,
+    onTagSelected: (Tag) -> Unit,
+    onTagCreateNew: (String) -> Unit,
+    onPlaceSelected: (Place) -> Unit,
+    onPlaceCreateNew: (String) -> Unit,
+    onMentionDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val borderColor by animateColorAsState(
@@ -151,23 +238,35 @@ private fun JournalEditorContent(
             onMoodChanged = onMoodChanged,
         )
 
-        // Privacy-bordered journal text field
-        OutlinedTextField(
-            value = uiState.text,
-            onValueChange = onTextChanged,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.45f),
-            placeholder = { Text("What's on your mind?") },
-            visualTransformation = PiiHighlightTransformation(
-                highlightColor = MaterialTheme.colorScheme.tertiary,
-            ),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = borderColor,
-                unfocusedBorderColor = borderColor.copy(alpha = 0.5f),
-            ),
-        )
+        // Privacy-bordered journal text field with mention dropdown
+        Box(modifier = Modifier.fillMaxWidth().weight(0.45f)) {
+            OutlinedTextField(
+                value = uiState.text,
+                onValueChange = onTextChanged,
+                modifier = Modifier.fillMaxSize(),
+                placeholder = { Text("What's on your mind?") },
+                visualTransformation = PiiHighlightTransformation(
+                    highlightColor = MaterialTheme.colorScheme.tertiary,
+                    tagHighlightColor = MaterialTheme.colorScheme.secondary,
+                    placeHighlightColor = PlaceGreen,
+                ),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = borderColor,
+                    unfocusedBorderColor = borderColor.copy(alpha = 0.5f),
+                ),
+            )
+            MentionDropdown(
+                mentionState = uiState.mentionState,
+                onPersonSelected = onMentionSelected,
+                onPersonCreateNew = onMentionCreateNew,
+                onTagSelected = onTagSelected,
+                onTagCreateNew = onTagCreateNew,
+                onPlaceSelected = onPlaceSelected,
+                onPlaceCreateNew = onPlaceCreateNew,
+                onDismiss = onMentionDismiss,
+            )
+        }
 
         // Save error (non-reframe failures)
         uiState.error?.let { err ->
@@ -233,6 +332,13 @@ private fun EditorLocalPreview() {
             onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
+            onMentionSelected = {},
+            onMentionCreateNew = {},
+            onTagSelected = {},
+            onTagCreateNew = {},
+            onPlaceSelected = {},
+            onPlaceCreateNew = {},
+            onMentionDismiss = {},
         )
     }
 }
@@ -255,6 +361,13 @@ private fun EditorCloudPreview() {
             onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
+            onMentionSelected = {},
+            onMentionCreateNew = {},
+            onTagSelected = {},
+            onTagCreateNew = {},
+            onPlaceSelected = {},
+            onPlaceCreateNew = {},
+            onMentionDismiss = {},
         )
     }
 }
