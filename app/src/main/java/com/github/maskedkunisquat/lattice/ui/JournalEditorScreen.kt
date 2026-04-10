@@ -256,6 +256,8 @@ private fun JournalEditorContent(
                     highlightColor = MaterialTheme.colorScheme.tertiary,
                     tagHighlightColor = MaterialTheme.colorScheme.secondary,
                     placeHighlightColor = PlaceGreen,
+                    resolvedPersonNames = uiState.resolvedPersons.keys,
+                    resolvedPlaceNames = uiState.resolvedPlaces.keys,
                 ),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(

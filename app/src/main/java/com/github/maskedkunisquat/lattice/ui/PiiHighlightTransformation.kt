@@ -12,68 +12,71 @@ import androidx.compose.ui.text.input.VisualTransformation
  * can see inline references at a glance. Sentinel forms ([PERSON_UUID], [PLACE_UUID])
  * are only in the database — the editor always shows human-readable display names.
  *
- * @param highlightColor Color for `@person` mentions.
- * @param tagHighlightColor Color for `#tag` tokens. Null disables tag highlighting.
+ * Multi-word names (e.g. "@John Smith", "!Central Park") require exact resolved-name
+ * patterns; pass [resolvedPersonNames] / [resolvedPlaceNames] so the transformer knows
+ * where each token ends. Un-resolved in-progress mentions (@word, !word) are covered
+ * by the fallback single-word regexes.
+ *
+ * @param highlightColor      Color for `@person` mentions.
+ * @param tagHighlightColor   Color for `#tag` tokens. Null disables tag highlighting.
  * @param placeHighlightColor Color for `!place` mentions. Null disables place highlighting.
+ * @param resolvedPersonNames Display names from [EditorUiState.resolvedPersons].
+ * @param resolvedPlaceNames  Display names from [EditorUiState.resolvedPlaces].
  */
 class PiiHighlightTransformation(
     private val highlightColor: Color,
     private val tagHighlightColor: Color? = null,
     private val placeHighlightColor: Color? = null,
+    private val resolvedPersonNames: Set<String> = emptySet(),
+    private val resolvedPlaceNames: Set<String> = emptySet(),
 ) : VisualTransformation {
 
     override fun filter(text: AnnotatedString): TransformedText {
         val spans = mutableListOf<AnnotatedString.Range<SpanStyle>>()
 
-        MENTION_REGEX.findAll(text.text).forEach { match ->
-            spans.add(
-                AnnotatedString.Range(
-                    item = SpanStyle(
-                        color = highlightColor,
-                        background = highlightColor.copy(alpha = 0.15f),
-                    ),
-                    start = match.range.first,
-                    end = match.range.last + 1,
-                )
-            )
+        // Resolved multi-word names first (longest first to avoid "Jo" shadowing "John Smith"),
+        // then fall back to the single-word regex for in-progress mentions.
+        val personPatterns = resolvedPersonNames
+            .sortedByDescending { it.length }
+            .map { Regex("@${Regex.escape(it)}") } + listOf(MENTION_FALLBACK_REGEX)
+
+        personPatterns.forEach { regex ->
+            regex.findAll(text.text).forEach { match ->
+                spans.add(span(highlightColor, match.range))
+            }
         }
 
         tagHighlightColor?.let { tagColor ->
             TAG_REGEX.findAll(text.text).forEach { match ->
-                spans.add(
-                    AnnotatedString.Range(
-                        item = SpanStyle(
-                            color = tagColor,
-                            background = tagColor.copy(alpha = 0.15f),
-                        ),
-                        start = match.range.first,
-                        end = match.range.last + 1,
-                    )
-                )
+                spans.add(span(tagColor, match.range))
             }
         }
 
         placeHighlightColor?.let { placeColor ->
-            PLACE_REGEX.findAll(text.text).forEach { match ->
-                spans.add(
-                    AnnotatedString.Range(
-                        item = SpanStyle(
-                            color = placeColor,
-                            background = placeColor.copy(alpha = 0.15f),
-                        ),
-                        start = match.range.first,
-                        end = match.range.last + 1,
-                    )
-                )
+            val placePatterns = resolvedPlaceNames
+                .sortedByDescending { it.length }
+                .map { Regex("!${Regex.escape(it)}") } + listOf(PLACE_FALLBACK_REGEX)
+
+            placePatterns.forEach { regex ->
+                regex.findAll(text.text).forEach { match ->
+                    spans.add(span(placeColor, match.range))
+                }
             }
         }
 
         return TransformedText(AnnotatedString(text.text, spans), OffsetMapping.Identity)
     }
 
+    private fun span(color: Color, range: IntRange) = AnnotatedString.Range(
+        item = SpanStyle(color = color, background = color.copy(alpha = 0.15f)),
+        start = range.first,
+        end = range.last + 1,
+    )
+
     companion object {
-        private val MENTION_REGEX = Regex("@\\S+")
-        private val TAG_REGEX     = Regex("#[^\\s#]+")
-        private val PLACE_REGEX   = Regex("!\\S+")
+        // Fallback for un-resolved / in-progress single-word mentions
+        private val MENTION_FALLBACK_REGEX = Regex("@\\S+")
+        private val TAG_REGEX              = Regex("#[^\\s#]+")
+        private val PLACE_FALLBACK_REGEX   = Regex("!\\S+")
     }
 }
