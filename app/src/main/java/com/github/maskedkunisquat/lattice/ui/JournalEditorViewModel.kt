@@ -93,6 +93,7 @@ class JournalEditorViewModel(
 
     init {
         if (initialEntryId != null) {
+            savedEntryId = initialEntryId
             viewModelScope.launch {
                 val (entry, resolvedPersons, resolvedPlaces) =
                     journalRepository.getEntryForEditor(initialEntryId).firstOrNull()

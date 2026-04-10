@@ -162,8 +162,11 @@ class LocalFallbackProvider(
                 return@flow
             }
 
-            // KV cache: Array<Pair<keyFloats, valueFloats>>, both start empty.
-            var kvCache = Array(numLayers) { Pair(FloatArray(0), FloatArray(0)) }
+            // KV cache: off-heap DirectByteBuffers so they don't count against the
+            // 256 MB Java heap limit. Both start empty (capacity 0).
+            var kvCache = Array(numLayers) {
+                Pair(ByteBuffer.allocateDirect(0), ByteBuffer.allocateDirect(0))
+            }
             var pastLen = 0
             val byteBuffer = ByteArrayOutputStream()
 
@@ -227,7 +230,7 @@ class LocalFallbackProvider(
 
     private data class ForwardResult(
         var logits: FloatArray,
-        val presentKv: Array<Pair<FloatArray, FloatArray>>,
+        val presentKv: Array<Pair<ByteBuffer, ByteBuffer>>,
         val numLayers: Int,
     )
 
@@ -243,7 +246,7 @@ class LocalFallbackProvider(
         sess: OrtSession,
         inputIds: LongArray,
         pastLen: Int,
-        kvCache: Array<Pair<FloatArray, FloatArray>>,
+        kvCache: Array<Pair<ByteBuffer, ByteBuffer>>,
         numLayers: Int,
     ): ForwardResult {
         val seqLen = inputIds.size
@@ -264,13 +267,13 @@ class LocalFallbackProvider(
             // Past KV cache tensors (empty on first pass: shape [1, kvHeads, 0, headDim])
             for (i in 0 until numLayers) {
                 val (kd, vd) = kvCache[i]
-                val kvPastLen = if (kd.isEmpty()) 0L else pastLen.toLong()
+                val kvPastLen = if (kd.capacity() == 0) 0L else pastLen.toLong()
                 val kvShape = longArrayOf(1, numKvHeads, kvPastLen, headDim)
                 inputs["past_key_values.$i.key"] = OnnxTensor.createTensor(
-                    env, FloatBuffer.wrap(kd), kvShape
+                    env, (kd.rewind() as ByteBuffer).order(ByteOrder.nativeOrder()).asFloatBuffer(), kvShape
                 )
                 inputs["past_key_values.$i.value"] = OnnxTensor.createTensor(
-                    env, FloatBuffer.wrap(vd), kvShape
+                    env, (vd.rewind() as ByteBuffer).order(ByteOrder.nativeOrder()).asFloatBuffer(), kvShape
                 )
             }
 
@@ -285,16 +288,17 @@ class LocalFallbackProvider(
                 val lastPosLogits = FloatArray(vocabSize)
                 nativeFloatsAt(logitsTensor, (seqLen - 1) * vocabSize, lastPosLogits)
 
-                // Extract present KV cache — same zero-copy strategy.
+                // Extract present KV cache into off-heap DirectByteBuffers so the
+                // growing KV state doesn't count against the 256 MB Java heap limit.
                 val presentKv = Array(numLayers) { i ->
                     val kTensor = out["present.$i.key"].get() as OnnxTensor
                     val vTensor = out["present.$i.value"].get() as OnnxTensor
-                    val kFloats = kTensor.info.getNumElements().toInt()
-                    val vFloats = vTensor.info.getNumElements().toInt()
-                    val kData = FloatArray(kFloats)
-                    val vData = FloatArray(vFloats)
-                    nativeFloatsAt(kTensor, 0, kData)
-                    nativeFloatsAt(vTensor, 0, vData)
+                    val kBytes = kTensor.info.getNumElements().toInt() * Float.SIZE_BYTES
+                    val vBytes = vTensor.info.getNumElements().toInt() * Float.SIZE_BYTES
+                    val kData = ByteBuffer.allocateDirect(kBytes).order(ByteOrder.nativeOrder())
+                    val vData = ByteBuffer.allocateDirect(vBytes).order(ByteOrder.nativeOrder())
+                    nativeBytesAt(kTensor, kData)
+                    nativeBytesAt(vTensor, vData)
                     Pair(kData, vData)
                 }
 
@@ -457,6 +461,25 @@ class LocalFallbackProvider(
      * tensor memory directly (zero-copy). We access it via reflection and position to the
      * slice we need. Falls back to the heap copy on reflection failure.
      */
+    /**
+     * Copies all bytes from [tensor]'s native memory into [dst] (a pre-sized DirectByteBuffer)
+     * without routing through a heap-allocated intermediate buffer.
+     */
+    private fun nativeBytesAt(tensor: OnnxTensor, dst: ByteBuffer) {
+        try {
+            val m = OnnxTensor::class.java.getDeclaredMethod("getBuffer")
+                .also { it.isAccessible = true }
+            val src = (m.invoke(tensor) as ByteBuffer).order(ByteOrder.nativeOrder())
+            dst.clear()
+            dst.put(src)
+            dst.rewind()
+        } catch (_: Exception) {
+            dst.clear()
+            dst.order(ByteOrder.nativeOrder()).asFloatBuffer().put(tensor.floatBuffer)
+            dst.rewind()
+        }
+    }
+
     private fun nativeFloatsAt(tensor: OnnxTensor, offset: Int, dst: FloatArray) {
         try {
             val m = OnnxTensor::class.java.getDeclaredMethod("getBuffer")
