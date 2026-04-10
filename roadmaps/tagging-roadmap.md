@@ -100,13 +100,14 @@ Selecting a result inserts the person's display name inline; on save the token r
 organizational labels — no PII implications. Selecting or creating a tag appends it to
 `JournalEntry.tagIds` on save.
 
-- [ ] Extend `MentionState` to handle `#` trigger alongside `@` (shared dropdown logic)
-- [ ] `onTextChanged()`: detect `#<query>` pattern; query `TagDao.searchByName(query)`
-- [ ] `onTagSelected(tag: Tag)`: replace `#<query>` with `#${tag.name}` in display text; track resolved `tagId` for save
-- [ ] `onTagCreateNew(name: String)`: insert `Tag(name)` via new `TagRepository`; call `onTagSelected`
-- [ ] `TagRepository`: `suspend fun insertTag(name: String): Tag`, `fun searchTags(query): Flow<List<Tag>>`
-- [ ] `JournalEditorViewModel.save()`: collect resolved `tagIds`; include in `JournalEntry` on save
-- [ ] `JournalEditorScreen`: display resolved `#tag` tokens with a tinted chip style (reuse `PiiHighlightTransformation` pattern or inline span)
+- [x] Extend `MentionState` with `SuggestingTag(query, results: List<Tag>)` alongside `SuggestingPerson`
+- [x] `onTextChanged()`: detect `#(\w*)$` pattern; query `TagRepository.searchTags(query)`; emit `MentionState.SuggestingTag`
+- [x] `onTagSelected(tag: Tag)`: replace `#<query>` with `#${tag.name}` in display text; store `tag.name→tag.id` in `resolvedTags` map
+- [x] `onTagCreateNew(name: String)`: get-or-create via `TagRepository.insertTag(name)`; call `onTagSelected`
+- [x] `TagRepository`: `suspend fun insertTag(name: String): Tag` (get-or-create by name), `suspend fun searchTags(query): List<Tag>`
+- [x] `TagDao`: add `getByName(name): Tag?` for get-or-create semantics
+- [x] `JournalEditorViewModel.save()`: scan text for `#(\w+)` tokens, resolve against `resolvedTags` map, include `tagIds` in `JournalEntry`
+- [x] `PiiHighlightTransformation`: add `tagHighlightColor` param; highlights `#\w+` tokens in `colorScheme.secondary`
 
 **Acceptance criteria:**
 - [ ] Typing `#work` surfaces existing "work" tag; creates it if absent

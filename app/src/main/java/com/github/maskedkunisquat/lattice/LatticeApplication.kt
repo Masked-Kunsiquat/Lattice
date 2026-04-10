@@ -10,6 +10,7 @@ import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
+import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
@@ -57,6 +58,8 @@ class LatticeApplication : Application() {
             phoneNumberDao = database.phoneNumberDao(),
         )
     }
+
+    val tagRepository by lazy { TagRepository(database.tagDao()) }
 
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
 

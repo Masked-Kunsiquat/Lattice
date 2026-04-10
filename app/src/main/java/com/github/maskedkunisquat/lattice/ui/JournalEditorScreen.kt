@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +68,8 @@ fun JournalEditorScreen(
             onDismissReframe = viewModel::dismissReframe,
             onMentionSelected = viewModel::onMentionSelected,
             onMentionCreateNew = viewModel::onMentionCreateNew,
+            onTagSelected = viewModel::onTagSelected,
+            onTagCreateNew = viewModel::onTagCreateNew,
             onMentionDismiss = viewModel::onMentionDismiss,
         )
 
@@ -101,27 +104,48 @@ fun JournalEditorScreen(
 @Composable
 private fun MentionDropdown(
     mentionState: MentionState,
-    onSelected: (Person) -> Unit,
-    onCreateNew: (String) -> Unit,
+    onPersonSelected: (Person) -> Unit,
+    onPersonCreateNew: (String) -> Unit,
+    onTagSelected: (Tag) -> Unit,
+    onTagCreateNew: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val suggesting = mentionState as? MentionState.Suggesting ?: return
-    DropdownMenu(
-        expanded = true,
-        onDismissRequest = onDismiss,
-    ) {
-        suggesting.results.forEach { person ->
-            DropdownMenuItem(
-                text = { Text(person.nickname ?: person.firstName) },
-                onClick = { onSelected(person) },
-            )
+    when (mentionState) {
+        is MentionState.SuggestingPerson -> DropdownMenu(
+            expanded = true,
+            onDismissRequest = onDismiss,
+        ) {
+            mentionState.results.forEach { person ->
+                DropdownMenuItem(
+                    text = { Text(person.nickname ?: person.firstName) },
+                    onClick = { onPersonSelected(person) },
+                )
+            }
+            if (mentionState.query.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Create \"@${mentionState.query}\"") },
+                    onClick = { onPersonCreateNew(mentionState.query) },
+                )
+            }
         }
-        if (suggesting.query.isNotEmpty()) {
-            DropdownMenuItem(
-                text = { Text("Create \"@${suggesting.query}\"") },
-                onClick = { onCreateNew(suggesting.query) },
-            )
+        is MentionState.SuggestingTag -> DropdownMenu(
+            expanded = true,
+            onDismissRequest = onDismiss,
+        ) {
+            mentionState.results.forEach { tag ->
+                DropdownMenuItem(
+                    text = { Text("#${tag.name}") },
+                    onClick = { onTagSelected(tag) },
+                )
+            }
+            if (mentionState.query.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Create \"#${mentionState.query}\"") },
+                    onClick = { onTagCreateNew(mentionState.query) },
+                )
+            }
         }
+        is MentionState.Idle -> Unit
     }
 }
 
@@ -139,6 +163,8 @@ private fun JournalEditorContent(
     onDismissReframe: () -> Unit,
     onMentionSelected: (Person) -> Unit,
     onMentionCreateNew: (String) -> Unit,
+    onTagSelected: (Tag) -> Unit,
+    onTagCreateNew: (String) -> Unit,
     onMentionDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -196,6 +222,7 @@ private fun JournalEditorContent(
                 placeholder = { Text("What's on your mind?") },
                 visualTransformation = PiiHighlightTransformation(
                     highlightColor = MaterialTheme.colorScheme.tertiary,
+                    tagHighlightColor = MaterialTheme.colorScheme.secondary,
                 ),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -205,8 +232,10 @@ private fun JournalEditorContent(
             )
             MentionDropdown(
                 mentionState = uiState.mentionState,
-                onSelected = onMentionSelected,
-                onCreateNew = onMentionCreateNew,
+                onPersonSelected = onMentionSelected,
+                onPersonCreateNew = onMentionCreateNew,
+                onTagSelected = onTagSelected,
+                onTagCreateNew = onTagCreateNew,
                 onDismiss = onMentionDismiss,
             )
         }
@@ -277,6 +306,8 @@ private fun EditorLocalPreview() {
             onDismissReframe = {},
             onMentionSelected = {},
             onMentionCreateNew = {},
+            onTagSelected = {},
+            onTagCreateNew = {},
             onMentionDismiss = {},
         )
     }
@@ -302,6 +333,8 @@ private fun EditorCloudPreview() {
             onDismissReframe = {},
             onMentionSelected = {},
             onMentionCreateNew = {},
+            onTagSelected = {},
+            onTagCreateNew = {},
             onMentionDismiss = {},
         )
     }

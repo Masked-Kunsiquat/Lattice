@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
@@ -17,6 +18,7 @@ import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
+import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -29,7 +31,8 @@ import java.util.UUID
 
 sealed class MentionState {
     object Idle : MentionState()
-    data class Suggesting(val query: String, val results: List<Person>) : MentionState()
+    data class SuggestingPerson(val query: String, val results: List<Person>) : MentionState()
+    data class SuggestingTag(val query: String, val results: List<Tag>) : MentionState()
 }
 
 sealed class ReframeState {
@@ -50,6 +53,8 @@ data class EditorUiState(
     val error: String? = null,
     val reframeState: ReframeState = ReframeState.Idle,
     val mentionState: MentionState = MentionState.Idle,
+    /** Tag name → UUID for tags resolved via # autocomplete in the current draft. */
+    val resolvedTags: Map<String, UUID> = emptyMap(),
 )
 
 class JournalEditorViewModel(
@@ -59,6 +64,7 @@ class JournalEditorViewModel(
     private val transitEventDao: TransitEventDao,
     val modelLoadState: StateFlow<ModelLoadState>,
     private val peopleRepository: PeopleRepository,
+    private val tagRepository: TagRepository,
 ) : ViewModel() {
 
     /** Drives the blue / amber privacy border in the UI. */
@@ -79,20 +85,29 @@ class JournalEditorViewModel(
         reframeJob?.cancel()
         _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
 
-        val mentionMatch = MENTION_REGEX.find(newText)
-        if (mentionMatch != null) {
-            val query = mentionMatch.groupValues[1]
-            viewModelScope.launch {
-                val results = peopleRepository.searchByName(query)
-                _uiState.update { it.copy(mentionState = MentionState.Suggesting(query, results)) }
+        val personMatch = MENTION_REGEX.find(newText)
+        val tagMatch    = TAG_REGEX.find(newText)
+        when {
+            personMatch != null -> {
+                val query = personMatch.groupValues[1]
+                viewModelScope.launch {
+                    val results = peopleRepository.searchByName(query)
+                    _uiState.update { it.copy(mentionState = MentionState.SuggestingPerson(query, results)) }
+                }
             }
-        } else {
-            _uiState.update { it.copy(mentionState = MentionState.Idle) }
+            tagMatch != null -> {
+                val query = tagMatch.groupValues[1]
+                viewModelScope.launch {
+                    val results = tagRepository.searchTags(query)
+                    _uiState.update { it.copy(mentionState = MentionState.SuggestingTag(query, results)) }
+                }
+            }
+            else -> _uiState.update { it.copy(mentionState = MentionState.Idle) }
         }
     }
 
     fun onMentionSelected(person: Person) {
-        val query = (_uiState.value.mentionState as? MentionState.Suggesting)?.query ?: return
+        val query = (_uiState.value.mentionState as? MentionState.SuggestingPerson)?.query ?: return
         val displayName = person.nickname ?: person.firstName
         val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$"), displayName)
         _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
@@ -117,6 +132,26 @@ class JournalEditorViewModel(
         _uiState.update { it.copy(mentionState = MentionState.Idle) }
     }
 
+    fun onTagSelected(tag: Tag) {
+        val query = (_uiState.value.mentionState as? MentionState.SuggestingTag)?.query ?: return
+        val newText = _uiState.value.text.replace(Regex("#${Regex.escape(query)}$"), "#${tag.name}")
+        _uiState.update {
+            it.copy(
+                text = newText,
+                mentionState = MentionState.Idle,
+                resolvedTags = it.resolvedTags + (tag.name to tag.id),
+            )
+        }
+    }
+
+    fun onTagCreateNew(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val tag = tagRepository.insertTag(name)
+            onTagSelected(tag)
+        }
+    }
+
     /**
      * Fires the reframe pipeline against the current editor text.
      * Called by the Reframe button in [JournalEditorScreen] — replaces the former
@@ -135,6 +170,11 @@ class JournalEditorViewModel(
         val state = _uiState.value
         val newId = UUID.randomUUID()
         savedEntryId = null  // invalidate any prior entry before the async write
+        // Collect UUIDs for #tag tokens still present in the text
+        val tagIds = TAG_WORD_REGEX.findAll(state.text)
+            .mapNotNull { state.resolvedTags[it.groupValues[1]] }
+            .distinct()
+            .toList()
         viewModelScope.launch {
             try {
                 journalRepository.saveEntry(
@@ -146,6 +186,7 @@ class JournalEditorViewModel(
                         arousal = state.arousal,
                         moodLabel = state.label.name,
                         embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
+                        tagIds = tagIds,
                     )
                 )
                 savedEntryId = newId
@@ -273,7 +314,10 @@ class JournalEditorViewModel(
     companion object {
         private const val REFRAME_PROVIDER  = "llama3_onnx_local"
         private const val REFRAME_OPERATION = "reframe"
-        private val MENTION_REGEX = Regex("@(\\w*)$")
+        private val MENTION_REGEX  = Regex("@(\\w*)$")
+        private val TAG_REGEX      = Regex("#(\\w*)$")
+        /** Matches all resolved #tag tokens in saved text for tagId collection. */
+        private val TAG_WORD_REGEX = Regex("#(\\w+)")
 
         fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -285,6 +329,7 @@ class JournalEditorViewModel(
                     transitEventDao   = app.database.transitEventDao(),
                     modelLoadState    = app.localFallbackProvider.modelLoadState,
                     peopleRepository  = app.peopleRepository,
+                    tagRepository     = app.tagRepository,
                 ) as T
         }
     }
