@@ -10,6 +10,8 @@ import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PhoneNumberDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TagDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
@@ -17,6 +19,8 @@ import com.github.maskedkunisquat.lattice.core.data.model.LatticeTypeConverters
 import com.github.maskedkunisquat.lattice.core.data.model.Mention
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
+import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 
 @Database(
@@ -27,8 +31,10 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         Mention::class,
         TransitEvent::class,
         ActivityHierarchy::class,
+        Tag::class,
+        Place::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -39,6 +45,8 @@ abstract class LatticeDatabase : RoomDatabase() {
     abstract fun mentionDao(): MentionDao
     abstract fun transitEventDao(): TransitEventDao
     abstract fun activityHierarchyDao(): ActivityHierarchyDao
+    abstract fun tagDao(): TagDao
+    abstract fun placeDao(): PlaceDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -141,6 +149,39 @@ abstract class LatticeDatabase : RoomDatabase() {
          * Zero-vector entries are already excluded from semantic search results by
          * [SearchRepository], so this is a safe lossy migration during development.
          */
+        /**
+         * Adds `tags` and `places` tables. Adds `tagIds` and `placeIds` JSON-array columns
+         * to `journal_entries` (default empty array — existing rows carry no tags or places).
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS tags (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_tags_name ON tags (name)"
+                )
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS places (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_places_name ON places (name)"
+                )
+                db.execSQL(
+                    "ALTER TABLE journal_entries ADD COLUMN tagIds TEXT NOT NULL DEFAULT '[]'"
+                )
+                db.execSQL(
+                    "ALTER TABLE journal_entries ADD COLUMN placeIds TEXT NOT NULL DEFAULT '[]'"
+                )
+            }
+        }
+
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
