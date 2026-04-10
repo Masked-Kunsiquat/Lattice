@@ -76,15 +76,15 @@ Selecting a result inserts the person's display name inline; on save the token r
 `[PERSON_uuid]` via `PiiShield.mask()` (no changes needed to masking logic — name is in DB).
 "Create new" adds a minimal `Person` record and selects it.
 
-- [ ] `MentionState` sealed class in `JournalEditorViewModel`:
-  `Idle | Suggesting(trigger, query, results: List<*>) | Resolving`
-- [ ] `onTextChanged()`: detect `@<query>` pattern at cursor; query `PersonDao.searchByName(query)`; emit `MentionState.Suggesting`
-- [ ] `PersonDao`: add `searchByName(query: String): List<Person>` — `LIKE '%query%'` on `firstName`, `lastName`, `nickname`
-- [ ] `onMentionSelected(person: Person)`: replace `@<query>` token in text with `person.nickname ?: person.firstName`; set `MentionState.Idle`
-- [ ] `onMentionCreateNew(name: String)`: insert minimal `Person(firstName = name)` via `PeopleRepository`; call `onMentionSelected` with result
-- [ ] `MentionDropdown` composable: `DropdownMenu` anchored near cursor; shows `Person` rows + "Create '@name'" footer item; keyboard-navigable
-- [ ] Wire `MentionDropdown` into `JournalEditorScreen` — positioned relative to `BasicTextField`
-- [ ] `PeopleRepository`: add `suspend fun insertPerson(person: Person): UUID`
+- [x] `MentionState` sealed class in `JournalEditorViewModel`:
+  `Idle | Suggesting(query, results: List<Person>)`
+- [x] `onTextChanged()`: detect `@(\w*)$` pattern; query `PeopleRepository.searchByName(query)`; emit `MentionState.Suggesting`
+- [x] `PersonDao`: add `searchByName(query: String): List<Person>` — `LIKE '%query%'` on `firstName`, `lastName`, `nickname`; limit 20
+- [x] `onMentionSelected(person: Person)`: replace `@<query>` token in text with `person.nickname ?: person.firstName`; set `MentionState.Idle`
+- [x] `onMentionCreateNew(name: String)`: insert minimal `Person(firstName = name, relationshipType = ACQUAINTANCE)` via `PeopleRepository`; call `onMentionSelected` with result
+- [x] `MentionDropdown` composable: `DropdownMenu` anchored to text field `Box`; shows `Person` rows + "Create '@name'" footer item
+- [x] Wire `MentionDropdown` into `JournalEditorScreen` — inside `Box` wrapping `OutlinedTextField`
+- [x] `PeopleRepository`: add `suspend fun insertPerson(person: Person): UUID` and `suspend fun searchByName(query: String): List<Person>`
 
 **Acceptance criteria:**
 - [ ] Typing `@Wat` surfaces Watson if seeded; selecting replaces token with display name

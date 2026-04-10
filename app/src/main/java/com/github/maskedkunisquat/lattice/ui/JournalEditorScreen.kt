@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.github.maskedkunisquat.lattice.core.data.model.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +65,9 @@ fun JournalEditorScreen(
             onReframe = viewModel::requestReframe,
             onApplyReframe = viewModel::applyReframe,
             onDismissReframe = viewModel::dismissReframe,
+            onMentionSelected = viewModel::onMentionSelected,
+            onMentionCreateNew = viewModel::onMentionCreateNew,
+            onMentionDismiss = viewModel::onMentionDismiss,
         )
 
         AnimatedVisibility(
@@ -93,6 +99,33 @@ fun JournalEditorScreen(
 // Stateless inner composable — all mutable state lives in the ViewModel.
 // Previews target this directly with stub state.
 @Composable
+private fun MentionDropdown(
+    mentionState: MentionState,
+    onSelected: (Person) -> Unit,
+    onCreateNew: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val suggesting = mentionState as? MentionState.Suggesting ?: return
+    DropdownMenu(
+        expanded = true,
+        onDismissRequest = onDismiss,
+    ) {
+        suggesting.results.forEach { person ->
+            DropdownMenuItem(
+                text = { Text(person.nickname ?: person.firstName) },
+                onClick = { onSelected(person) },
+            )
+        }
+        if (suggesting.query.isNotEmpty()) {
+            DropdownMenuItem(
+                text = { Text("Create \"@${suggesting.query}\"") },
+                onClick = { onCreateNew(suggesting.query) },
+            )
+        }
+    }
+}
+
+@Composable
 private fun JournalEditorContent(
     privacyState: PrivacyLevel,
     uiState: EditorUiState,
@@ -104,6 +137,9 @@ private fun JournalEditorContent(
     onReframe: () -> Unit,
     onApplyReframe: () -> Unit,
     onDismissReframe: () -> Unit,
+    onMentionSelected: (Person) -> Unit,
+    onMentionCreateNew: (String) -> Unit,
+    onMentionDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val borderColor by animateColorAsState(
@@ -151,23 +187,29 @@ private fun JournalEditorContent(
             onMoodChanged = onMoodChanged,
         )
 
-        // Privacy-bordered journal text field
-        OutlinedTextField(
-            value = uiState.text,
-            onValueChange = onTextChanged,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.45f),
-            placeholder = { Text("What's on your mind?") },
-            visualTransformation = PiiHighlightTransformation(
-                highlightColor = MaterialTheme.colorScheme.tertiary,
-            ),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = borderColor,
-                unfocusedBorderColor = borderColor.copy(alpha = 0.5f),
-            ),
-        )
+        // Privacy-bordered journal text field with mention dropdown
+        Box(modifier = Modifier.fillMaxWidth().weight(0.45f)) {
+            OutlinedTextField(
+                value = uiState.text,
+                onValueChange = onTextChanged,
+                modifier = Modifier.fillMaxSize(),
+                placeholder = { Text("What's on your mind?") },
+                visualTransformation = PiiHighlightTransformation(
+                    highlightColor = MaterialTheme.colorScheme.tertiary,
+                ),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = borderColor,
+                    unfocusedBorderColor = borderColor.copy(alpha = 0.5f),
+                ),
+            )
+            MentionDropdown(
+                mentionState = uiState.mentionState,
+                onSelected = onMentionSelected,
+                onCreateNew = onMentionCreateNew,
+                onDismiss = onMentionDismiss,
+            )
+        }
 
         // Save error (non-reframe failures)
         uiState.error?.let { err ->
@@ -233,6 +275,9 @@ private fun EditorLocalPreview() {
             onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
+            onMentionSelected = {},
+            onMentionCreateNew = {},
+            onMentionDismiss = {},
         )
     }
 }
@@ -255,6 +300,9 @@ private fun EditorCloudPreview() {
             onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
+            onMentionSelected = {},
+            onMentionCreateNew = {},
+            onMentionDismiss = {},
         )
     }
 }

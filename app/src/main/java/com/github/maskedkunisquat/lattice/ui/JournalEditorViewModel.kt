@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
@@ -13,6 +15,7 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.MoodLabel
+import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import kotlinx.coroutines.CancellationException
@@ -23,6 +26,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+
+sealed class MentionState {
+    object Idle : MentionState()
+    data class Suggesting(val query: String, val results: List<Person>) : MentionState()
+}
 
 sealed class ReframeState {
     object Idle                              : ReframeState()
@@ -41,6 +49,7 @@ data class EditorUiState(
     val saved: Boolean = false,
     val error: String? = null,
     val reframeState: ReframeState = ReframeState.Idle,
+    val mentionState: MentionState = MentionState.Idle,
 )
 
 class JournalEditorViewModel(
@@ -49,6 +58,7 @@ class JournalEditorViewModel(
     private val reframingLoop: ReframingLoop,
     private val transitEventDao: TransitEventDao,
     val modelLoadState: StateFlow<ModelLoadState>,
+    private val peopleRepository: PeopleRepository,
 ) : ViewModel() {
 
     /** Drives the blue / amber privacy border in the UI. */
@@ -68,6 +78,43 @@ class JournalEditorViewModel(
     fun onTextChanged(newText: String) {
         reframeJob?.cancel()
         _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
+
+        val mentionMatch = MENTION_REGEX.find(newText)
+        if (mentionMatch != null) {
+            val query = mentionMatch.groupValues[1]
+            viewModelScope.launch {
+                val results = peopleRepository.searchByName(query)
+                _uiState.update { it.copy(mentionState = MentionState.Suggesting(query, results)) }
+            }
+        } else {
+            _uiState.update { it.copy(mentionState = MentionState.Idle) }
+        }
+    }
+
+    fun onMentionSelected(person: Person) {
+        val query = (_uiState.value.mentionState as? MentionState.Suggesting)?.query ?: return
+        val displayName = person.nickname ?: person.firstName
+        val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$"), displayName)
+        _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
+    }
+
+    fun onMentionCreateNew(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val person = Person(
+                id = UUID.randomUUID(),
+                firstName = name,
+                lastName = null,
+                nickname = null,
+                relationshipType = RelationshipType.ACQUAINTANCE,
+            )
+            peopleRepository.insertPerson(person)
+            onMentionSelected(person)
+        }
+    }
+
+    fun onMentionDismiss() {
+        _uiState.update { it.copy(mentionState = MentionState.Idle) }
     }
 
     /**
@@ -226,6 +273,7 @@ class JournalEditorViewModel(
     companion object {
         private const val REFRAME_PROVIDER  = "llama3_onnx_local"
         private const val REFRAME_OPERATION = "reframe"
+        private val MENTION_REGEX = Regex("@(\\w*)$")
 
         fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -236,6 +284,7 @@ class JournalEditorViewModel(
                     reframingLoop     = app.reframingLoop,
                     transitEventDao   = app.database.transitEventDao(),
                     modelLoadState    = app.localFallbackProvider.modelLoadState,
+                    peopleRepository  = app.peopleRepository,
                 ) as T
         }
     }

@@ -9,6 +9,7 @@ import com.github.maskedkunisquat.lattice.core.data.KeyProvider
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
+import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
@@ -48,6 +49,14 @@ class LatticeApplication : Application() {
     }
 
     val seedManager by lazy { SeedManager(database, this) }
+
+    val peopleRepository by lazy {
+        PeopleRepository(
+            database = database,
+            personDao = database.personDao(),
+            phoneNumberDao = database.phoneNumberDao(),
+        )
+    }
 
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
 

@@ -60,4 +60,12 @@ class PeopleRepository(
     suspend fun updateVibeScore(personId: UUID, delta: Float) {
         personDao.incrementVibeScore(personId, delta)
     }
+
+    suspend fun searchByName(query: String): List<Person> =
+        personDao.searchByName(query)
+
+    suspend fun insertPerson(person: Person): UUID {
+        personDao.insertPerson(person)
+        return person.id
+    }
 }
