@@ -288,7 +288,7 @@ private fun JournalEditorContent(
         val canReframe = uiState.text.isNotBlank()
             && !reframeInFlight
             && modelLoadState == ModelLoadState.READY
-        val canSave = uiState.text.isNotBlank() && uiState.moodSelected && !reframeInFlight
+        val canSave = uiState.moodSelected && !reframeInFlight
 
         Row(modifier = Modifier.fillMaxWidth()) {
             FilledTonalButton(

@@ -8,12 +8,13 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 
 /**
- * Highlights [PERSON_UUID] placeholders (PiiShield-masked names) and resolved
- * #tag tokens in distinct colors so the user can see inline tags at a glance.
+ * Highlights resolved @mention, #tag, and !place tokens in distinct colors so the user
+ * can see inline references at a glance. Sentinel forms ([PERSON_UUID], [PLACE_UUID])
+ * are only in the database — the editor always shows human-readable display names.
  *
- * @param highlightColor Color for `[PERSON_UUID]` placeholders.
+ * @param highlightColor Color for `@person` mentions.
  * @param tagHighlightColor Color for `#tag` tokens. Null disables tag highlighting.
- * @param placeHighlightColor Color for `[PLACE_UUID]` placeholders. Null disables place highlighting.
+ * @param placeHighlightColor Color for `!place` mentions. Null disables place highlighting.
  */
 class PiiHighlightTransformation(
     private val highlightColor: Color,
@@ -24,7 +25,7 @@ class PiiHighlightTransformation(
     override fun filter(text: AnnotatedString): TransformedText {
         val spans = mutableListOf<AnnotatedString.Range<SpanStyle>>()
 
-        PLACEHOLDER_REGEX.findAll(text.text).forEach { match ->
+        MENTION_REGEX.findAll(text.text).forEach { match ->
             spans.add(
                 AnnotatedString.Range(
                     item = SpanStyle(
@@ -71,8 +72,8 @@ class PiiHighlightTransformation(
     }
 
     companion object {
-        private val PLACEHOLDER_REGEX = Regex("\\[PERSON_[a-fA-F0-9-]{36}\\]")
-        private val TAG_REGEX         = Regex("#[^\\s#]+")
-        private val PLACE_REGEX       = Regex("\\[PLACE_[a-fA-F0-9-]{36}\\]")
+        private val MENTION_REGEX = Regex("@\\S+")
+        private val TAG_REGEX     = Regex("#[^\\s#]+")
+        private val PLACE_REGEX   = Regex("!\\S+")
     }
 }

@@ -58,6 +58,10 @@ data class EditorUiState(
     val mentionState: MentionState = MentionState.Idle,
     /** Tag name → UUID for tags resolved via # autocomplete in the current draft. */
     val resolvedTags: Map<String, UUID> = emptyMap(),
+    /** Display name → UUID for persons resolved via @ autocomplete. Masking deferred to save(). */
+    val resolvedPersons: Map<String, UUID> = emptyMap(),
+    /** Place name → UUID for places resolved via ! autocomplete. Masking deferred to save(). */
+    val resolvedPlaces: Map<String, UUID> = emptyMap(),
 )
 
 class JournalEditorViewModel(
@@ -69,6 +73,8 @@ class JournalEditorViewModel(
     private val peopleRepository: PeopleRepository,
     private val tagRepository: TagRepository,
     private val placeRepository: PlaceRepository,
+    /** When non-null, loads the existing entry for viewing/editing on init. */
+    private val initialEntryId: UUID? = null,
 ) : ViewModel() {
 
     /** Drives the blue / amber privacy border in the UI. */
@@ -82,6 +88,27 @@ class JournalEditorViewModel(
     private var currentMentionJob: Job? = null
     /** ID of the most recently saved entry — set after [save] succeeds. */
     private var savedEntryId: UUID? = null
+
+    init {
+        if (initialEntryId != null) {
+            viewModelScope.launch {
+                journalRepository.getEntryById(initialEntryId).collect { entry ->
+                    if (entry != null) {
+                        _uiState.update {
+                            it.copy(
+                                text = entry.content ?: "",
+                                valence = entry.valence,
+                                arousal = entry.arousal,
+                                label = runCatching { MoodLabel.valueOf(entry.moodLabel) }
+                                    .getOrDefault(MoodLabel.ALIVE),
+                                moodSelected = true,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Called on every keystroke. Cancels any in-flight reframe job (stale if text changed)
@@ -126,9 +153,15 @@ class JournalEditorViewModel(
 
     fun onMentionSelected(person: Person) {
         val query = (_uiState.value.mentionState as? MentionState.SuggestingPerson)?.query ?: return
-        val sentinel = "[PERSON_${person.id}]"
-        val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$")) { sentinel }
-        _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
+        val displayName = person.nickname ?: person.firstName
+        val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$")) { "@$displayName" }
+        _uiState.update {
+            it.copy(
+                text = newText,
+                mentionState = MentionState.Idle,
+                resolvedPersons = it.resolvedPersons + (displayName to person.id),
+            )
+        }
     }
 
     fun onMentionCreateNew(name: String) {
@@ -181,11 +214,15 @@ class JournalEditorViewModel(
 
     fun onPlaceSelected(place: Place) {
         val query = (_uiState.value.mentionState as? MentionState.SuggestingPlace)?.query ?: return
-        // Insert the stable [PLACE_uuid] sentinel directly so save() can parse placeIds
-        // deterministically from the text, avoiding heuristic substring matching on place names.
-        val sentinel = "[PLACE_${place.id}]"
-        val newText = _uiState.value.text.replace(Regex("!${Regex.escape(query)}$")) { sentinel }
-        _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
+        // Keep the human-readable display form in the editor; masking to [PLACE_uuid] is deferred to save().
+        val newText = _uiState.value.text.replace(Regex("!${Regex.escape(query)}$")) { "!${place.name}" }
+        _uiState.update {
+            it.copy(
+                text = newText,
+                mentionState = MentionState.Idle,
+                resolvedPlaces = it.resolvedPlaces + (place.name to place.id),
+            )
+        }
     }
 
     fun onPlaceCreateNew(name: String) {
@@ -223,18 +260,35 @@ class JournalEditorViewModel(
             .mapNotNull { state.resolvedTags[it.groupValues[1]] }
             .distinct()
             .toList()
-        // Parse [PLACE_uuid] sentinel tokens inserted by onPlaceSelected — deterministic, no heuristics
-        val placeIds = PLACE_TOKEN_REGEX.findAll(state.text)
-            .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
-            .distinct()
-            .toList()
+        // Collect placeIds from resolved map — no sentinel parsing needed since
+        // onPlaceSelected now keeps !name display form in text until save.
+        val placeIds = state.resolvedPlaces.values.distinct().toList()
+
+        // Substitute display-form mentions with PII sentinels before handing off to
+        // JournalRepository (which will further mask any remaining plain-text names via PiiShield).
+        val content = if (state.text.isBlank()) null else {
+            var masked = state.text
+            // Longest display names first to avoid "Jo" shadowing "John"
+            state.resolvedPersons.entries
+                .sortedByDescending { it.key.length }
+                .forEach { (displayName, uuid) ->
+                    masked = masked.replace(Regex("@${Regex.escape(displayName)}"), "[PERSON_$uuid]")
+                }
+            state.resolvedPlaces.entries
+                .sortedByDescending { it.key.length }
+                .forEach { (name, uuid) ->
+                    masked = masked.replace(Regex("!${Regex.escape(name)}"), "[PLACE_$uuid]")
+                }
+            masked
+        }
+
         viewModelScope.launch {
             try {
                 journalRepository.saveEntry(
                     JournalEntry(
                         id = newId,
                         timestamp = System.currentTimeMillis(),
-                        content = state.text,
+                        content = content,
                         valence = state.valence,
                         arousal = state.arousal,
                         moodLabel = state.label.name,
@@ -368,27 +422,27 @@ class JournalEditorViewModel(
     companion object {
         private const val REFRAME_PROVIDER  = "llama3_onnx_local"
         private const val REFRAME_OPERATION = "reframe"
-        private val MENTION_REGEX      = Regex("@(\\w*)$")
-        private val TAG_REGEX          = Regex("#(\\w*)$")
-        private val PLACE_REGEX        = Regex("!(\\w*)$")
+        private val MENTION_REGEX  = Regex("@(\\w*)$")
+        private val TAG_REGEX      = Regex("#(\\w*)$")
+        private val PLACE_REGEX    = Regex("!(\\w*)$")
         /** Matches all resolved #tag tokens in saved text for tagId collection. */
-        private val TAG_WORD_REGEX     = Regex("#(\\w+)")
-        /** Matches [PLACE_uuid] sentinels inserted by onPlaceSelected for deterministic placeId extraction. */
-        private val PLACE_TOKEN_REGEX  = Regex("\\[PLACE_([a-fA-F0-9-]{36})\\]")
+        private val TAG_WORD_REGEX = Regex("#(\\w+)")
 
-        fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                JournalEditorViewModel(
-                    journalRepository = app.journalRepository,
-                    orchestrator      = app.llmOrchestrator,
-                    reframingLoop     = app.reframingLoop,
-                    transitEventDao   = app.database.transitEventDao(),
-                    modelLoadState    = app.localFallbackProvider.modelLoadState,
-                    peopleRepository  = app.peopleRepository,
-                    tagRepository     = app.tagRepository,
-                    placeRepository   = app.placeRepository,
-                ) as T
-        }
+        fun factory(app: LatticeApplication, initialEntryId: UUID? = null) =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                    JournalEditorViewModel(
+                        journalRepository = app.journalRepository,
+                        orchestrator      = app.llmOrchestrator,
+                        reframingLoop     = app.reframingLoop,
+                        transitEventDao   = app.database.transitEventDao(),
+                        modelLoadState    = app.localFallbackProvider.modelLoadState,
+                        peopleRepository  = app.peopleRepository,
+                        tagRepository     = app.tagRepository,
+                        placeRepository   = app.placeRepository,
+                        initialEntryId    = initialEntryId,
+                    ) as T
+            }
     }
 }
