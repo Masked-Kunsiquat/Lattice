@@ -24,7 +24,8 @@ Reframe trigger: `!reframe` text command → replaced by a **Reframe button** in
 
 ### 8.1 — Schema v9 Migration
 
-**Goal:** Add `tags` and `places` tables. Add `tags` (CSV text column) to `journal_entries`.
+**Goal:** Add `tags` and `places` tables. Add `tagIds` and `placeIds` JSON-array columns to
+`journal_entries` linking entries to their resolved tag/place records.
 Places are masked like persons; tags are unmasked display labels.
 
 - [x] Add `Tag` entity: `id: UUID`, `name: String`
@@ -155,7 +156,7 @@ friction points before any wider testing.
 
 ## Dependency Order
 
-```
+```text
 8.1 (Schema v9)
   └── 8.2 (Remove !reframe → button)    — no schema dep, can run parallel with 8.1
   └── 8.3 (@ person mention)            — needs PersonDao.searchByName from 8.1

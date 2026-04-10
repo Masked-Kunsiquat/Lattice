@@ -72,7 +72,9 @@ class JournalEditorViewModel(
 
     /**
      * Fires the reframe pipeline against the current editor text.
-     * Called by the Reframe button in [JournalEditorScreen].
+     * Called by the Reframe button in [JournalEditorScreen] — replaces the former
+     * `!reframe` text-command model. Text is passed to [triggerReframe] as-is;
+     * no stripping or command extraction occurs.
      */
     fun requestReframe() {
         triggerReframe(_uiState.value.text)

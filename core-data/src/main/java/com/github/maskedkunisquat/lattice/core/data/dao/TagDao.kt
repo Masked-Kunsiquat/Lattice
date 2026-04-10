@@ -19,8 +19,8 @@ interface TagDao {
     @Query("SELECT * FROM tags ORDER BY name ASC")
     fun getAll(): Flow<List<Tag>>
 
-    @Query("SELECT * FROM tags WHERE name LIKE '%' || :query || '%' ORDER BY name ASC LIMIT 20")
-    suspend fun searchByName(query: String): List<Tag>
+    @Query("SELECT * FROM tags WHERE name LIKE '%' || REPLACE(REPLACE(REPLACE(:query, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\' ORDER BY name ASC LIMIT 20")
+    fun searchByName(query: String): Flow<List<Tag>>
 
     @Query("SELECT * FROM tags WHERE id = :id")
     suspend fun getById(id: UUID): Tag?
