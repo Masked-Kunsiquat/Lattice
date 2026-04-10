@@ -239,6 +239,9 @@ private fun JournalEditorContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(0.45f),
+            initialValence = uiState.valence,
+            initialArousal = uiState.arousal,
+            hasInitialMood = uiState.moodSelected,
             onMoodChanged = onMoodChanged,
         )
 

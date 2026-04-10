@@ -153,7 +153,8 @@ class JournalEditorViewModel(
 
     fun onMentionSelected(person: Person) {
         val query = (_uiState.value.mentionState as? MentionState.SuggestingPerson)?.query ?: return
-        val displayName = person.nickname ?: person.firstName
+        val displayName = person.nickname
+            ?: if (person.lastName != null) "${person.firstName} ${person.lastName}" else person.firstName
         val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$")) { "@$displayName" }
         _uiState.update {
             it.copy(
@@ -168,10 +169,12 @@ class JournalEditorViewModel(
         if (name.isBlank()) return
         viewModelScope.launch {
             try {
+                // Split "First Last" into first + last; everything after the first space is lastName.
+                val parts = name.trim().split(" ", limit = 2)
                 val person = Person(
                     id = UUID.randomUUID(),
-                    firstName = name,
-                    lastName = null,
+                    firstName = parts[0],
+                    lastName = parts.getOrNull(1)?.takeIf { it.isNotBlank() },
                     nickname = null,
                     relationshipType = RelationshipType.ACQUAINTANCE,
                 )
@@ -422,9 +425,12 @@ class JournalEditorViewModel(
     companion object {
         private const val REFRAME_PROVIDER  = "llama3_onnx_local"
         private const val REFRAME_OPERATION = "reframe"
-        private val MENTION_REGEX  = Regex("@(\\w*)$")
+        // Allow spaces in person/place names (e.g. "@John Smith", "!Central Park").
+        // Pattern ends at a word char (no trailing space) so selecting a suggestion and
+        // typing a space naturally dismisses the autocomplete without re-triggering it.
+        private val MENTION_REGEX  = Regex("@((?:\\w+ )*\\w+|\\w*)$")
         private val TAG_REGEX      = Regex("#(\\w*)$")
-        private val PLACE_REGEX    = Regex("!(\\w*)$")
+        private val PLACE_REGEX    = Regex("!((?:\\w+ )*\\w+|\\w*)$")
         /** Matches all resolved #tag tokens in saved text for tagId collection. */
         private val TAG_WORD_REGEX = Regex("#(\\w+)")
 

@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -58,10 +61,28 @@ private val QUADRANT_LABELS = listOf(
 @Composable
 fun MoodGrid(
     modifier: Modifier = Modifier,
+    initialValence: Float = 0f,
+    initialArousal: Float = 0f,
+    hasInitialMood: Boolean = false,
     onMoodChanged: (valence: Float, arousal: Float, label: MoodLabel) -> Unit = { _, _, _ -> },
 ) {
     var moodState by remember { mutableStateOf<MoodState?>(null) }
+    var canvasSize by remember { mutableStateOf<IntSize?>(null) }
     val textMeasurer = rememberTextMeasurer()
+
+    // Restore the dot position when loading an existing entry.
+    // Runs once per (hasInitialMood, canvasSize) pair; the moodState == null guard
+    // ensures a subsequent user tap is never overwritten by a config-change re-run.
+    LaunchedEffect(hasInitialMood, canvasSize) {
+        if (hasInitialMood && moodState == null) {
+            val size = canvasSize ?: return@LaunchedEffect
+            val w = size.width.toFloat()
+            val h = size.height.toFloat()
+            val x = (initialValence + 1f) / 2f * w
+            val y = (1f - (initialArousal + 1f) / 2f) * h
+            handlePosition(Offset(x, y), w, h) { state -> moodState = state }
+        }
+    }
 
     // Capture outside the draw scope (no Composable context inside Canvas block).
     val quadrantLabelStyle = TextStyle(
@@ -97,6 +118,7 @@ fun MoodGrid(
                     .weight(1f)
                     .fillMaxHeight()
                     .padding(4.dp)
+                    .onSizeChanged { canvasSize = it }
                     .pointerInput(Unit) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
