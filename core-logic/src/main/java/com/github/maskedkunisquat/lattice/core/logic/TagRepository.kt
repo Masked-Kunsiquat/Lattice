@@ -12,12 +12,12 @@ class TagRepository(private val tagDao: TagDao) {
 
     /**
      * Returns an existing tag with [name] (exact match) or inserts and returns a new one.
-     * Case-sensitive to preserve the casing the user typed.
+     * Re-queries after insert so a concurrent insert that was silently ignored by the
+     * UNIQUE+IGNORE constraint still returns the canonical row.
      */
     suspend fun insertTag(name: String): Tag {
         tagDao.getByName(name)?.let { return it }
-        val tag = Tag(id = UUID.randomUUID(), name = name)
-        tagDao.insertTag(tag)
-        return tag
+        tagDao.insertTag(Tag(id = UUID.randomUUID(), name = name))
+        return checkNotNull(tagDao.getByName(name)) { "insertTag: no row for name=$name after insert" }
     }
 }

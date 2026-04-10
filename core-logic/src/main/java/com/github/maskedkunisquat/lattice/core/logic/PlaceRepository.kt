@@ -12,11 +12,12 @@ class PlaceRepository(private val placeDao: PlaceDao) {
 
     /**
      * Returns an existing place with [name] (exact match) or inserts and returns a new one.
+     * Re-queries after insert so a concurrent insert ignored by the UNIQUE+IGNORE constraint
+     * still returns the canonical row.
      */
     suspend fun insertPlace(name: String): Place {
         placeDao.getByName(name)?.let { return it }
-        val place = Place(id = UUID.randomUUID(), name = name)
-        placeDao.insertPlace(place)
-        return place
+        placeDao.insertPlace(Place(id = UUID.randomUUID(), name = name))
+        return checkNotNull(placeDao.getByName(name)) { "insertPlace: no row for name=$name after insert" }
     }
 }

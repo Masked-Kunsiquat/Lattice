@@ -77,14 +77,14 @@ Selecting a result inserts the person's display name inline; on save the token r
 "Create new" adds a minimal `Person` record and selects it.
 
 - [x] `MentionState` sealed class in `JournalEditorViewModel`:
-  `Idle | Suggesting(query, results: List<Person>)`
-- [x] `onTextChanged()`: detect `@(\w*)$` pattern; query `PeopleRepository.searchByName(query)`; emit `MentionState.Suggesting`
-- [x] `PersonDao`: add `searchByName(query: String): List<Person>` — `LIKE '%query%'` on `firstName`, `lastName`, `nickname`; limit 20
-- [x] `onMentionSelected(person: Person)`: replace `@<query>` token in text with `person.nickname ?: person.firstName`; set `MentionState.Idle`
-- [x] `onMentionCreateNew(name: String)`: insert minimal `Person(firstName = name, relationshipType = ACQUAINTANCE)` via `PeopleRepository`; call `onMentionSelected` with result
-- [x] `MentionDropdown` composable: `DropdownMenu` anchored to text field `Box`; shows `Person` rows + "Create '@name'" footer item
+  `Idle | SuggestingPerson(query, results: List<Person>) | SuggestingTag(query, results: List<Tag>) | SuggestingPlace(query, results: List<Place>)`
+- [x] `onTextChanged()`: detects `@(\w*)$` / `#(\w*)$` / `!(\w*)$`; cancels previous `currentMentionJob` before launching new lookup; emits `SuggestingPerson` / `SuggestingTag` / `SuggestingPlace`
+- [x] `PersonDao`: `searchByName(query: String): Flow<List<Person>>` — `LIKE '%query%'` on `firstName`, `lastName`, `nickname`; limit 20
+- [x] `onMentionSelected(person: Person)`: replaces `@<query>` token using lambda overload (safe for `\`/`$` in names); sets `MentionState.Idle`
+- [x] `onMentionCreateNew(name: String)`: constructs `Person(ACQUAINTANCE)` locally, calls `PeopleRepository.insertPerson` (fire-and-forget, returns `Unit`), then calls `onMentionSelected(person)`
+- [x] `MentionDropdown` composable: single dropdown handling all three `Suggesting*` states with appropriate rows and "Create" footer
 - [x] Wire `MentionDropdown` into `JournalEditorScreen` — inside `Box` wrapping `OutlinedTextField`
-- [x] `PeopleRepository`: add `suspend fun insertPerson(person: Person): UUID` and `suspend fun searchByName(query: String): List<Person>`
+- [x] `PeopleRepository`: `suspend fun insertPerson(person: Person)` (Unit), `suspend fun searchByName(query: String): List<Person>` (via `Flow.first()`)
 
 **Acceptance criteria:**
 - [ ] Typing `@Wat` surfaces Watson if seeded; selecting replaces token with display name

@@ -34,7 +34,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         Tag::class,
         Place::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -180,7 +180,7 @@ abstract class LatticeDatabase : RoomDatabase() {
          * Adds `tags` and `places` tables. Adds `tagIds` and `placeIds` JSON-array columns
          * to `journal_entries` (default empty array — existing rows carry no tags or places).
          */
-        val MIGRATION_8_9 = object : Migration(8, 9) {
+        val MIGRATION_8_9  = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS tags (
@@ -206,6 +206,39 @@ abstract class LatticeDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE journal_entries ADD COLUMN placeIds TEXT NOT NULL DEFAULT '[]'"
                 )
+            }
+        }
+
+        /**
+         * Adds UNIQUE constraints to `tags.name` and `places.name` to prevent duplicate
+         * entries from concurrent inserts. Existing duplicates (if any) are deduplicated
+         * by keeping the first inserted row (lowest rowid) via INSERT OR IGNORE.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Tags — recreate with unique name index
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS tags_new (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("INSERT OR IGNORE INTO tags_new SELECT id, name FROM tags")
+                db.execSQL("DROP TABLE tags")
+                db.execSQL("ALTER TABLE tags_new RENAME TO tags")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_tags_name ON tags (name)")
+
+                // Places — recreate with unique name index
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS places_new (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("INSERT OR IGNORE INTO places_new SELECT id, name FROM places")
+                db.execSQL("DROP TABLE places")
+                db.execSQL("ALTER TABLE places_new RENAME TO places")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_places_name ON places (name)")
             }
         }
     }

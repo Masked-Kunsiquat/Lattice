@@ -41,5 +41,5 @@ interface PersonDao {
         ORDER BY firstName ASC
         LIMIT 20
     """)
-    suspend fun searchByName(query: String): List<Person>
+    fun searchByName(query: String): Flow<List<Person>>
 }

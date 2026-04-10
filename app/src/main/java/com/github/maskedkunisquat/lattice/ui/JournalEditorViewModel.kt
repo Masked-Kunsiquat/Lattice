@@ -58,8 +58,6 @@ data class EditorUiState(
     val mentionState: MentionState = MentionState.Idle,
     /** Tag name → UUID for tags resolved via # autocomplete in the current draft. */
     val resolvedTags: Map<String, UUID> = emptyMap(),
-    /** Place name → UUID for places resolved via ! autocomplete in the current draft. */
-    val resolvedPlaces: Map<String, UUID> = emptyMap(),
 )
 
 class JournalEditorViewModel(
@@ -80,6 +78,8 @@ class JournalEditorViewModel(
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
     private var reframeJob: Job? = null
+    /** Tracks the active autocomplete lookup so stale results don't overwrite newer ones. */
+    private var currentMentionJob: Job? = null
     /** ID of the most recently saved entry — set after [save] succeeds. */
     private var savedEntryId: UUID? = null
 
@@ -94,36 +94,40 @@ class JournalEditorViewModel(
         val personMatch = MENTION_REGEX.find(newText)
         val tagMatch    = TAG_REGEX.find(newText)
         val placeMatch  = PLACE_REGEX.find(newText)
+        currentMentionJob?.cancel()
         when {
             personMatch != null -> {
                 val query = personMatch.groupValues[1]
-                viewModelScope.launch {
+                currentMentionJob = viewModelScope.launch {
                     val results = peopleRepository.searchByName(query)
                     _uiState.update { it.copy(mentionState = MentionState.SuggestingPerson(query, results)) }
                 }
             }
             tagMatch != null -> {
                 val query = tagMatch.groupValues[1]
-                viewModelScope.launch {
+                currentMentionJob = viewModelScope.launch {
                     val results = tagRepository.searchTags(query)
                     _uiState.update { it.copy(mentionState = MentionState.SuggestingTag(query, results)) }
                 }
             }
             placeMatch != null -> {
                 val query = placeMatch.groupValues[1]
-                viewModelScope.launch {
+                currentMentionJob = viewModelScope.launch {
                     val results = placeRepository.searchPlaces(query)
                     _uiState.update { it.copy(mentionState = MentionState.SuggestingPlace(query, results)) }
                 }
             }
-            else -> _uiState.update { it.copy(mentionState = MentionState.Idle) }
+            else -> {
+                currentMentionJob = null
+                _uiState.update { it.copy(mentionState = MentionState.Idle) }
+            }
         }
     }
 
     fun onMentionSelected(person: Person) {
         val query = (_uiState.value.mentionState as? MentionState.SuggestingPerson)?.query ?: return
         val displayName = person.nickname ?: person.firstName
-        val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$"), displayName)
+        val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$")) { displayName }
         _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
     }
 
@@ -148,7 +152,8 @@ class JournalEditorViewModel(
 
     fun onTagSelected(tag: Tag) {
         val query = (_uiState.value.mentionState as? MentionState.SuggestingTag)?.query ?: return
-        val newText = _uiState.value.text.replace(Regex("#${Regex.escape(query)}$"), "#${tag.name}")
+        val tagToken = "#${tag.name}"
+        val newText = _uiState.value.text.replace(Regex("#${Regex.escape(query)}$")) { tagToken }
         _uiState.update {
             it.copy(
                 text = newText,
@@ -168,15 +173,11 @@ class JournalEditorViewModel(
 
     fun onPlaceSelected(place: Place) {
         val query = (_uiState.value.mentionState as? MentionState.SuggestingPlace)?.query ?: return
-        // Replace !query with the place name; PiiShield.mask() will mask it on save.
-        val newText = _uiState.value.text.replace(Regex("!${Regex.escape(query)}$"), place.name)
-        _uiState.update {
-            it.copy(
-                text = newText,
-                mentionState = MentionState.Idle,
-                resolvedPlaces = it.resolvedPlaces + (place.name to place.id),
-            )
-        }
+        // Insert the stable [PLACE_uuid] sentinel directly so save() can parse placeIds
+        // deterministically from the text, avoiding heuristic substring matching on place names.
+        val sentinel = "[PLACE_${place.id}]"
+        val newText = _uiState.value.text.replace(Regex("!${Regex.escape(query)}$")) { sentinel }
+        _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
     }
 
     fun onPlaceCreateNew(name: String) {
@@ -210,10 +211,11 @@ class JournalEditorViewModel(
             .mapNotNull { state.resolvedTags[it.groupValues[1]] }
             .distinct()
             .toList()
-        // Collect UUIDs for resolved place names still present in the text
-        val placeIds = state.resolvedPlaces
-            .filter { (name, _) -> state.text.contains(name, ignoreCase = true) }
-            .values.distinct().toList()
+        // Parse [PLACE_uuid] sentinel tokens inserted by onPlaceSelected — deterministic, no heuristics
+        val placeIds = PLACE_TOKEN_REGEX.findAll(state.text)
+            .map { UUID.fromString(it.groupValues[1]) }
+            .distinct()
+            .toList()
         viewModelScope.launch {
             try {
                 journalRepository.saveEntry(
@@ -354,11 +356,13 @@ class JournalEditorViewModel(
     companion object {
         private const val REFRAME_PROVIDER  = "llama3_onnx_local"
         private const val REFRAME_OPERATION = "reframe"
-        private val MENTION_REGEX  = Regex("@(\\w*)$")
-        private val TAG_REGEX      = Regex("#(\\w*)$")
-        private val PLACE_REGEX    = Regex("!(\\w*)$")
+        private val MENTION_REGEX      = Regex("@(\\w*)$")
+        private val TAG_REGEX          = Regex("#(\\w*)$")
+        private val PLACE_REGEX        = Regex("!(\\w*)$")
         /** Matches all resolved #tag tokens in saved text for tagId collection. */
-        private val TAG_WORD_REGEX = Regex("#(\\w+)")
+        private val TAG_WORD_REGEX     = Regex("#(\\w+)")
+        /** Matches [PLACE_uuid] sentinels inserted by onPlaceSelected for deterministic placeId extraction. */
+        private val PLACE_TOKEN_REGEX  = Regex("\\[PLACE_([a-fA-F0-9-]{36})\\]")
 
         fun factory(app: LatticeApplication) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

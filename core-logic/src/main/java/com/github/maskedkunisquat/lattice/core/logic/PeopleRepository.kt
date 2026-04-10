@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 
 /**
@@ -62,10 +63,9 @@ class PeopleRepository(
     }
 
     suspend fun searchByName(query: String): List<Person> =
-        personDao.searchByName(query)
+        personDao.searchByName(query).first()
 
-    suspend fun insertPerson(person: Person): UUID {
+    suspend fun insertPerson(person: Person) {
         personDao.insertPerson(person)
-        return person.id
     }
 }

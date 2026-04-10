@@ -72,7 +72,7 @@ class PiiHighlightTransformation(
 
     companion object {
         private val PLACEHOLDER_REGEX = Regex("\\[PERSON_[a-fA-F0-9-]{36}\\]")
-        private val TAG_REGEX         = Regex("#\\w+")
+        private val TAG_REGEX         = Regex("#[^\\s#]+")
         private val PLACE_REGEX       = Regex("\\[PLACE_[a-fA-F0-9-]{36}\\]")
     }
 }
