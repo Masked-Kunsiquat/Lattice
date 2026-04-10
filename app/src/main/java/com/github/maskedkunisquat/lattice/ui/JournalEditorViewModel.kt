@@ -126,23 +126,27 @@ class JournalEditorViewModel(
 
     fun onMentionSelected(person: Person) {
         val query = (_uiState.value.mentionState as? MentionState.SuggestingPerson)?.query ?: return
-        val displayName = person.nickname ?: person.firstName
-        val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$")) { displayName }
+        val sentinel = "[PERSON_${person.id}]"
+        val newText = _uiState.value.text.replace(Regex("@${Regex.escape(query)}$")) { sentinel }
         _uiState.update { it.copy(text = newText, mentionState = MentionState.Idle) }
     }
 
     fun onMentionCreateNew(name: String) {
         if (name.isBlank()) return
         viewModelScope.launch {
-            val person = Person(
-                id = UUID.randomUUID(),
-                firstName = name,
-                lastName = null,
-                nickname = null,
-                relationshipType = RelationshipType.ACQUAINTANCE,
-            )
-            peopleRepository.insertPerson(person)
-            onMentionSelected(person)
+            try {
+                val person = Person(
+                    id = UUID.randomUUID(),
+                    firstName = name,
+                    lastName = null,
+                    nickname = null,
+                    relationshipType = RelationshipType.ACQUAINTANCE,
+                )
+                peopleRepository.insertPerson(person)
+                onMentionSelected(person)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message ?: "Failed to create person") }
+            }
         }
     }
 
@@ -166,8 +170,12 @@ class JournalEditorViewModel(
     fun onTagCreateNew(name: String) {
         if (name.isBlank()) return
         viewModelScope.launch {
-            val tag = tagRepository.insertTag(name)
-            onTagSelected(tag)
+            try {
+                val tag = tagRepository.insertTag(name)
+                onTagSelected(tag)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message ?: "Failed to create tag") }
+            }
         }
     }
 
@@ -183,8 +191,12 @@ class JournalEditorViewModel(
     fun onPlaceCreateNew(name: String) {
         if (name.isBlank()) return
         viewModelScope.launch {
-            val place = placeRepository.insertPlace(name)
-            onPlaceSelected(place)
+            try {
+                val place = placeRepository.insertPlace(name)
+                onPlaceSelected(place)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message ?: "Failed to create place") }
+            }
         }
     }
 
