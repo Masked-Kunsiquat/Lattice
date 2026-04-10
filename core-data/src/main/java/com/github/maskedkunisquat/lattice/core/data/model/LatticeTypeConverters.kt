@@ -62,4 +62,19 @@ class LatticeTypeConverters {
         val array = org.json.JSONArray(it)
         List(array.length()) { i -> array.getString(i) }
     }
+
+    /**
+     * Serialises [List<UUID>] as a JSON array of UUID strings.
+     * Stored in columns such as `tagIds` and `placeIds` on [JournalEntry].
+     */
+    @TypeConverter
+    fun fromUuidList(value: List<UUID>?): String? = value?.let {
+        org.json.JSONArray(it.map { uuid -> uuid.toString() }).toString()
+    }
+
+    @TypeConverter
+    fun toUuidList(value: String?): List<UUID>? = value?.let {
+        val array = org.json.JSONArray(it)
+        List(array.length()) { i -> UUID.fromString(array.getString(i)) }
+    }
 }

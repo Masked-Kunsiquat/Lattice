@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -50,10 +54,12 @@ fun JournalEditorScreen(
         JournalEditorContent(
             privacyState = privacyState,
             uiState = uiState,
+            modelLoadState = modelLoadState,
             onTextChanged = viewModel::onTextChanged,
             onMoodChanged = viewModel::onMoodChanged,
             onSave = viewModel::save,
             onResetSaved = viewModel::resetSaved,
+            onReframe = viewModel::requestReframe,
             onApplyReframe = viewModel::applyReframe,
             onDismissReframe = viewModel::dismissReframe,
         )
@@ -90,10 +96,12 @@ fun JournalEditorScreen(
 private fun JournalEditorContent(
     privacyState: PrivacyLevel,
     uiState: EditorUiState,
+    modelLoadState: ModelLoadState,
     onTextChanged: (String) -> Unit,
     onMoodChanged: (Float, Float, MoodLabel) -> Unit,
     onSave: () -> Unit,
     onResetSaved: () -> Unit,
+    onReframe: () -> Unit,
     onApplyReframe: () -> Unit,
     onDismissReframe: () -> Unit,
     modifier: Modifier = Modifier,
@@ -170,15 +178,33 @@ private fun JournalEditorContent(
             )
         }
 
-        val canSave = uiState.text.isNotBlank() && uiState.moodSelected &&
-            uiState.reframeState !is ReframeState.Loading &&
-            uiState.reframeState !is ReframeState.Streaming
-        Button(
-            onClick = onSave,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = canSave,
-        ) {
-            Text("Save Entry")
+        val reframeInFlight = uiState.reframeState is ReframeState.Loading
+            || uiState.reframeState is ReframeState.Streaming
+        val canReframe = uiState.text.isNotBlank()
+            && !reframeInFlight
+            && modelLoadState == ModelLoadState.READY
+        val canSave = uiState.text.isNotBlank() && uiState.moodSelected && !reframeInFlight
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(
+                onClick = onReframe,
+                enabled = canReframe,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    if (reframeInFlight) "Reframing…"
+                    else if (modelLoadState != ModelLoadState.READY) "Model loading…"
+                    else "Reframe"
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onSave,
+                enabled = canSave,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Save")
+            }
         }
     }
 
@@ -199,10 +225,12 @@ private fun EditorLocalPreview() {
         JournalEditorContent(
             privacyState = PrivacyLevel.LocalOnly,
             uiState = EditorUiState(text = "Today I spoke with [PERSON_00000000-0000-0000-0000-000000000001] about the project."),
+            modelLoadState = ModelLoadState.READY,
             onTextChanged = {},
             onMoodChanged = { _, _, _ -> },
             onSave = {},
             onResetSaved = {},
+            onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
         )
@@ -219,10 +247,12 @@ private fun EditorCloudPreview() {
                 sinceTimestamp = 0L,
             ),
             uiState = EditorUiState(text = "Feeling anxious about the presentation.", moodSelected = true),
+            modelLoadState = ModelLoadState.LOADING_SESSION,
             onTextChanged = {},
             onMoodChanged = { _, _, _ -> },
             onSave = {},
             onResetSaved = {},
+            onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
         )

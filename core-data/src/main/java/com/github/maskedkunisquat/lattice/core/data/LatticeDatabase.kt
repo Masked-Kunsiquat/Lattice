@@ -10,6 +10,8 @@ import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PhoneNumberDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TagDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
@@ -17,6 +19,8 @@ import com.github.maskedkunisquat.lattice.core.data.model.LatticeTypeConverters
 import com.github.maskedkunisquat.lattice.core.data.model.Mention
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
+import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 
 @Database(
@@ -27,8 +31,10 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         Mention::class,
         TransitEvent::class,
         ActivityHierarchy::class,
+        Tag::class,
+        Place::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -39,6 +45,8 @@ abstract class LatticeDatabase : RoomDatabase() {
     abstract fun mentionDao(): MentionDao
     abstract fun transitEventDao(): TransitEventDao
     abstract fun activityHierarchyDao(): ActivityHierarchyDao
+    abstract fun tagDao(): TagDao
+    abstract fun placeDao(): PlaceDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -100,6 +108,41 @@ abstract class LatticeDatabase : RoomDatabase() {
         }
 
         /**
+         * Migrates the `embedding` column in `journal_entries` from TEXT (CSV floats) to
+         * BLOB (IEEE 754 float32 little-endian), matching the updated [LatticeTypeConverters].
+         * SQLite cannot change a column type in-place, so we recreate the table.
+         * Existing embeddings are replaced with zeroblob(1536) — 384 × 4 bytes of zeros.
+         * Zero-vector entries are already excluded from semantic search results by
+         * [SearchRepository], so this is a safe lossy migration during development.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS journal_entries_new (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        timestamp INTEGER NOT NULL,
+                        content TEXT NOT NULL,
+                        valence REAL NOT NULL,
+                        arousal REAL NOT NULL,
+                        moodLabel TEXT NOT NULL,
+                        embedding BLOB NOT NULL,
+                        cognitiveDistortions TEXT NOT NULL DEFAULT '[]',
+                        reframedContent TEXT
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    INSERT INTO journal_entries_new
+                    SELECT id, timestamp, content, valence, arousal, moodLabel,
+                           zeroblob(1536), cognitiveDistortions, reframedContent
+                    FROM journal_entries
+                """.trimIndent())
+                db.execSQL("DROP TABLE journal_entries")
+                db.execSQL("ALTER TABLE journal_entries_new RENAME TO journal_entries")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_journal_entries_timestamp ON journal_entries (timestamp)")
+            }
+        }
+
+        /**
          * Makes `content` nullable in `journal_entries` to support mood-log entries
          * (valid valence/arousal coordinates with no text). SQLite cannot alter column
          * nullability in-place, so the table is recreated. Existing rows are preserved;
@@ -134,37 +177,35 @@ abstract class LatticeDatabase : RoomDatabase() {
         }
 
         /**
-         * Migrates the `embedding` column in `journal_entries` from TEXT (CSV floats) to
-         * BLOB (IEEE 754 float32 little-endian), matching the updated [LatticeTypeConverters].
-         * SQLite cannot change a column type in-place, so we recreate the table.
-         * Existing embeddings are replaced with zeroblob(1536) — 384 × 4 bytes of zeros.
-         * Zero-vector entries are already excluded from semantic search results by
-         * [SearchRepository], so this is a safe lossy migration during development.
+         * Adds `tags` and `places` tables. Adds `tagIds` and `placeIds` JSON-array columns
+         * to `journal_entries` (default empty array — existing rows carry no tags or places).
          */
-        val MIGRATION_6_7 = object : Migration(6, 7) {
+        val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS journal_entries_new (
+                    CREATE TABLE IF NOT EXISTS tags (
                         id TEXT NOT NULL PRIMARY KEY,
-                        timestamp INTEGER NOT NULL,
-                        content TEXT NOT NULL,
-                        valence REAL NOT NULL,
-                        arousal REAL NOT NULL,
-                        moodLabel TEXT NOT NULL,
-                        embedding BLOB NOT NULL,
-                        cognitiveDistortions TEXT NOT NULL DEFAULT '[]',
-                        reframedContent TEXT
+                        name TEXT NOT NULL
                     )
                 """.trimIndent())
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_tags_name ON tags (name)"
+                )
                 db.execSQL("""
-                    INSERT INTO journal_entries_new
-                    SELECT id, timestamp, content, valence, arousal, moodLabel,
-                           zeroblob(1536), cognitiveDistortions, reframedContent
-                    FROM journal_entries
+                    CREATE TABLE IF NOT EXISTS places (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL
+                    )
                 """.trimIndent())
-                db.execSQL("DROP TABLE journal_entries")
-                db.execSQL("ALTER TABLE journal_entries_new RENAME TO journal_entries")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_journal_entries_timestamp ON journal_entries (timestamp)")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_places_name ON places (name)"
+                )
+                db.execSQL(
+                    "ALTER TABLE journal_entries ADD COLUMN tagIds TEXT NOT NULL DEFAULT '[]'"
+                )
+                db.execSQL(
+                    "ALTER TABLE journal_entries ADD COLUMN placeIds TEXT NOT NULL DEFAULT '[]'"
+                )
             }
         }
     }

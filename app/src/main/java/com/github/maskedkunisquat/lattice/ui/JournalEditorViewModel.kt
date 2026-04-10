@@ -62,18 +62,22 @@ class JournalEditorViewModel(
     private var savedEntryId: UUID? = null
 
     /**
-     * Called on every keystroke. Intercepts the [REFRAME_COMMAND] token anywhere in
-     * [newText]: strips it from the displayed text and fires the reframe pipeline.
+     * Called on every keystroke. Cancels any in-flight reframe job (stale if text changed)
+     * and updates the displayed text.
      */
     fun onTextChanged(newText: String) {
-        if (REFRAME_COMMAND in newText) {
-            val stripped = newText.replace(REFRAME_COMMAND, "").trim()
-            _uiState.update { it.copy(text = stripped) }
-            triggerReframe(stripped)
-        } else {
-            reframeJob?.cancel()
-            _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
-        }
+        reframeJob?.cancel()
+        _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
+    }
+
+    /**
+     * Fires the reframe pipeline against the current editor text.
+     * Called by the Reframe button in [JournalEditorScreen] — replaces the former
+     * `!reframe` text-command model. Text is passed to [triggerReframe] as-is;
+     * no stripping or command extraction occurs.
+     */
+    fun requestReframe() {
+        triggerReframe(_uiState.value.text)
     }
 
     fun onMoodChanged(valence: Float, arousal: Float, label: MoodLabel) {
@@ -220,8 +224,6 @@ class JournalEditorViewModel(
     }
 
     companion object {
-        /** Command token typed by the user to trigger the reframing pipeline. */
-        const val REFRAME_COMMAND = "!reframe"
         private const val REFRAME_PROVIDER  = "llama3_onnx_local"
         private const val REFRAME_OPERATION = "reframe"
 
