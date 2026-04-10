@@ -36,13 +36,18 @@ class PiiHighlightTransformation(
 
         // Resolved multi-word names first (longest first to avoid "Jo" shadowing "John Smith"),
         // then fall back to the single-word regex for in-progress mentions.
+        // The fallback skips any match that overlaps an already-added resolved-name span
+        // so "@John" inside "@John Smith" isn't double-highlighted.
         val personPatterns = resolvedPersonNames
             .sortedByDescending { it.length }
             .map { Regex("@${Regex.escape(it)}") } + listOf(MENTION_FALLBACK_REGEX)
 
         personPatterns.forEach { regex ->
+            val isFallback = regex === MENTION_FALLBACK_REGEX
             regex.findAll(text.text).forEach { match ->
-                spans.add(span(highlightColor, match.range))
+                if (!isFallback || spans.none { it.overlaps(match.range) }) {
+                    spans.add(span(highlightColor, match.range))
+                }
             }
         }
 
@@ -58,8 +63,11 @@ class PiiHighlightTransformation(
                 .map { Regex("!${Regex.escape(it)}") } + listOf(PLACE_FALLBACK_REGEX)
 
             placePatterns.forEach { regex ->
+                val isFallback = regex === PLACE_FALLBACK_REGEX
                 regex.findAll(text.text).forEach { match ->
-                    spans.add(span(placeColor, match.range))
+                    if (!isFallback || spans.none { it.overlaps(match.range) }) {
+                        spans.add(span(placeColor, match.range))
+                    }
                 }
             }
         }
@@ -73,10 +81,15 @@ class PiiHighlightTransformation(
         end = range.last + 1,
     )
 
+    /** True if this span's character range intersects [other]. */
+    private fun AnnotatedString.Range<*>.overlaps(other: IntRange): Boolean =
+        start < other.last + 1 && end > other.first
+
     companion object {
-        // Fallback for un-resolved / in-progress single-word mentions
-        private val MENTION_FALLBACK_REGEX = Regex("@\\S+")
-        private val TAG_REGEX              = Regex("#[^\\s#]+")
-        private val PLACE_FALLBACK_REGEX   = Regex("!\\S+")
+        // Fallback for un-resolved / in-progress single-word mentions.
+        // (?<!\w) negative lookbehind prevents matching inside emails (user@example.com).
+        private val MENTION_FALLBACK_REGEX = Regex("(?<!\\w)@\\S+")
+        private val TAG_REGEX              = Regex("(?<!\\w)#[^\\s#]+")
+        private val PLACE_FALLBACK_REGEX   = Regex("(?<!\\w)!\\S+")
     }
 }

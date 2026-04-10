@@ -27,6 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -93,18 +94,21 @@ class JournalEditorViewModel(
     init {
         if (initialEntryId != null) {
             viewModelScope.launch {
-                journalRepository.getEntryById(initialEntryId).collect { entry ->
-                    if (entry != null) {
-                        _uiState.update {
-                            it.copy(
-                                text = entry.content ?: "",
-                                valence = entry.valence,
-                                arousal = entry.arousal,
-                                label = runCatching { MoodLabel.valueOf(entry.moodLabel) }
-                                    .getOrDefault(MoodLabel.ALIVE),
-                                moodSelected = true,
-                            )
-                        }
+                val (entry, resolvedPersons, resolvedPlaces) =
+                    journalRepository.getEntryForEditor(initialEntryId).firstOrNull()
+                    ?: return@launch
+                if (entry != null) {
+                    _uiState.update {
+                        it.copy(
+                            text = entry.content ?: "",
+                            valence = entry.valence,
+                            arousal = entry.arousal,
+                            label = runCatching { MoodLabel.valueOf(entry.moodLabel) }
+                                .getOrDefault(MoodLabel.ALIVE),
+                            moodSelected = true,
+                            resolvedPersons = resolvedPersons,
+                            resolvedPlaces = resolvedPlaces,
+                        )
                     }
                 }
             }
@@ -429,11 +433,13 @@ class JournalEditorViewModel(
         // Allow spaces in person/place names (e.g. "@John Smith", "!Central Park").
         // Pattern ends at a word char (no trailing space) so selecting a suggestion and
         // typing a space naturally dismisses the autocomplete without re-triggering it.
-        private val MENTION_REGEX  = Regex("@((?:\\w+ )*\\w+|\\w*)$")
-        private val TAG_REGEX      = Regex("#(\\w*)$")
-        private val PLACE_REGEX    = Regex("!((?:\\w+ )*\\w+|\\w*)$")
+        // [\p{L}\p{N}_] instead of \w so accented/diacritic names (André, José) work.
+        private val W = "[\\p{L}\\p{N}_]"
+        private val MENTION_REGEX  = Regex("@((?:$W+ )*$W+|$W*)$")
+        private val TAG_REGEX      = Regex("#($W*)$")
+        private val PLACE_REGEX    = Regex("!((?:$W+ )*$W+|$W*)$")
         /** Matches all resolved #tag tokens in saved text for tagId collection. */
-        private val TAG_WORD_REGEX = Regex("#(\\w+)")
+        private val TAG_WORD_REGEX = Regex("#($W+)")
 
         fun factory(app: LatticeApplication, initialEntryId: UUID? = null) =
             object : ViewModelProvider.Factory {

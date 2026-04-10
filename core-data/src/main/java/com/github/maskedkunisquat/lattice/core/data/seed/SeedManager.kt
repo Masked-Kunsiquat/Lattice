@@ -260,8 +260,9 @@ class SeedManager(
     private fun parseRawPerson(obj: JSONObject) = RawPerson(
         id = obj.getString("id"),
         firstName = obj.getString("firstName"),
-        lastName = obj.optString("lastName").takeIf { it.isNotEmpty() },
-        nickname = obj.optString("nickname").takeIf { it.isNotEmpty() },
+        // optString() returns the literal string "null" for JSON null values; guard against it.
+        lastName = obj.optString("lastName").takeIf { it.isNotEmpty() && it != "null" },
+        nickname = obj.optString("nickname").takeIf { it.isNotEmpty() && it != "null" },
         relationshipType = obj.getString("relationshipType"),
         vibeScore = obj.optDouble("vibeScore", 0.0).toFloat(),
         isFavorite = obj.optBoolean("isFavorite", false)
@@ -277,7 +278,7 @@ class SeedManager(
         embeddingBase64 = obj.getString("embeddingBase64"),
         cognitiveDistortions = obj.optJSONArray("cognitiveDistortions")
             ?.let { arr -> List(arr.length()) { arr.getString(it) } } ?: emptyList(),
-        reframedContent = obj.optString("reframedContent").takeIf { it.isNotEmpty() },
+        reframedContent = obj.optString("reframedContent").takeIf { it.isNotEmpty() && it != "null" },
         mentions = obj.optJSONArray("mentions")?.parseList { parseRawMention(it) } ?: emptyList()
     )
 

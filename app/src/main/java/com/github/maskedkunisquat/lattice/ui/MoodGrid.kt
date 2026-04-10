@@ -70,18 +70,22 @@ fun MoodGrid(
     var canvasSize by remember { mutableStateOf<IntSize?>(null) }
     val textMeasurer = rememberTextMeasurer()
 
-    // Restore the dot position when loading an existing entry.
-    // Runs once per (hasInitialMood, canvasSize) pair; the moodState == null guard
-    // ensures a subsequent user tap is never overwritten by a config-change re-run.
+    // Re-anchor the dot whenever the canvas resizes (e.g. keyboard open/close or rotation).
+    // If the user has already tapped, use their stored valence/arousal so the dot stays put
+    // relative to the grid. Otherwise fall back to the entry's initial coordinates.
     LaunchedEffect(hasInitialMood, canvasSize) {
-        if (hasInitialMood && moodState == null) {
-            val size = canvasSize ?: return@LaunchedEffect
-            val w = size.width.toFloat()
-            val h = size.height.toFloat()
-            val x = (initialValence + 1f) / 2f * w
-            val y = (1f - (initialArousal + 1f) / 2f) * h
-            handlePosition(Offset(x, y), w, h) { state -> moodState = state }
+        val size = canvasSize ?: return@LaunchedEffect
+        val w = size.width.toFloat()
+        val h = size.height.toFloat()
+        val existing = moodState
+        val (v, a) = when {
+            existing != null -> existing.valence to existing.arousal
+            hasInitialMood   -> initialValence to initialArousal
+            else             -> return@LaunchedEffect
         }
+        val x = (v + 1f) / 2f * w
+        val y = (1f - (a + 1f) / 2f) * h
+        handlePosition(Offset(x, y), w, h) { state -> moodState = state }
     }
 
     // Capture outside the draw scope (no Composable context inside Canvas block).

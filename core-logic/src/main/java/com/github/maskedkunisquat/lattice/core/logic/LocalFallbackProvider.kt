@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 
@@ -248,7 +250,8 @@ class LocalFallbackProvider(
         val inputs = mutableMapOf<String, OnnxTensor>()
 
         try {
-            // Standard input tensors
+            // Standard input tensors.
+            // position_ids is NOT passed — this model computes positions internally.
             inputs["input_ids"] = OnnxTensor.createTensor(
                 env, LongBuffer.wrap(inputIds), longArrayOf(1, seqLen.toLong())
             )
@@ -256,11 +259,6 @@ class LocalFallbackProvider(
                 env,
                 LongBuffer.wrap(LongArray(pastLen + seqLen) { 1L }),
                 longArrayOf(1, (pastLen + seqLen).toLong())
-            )
-            inputs["position_ids"] = OnnxTensor.createTensor(
-                env,
-                LongBuffer.wrap(LongArray(seqLen) { (pastLen + it).toLong() }),
-                longArrayOf(1, seqLen.toLong())
             )
 
             // Past KV cache tensors (empty on first pass: shape [1, kvHeads, 0, headDim])
@@ -278,22 +276,25 @@ class LocalFallbackProvider(
 
             val outputs = sess.run(inputs)
             return outputs.use { out ->
-                // Extract logits for the last sequence position
+                // Read only the last-position logits from the native tensor buffer.
+                // OnnxTensor.getFloatBuffer() copies the entire [1,seqLen,vocab] tensor
+                // (~114 MB at seqLen=233) to the Java heap. Instead, we reflect into the
+                // private getBuffer() which returns the direct ByteBuffer wrapping native
+                // memory (zero-copy), then read just vocabSize floats from the last position.
                 val logitsTensor = out["logits"].get() as OnnxTensor
-                val allLogits = FloatArray(logitsTensor.floatBuffer.remaining())
-                logitsTensor.floatBuffer.get(allLogits)
-                // Only keep the last position's logits ([1, seqLen, vocab] → [vocab])
-                val lastPosLogits = allLogits.copyOfRange(
-                    (seqLen - 1) * vocabSize,
-                    seqLen * vocabSize
-                )
+                val lastPosLogits = FloatArray(vocabSize)
+                nativeFloatsAt(logitsTensor, (seqLen - 1) * vocabSize, lastPosLogits)
 
-                // Extract present KV cache for the next step
+                // Extract present KV cache — same zero-copy strategy.
                 val presentKv = Array(numLayers) { i ->
                     val kTensor = out["present.$i.key"].get() as OnnxTensor
                     val vTensor = out["present.$i.value"].get() as OnnxTensor
-                    val kData = FloatArray(kTensor.floatBuffer.remaining()).also { kTensor.floatBuffer.get(it) }
-                    val vData = FloatArray(vTensor.floatBuffer.remaining()).also { vTensor.floatBuffer.get(it) }
+                    val kFloats = kTensor.info.getNumElements().toInt()
+                    val vFloats = vTensor.info.getNumElements().toInt()
+                    val kData = FloatArray(kFloats)
+                    val vData = FloatArray(vFloats)
+                    nativeFloatsAt(kTensor, 0, kData)
+                    nativeFloatsAt(vTensor, 0, vData)
                     Pair(kData, vData)
                 }
 
@@ -439,6 +440,35 @@ class LocalFallbackProvider(
         session?.let { sess ->
             Log.d(TAG, "Session inputs:  ${sess.inputInfo.keys.sorted()}")
             Log.d(TAG, "Session outputs: ${sess.outputInfo.keys.sorted()}")
+        }
+    }
+
+    // ── Zero-copy tensor read ─────────────────────────────────────────────────
+
+    /**
+     * Reads [dst.size] floats from [tensor]'s native memory starting at float-index [offset],
+     * without copying the whole tensor to the Java heap.
+     *
+     * OnnxTensor.getFloatBuffer() / getByteBuffer() both call FloatBuffer.allocate() /
+     * ByteBuffer.allocate() internally, copying the entire tensor to a new heap buffer.
+     * For the logits tensor that's ~114 MB per step at seqLen=233 — enough to OOM.
+     *
+     * The private `getBuffer()` method returns a DirectByteBuffer wrapping the native C++
+     * tensor memory directly (zero-copy). We access it via reflection and position to the
+     * slice we need. Falls back to the heap copy on reflection failure.
+     */
+    private fun nativeFloatsAt(tensor: OnnxTensor, offset: Int, dst: FloatArray) {
+        try {
+            val m = OnnxTensor::class.java.getDeclaredMethod("getBuffer")
+                .also { it.isAccessible = true }
+            val buf = (m.invoke(tensor) as ByteBuffer)
+                .order(ByteOrder.nativeOrder())
+            (buf.position(offset * Float.SIZE_BYTES) as ByteBuffer)
+                .asFloatBuffer()
+                .get(dst)
+        } catch (_: Exception) {
+            // Reflection unavailable — fall back to heap copy.
+            (tensor.floatBuffer.position(offset) as FloatBuffer).get(dst)
         }
     }
 
