@@ -223,7 +223,7 @@ abstract class LatticeDatabase : RoomDatabase() {
                         name TEXT NOT NULL
                     )
                 """.trimIndent())
-                db.execSQL("INSERT OR IGNORE INTO tags_new SELECT id, name FROM tags")
+                db.execSQL("INSERT OR IGNORE INTO tags_new SELECT MIN(id), name FROM tags GROUP BY name")
                 db.execSQL("DROP TABLE tags")
                 db.execSQL("ALTER TABLE tags_new RENAME TO tags")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_tags_name ON tags (name)")
@@ -235,7 +235,7 @@ abstract class LatticeDatabase : RoomDatabase() {
                         name TEXT NOT NULL
                     )
                 """.trimIndent())
-                db.execSQL("INSERT OR IGNORE INTO places_new SELECT id, name FROM places")
+                db.execSQL("INSERT OR IGNORE INTO places_new SELECT MIN(id), name FROM places GROUP BY name")
                 db.execSQL("DROP TABLE places")
                 db.execSQL("ALTER TABLE places_new RENAME TO places")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_places_name ON places (name)")

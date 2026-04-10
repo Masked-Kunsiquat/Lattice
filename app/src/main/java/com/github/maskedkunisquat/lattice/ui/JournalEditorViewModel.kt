@@ -213,7 +213,7 @@ class JournalEditorViewModel(
             .toList()
         // Parse [PLACE_uuid] sentinel tokens inserted by onPlaceSelected — deterministic, no heuristics
         val placeIds = PLACE_TOKEN_REGEX.findAll(state.text)
-            .map { UUID.fromString(it.groupValues[1]) }
+            .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
             .distinct()
             .toList()
         viewModelScope.launch {
