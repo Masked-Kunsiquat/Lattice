@@ -30,8 +30,8 @@ Places are masked like persons; tags are unmasked display labels.
 
 - [x] Add `Tag` entity: `id: UUID`, `name: String`
 - [x] Add `Place` entity: `id: UUID`, `name: String`
-- [x] Add `TagDao`: `getAll(): Flow<List<Tag>>`, `insert`, `deleteById`, `searchByName(query): List<Tag>`
-- [x] Add `PlaceDao`: `getAll(): Flow<List<Place>>`, `insert`, `deleteById`, `searchByName(query): List<Place>`, `getByName(name): Place?`
+- [x] Add `TagDao`: `getAll(): Flow<List<Tag>>`, `insert`, `deleteById`, `searchByName(query): Flow<List<Tag>>`
+- [x] Add `PlaceDao`: `getAll(): Flow<List<Place>>`, `insert`, `deleteById`, `searchByName(query): Flow<List<Place>>`, `getByName(name): Place?`
 - [x] `MIGRATION_8_9`:
   ```sql
   CREATE TABLE tags   (id TEXT PRIMARY KEY, name TEXT NOT NULL);
