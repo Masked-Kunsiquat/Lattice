@@ -106,11 +106,15 @@ fun AppNavHost(app: LatticeApplication) {
             composable("history/{entryId}") { backStackEntry ->
                 val entryId = backStackEntry.arguments?.getString("entryId")
                     ?.let { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
-                val vm: JournalEditorViewModel = viewModel(
-                    factory = JournalEditorViewModel.factory(app, initialEntryId = entryId),
+                    ?: return@composable
+                val vm: EntryDetailViewModel = viewModel(
+                    factory = EntryDetailViewModel.factory(app, entryId),
                 )
-                Box(Modifier.fillMaxSize().testTag("screen:editor")) {
-                    JournalEditorScreen(viewModel = vm)
+                Box(Modifier.fillMaxSize().testTag("screen:entry-detail")) {
+                    EntryDetailScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
             }
 
