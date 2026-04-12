@@ -8,7 +8,13 @@ android {
 
     defaultConfig {
         minSdk = 24
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // AndroidBenchmarkRunner is a drop-in replacement for AndroidJUnitRunner that adds
+        // IsolationActivity support. Required to avoid ACTIVITY-MISSING benchmark errors.
+        testInstrumentationRunner = "androidx.benchmark.junit4.AndroidBenchmarkRunner"
+        // Library modules cannot set isDebuggable=false on their test APK in AGP 9.x.
+        // Suppress the DEBUGGABLE error so benchmarks run; numbers are valid for relative
+        // comparisons but will be slower than a release-signed app module benchmark.
+        testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "DEBUGGABLE"
         consumerProguardFiles("consumer-rules.pro")
     }
 
