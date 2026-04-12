@@ -54,7 +54,7 @@ fun EntryDetailScreen(
     viewModel: EntryDetailViewModel,
     onBack: () -> Unit,
 ) {
-    val entry by viewModel.entry.collectAsStateWithLifecycle()
+    val entryState by viewModel.entryState.collectAsStateWithLifecycle()
     val reframeState by viewModel.reframeState.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
 
@@ -62,8 +62,12 @@ fun EntryDetailScreen(
         viewModel.deletedEvent.collect { onBack() }
     }
 
+    LaunchedEffect(entryState) {
+        if (entryState is EntryDetailState.NotFound) onBack()
+    }
+
     EntryDetailContent(
-        entry = entry,
+        entryState = entryState,
         reframeState = reframeState,
         modelLoadState = modelLoadState,
         onBack = onBack,
@@ -79,7 +83,7 @@ fun EntryDetailScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EntryDetailContent(
-    entry: JournalEntry?,
+    entryState: EntryDetailState,
     reframeState: ReframeState,
     modelLoadState: ModelLoadState,
     onBack: () -> Unit,
@@ -88,6 +92,7 @@ private fun EntryDetailContent(
     onApplyReframe: () -> Unit,
     onDismissReframe: () -> Unit,
 ) {
+    val entry = (entryState as? EntryDetailState.Found)?.entry
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (showDeleteConfirm) {
@@ -153,14 +158,14 @@ private fun EntryDetailContent(
             }
         },
     ) { innerPadding ->
-        if (entry == null) {
+        if (entryState is EntryDetailState.Loading) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator()
             }
-        } else {
+        } else if (entry != null) {
             val fmt = remember { SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault()) }
 
             Column(
@@ -271,7 +276,7 @@ private val previewEntry = JournalEntry(
 private fun PreviewOriginalOnly() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         EntryDetailContent(
-            entry = previewEntry,
+            entryState = EntryDetailState.Found(previewEntry),
             reframeState = ReframeState.Idle,
             modelLoadState = ModelLoadState.READY,
             onBack = {},
@@ -288,9 +293,9 @@ private fun PreviewOriginalOnly() {
 private fun PreviewWithReframe() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         EntryDetailContent(
-            entry = previewEntry.copy(
+            entryState = EntryDetailState.Found(previewEntry.copy(
                 reframedContent = "I'm assuming I have to reveal all my symptoms to prove I'm not just \"fine.\" But is it really true that I have to justify my answer to someone else?"
-            ),
+            )),
             reframeState = ReframeState.Idle,
             modelLoadState = ModelLoadState.READY,
             onBack = {},
@@ -307,7 +312,7 @@ private fun PreviewWithReframe() {
 private fun PreviewModelLoading() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         EntryDetailContent(
-            entry = previewEntry,
+            entryState = EntryDetailState.Found(previewEntry),
             reframeState = ReframeState.Idle,
             modelLoadState = ModelLoadState.LOADING_SESSION,
             onBack = {},
@@ -324,7 +329,7 @@ private fun PreviewModelLoading() {
 private fun PreviewMoodLog() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         EntryDetailContent(
-            entry = previewEntry.copy(content = null, cognitiveDistortions = emptyList()),
+            entryState = EntryDetailState.Found(previewEntry.copy(content = null, cognitiveDistortions = emptyList())),
             reframeState = ReframeState.Idle,
             modelLoadState = ModelLoadState.READY,
             onBack = {},

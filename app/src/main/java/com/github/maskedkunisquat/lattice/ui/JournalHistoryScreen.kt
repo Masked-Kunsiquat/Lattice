@@ -74,7 +74,7 @@ fun JournalHistoryScreen(
         AlertDialog(
             onDismissRequest = { pendingDeleteEntry = null },
             title = { Text("Delete entry?") },
-            text = { Text("This entry will be permanently deleted.") },
+            text = { Text("This entry will be deleted. You can undo using the snackbar.") },
             confirmButton = {
                 Button(
                     onClick = {

@@ -100,6 +100,7 @@ class LocalFallbackProvider(
                 loadArchConfig()
                 _modelLoadState.value = ModelLoadState.COPYING_SHARDS
                 copyAssetsToFilesDir()
+                _copyProgress.value = 0f
                 _modelLoadState.value = ModelLoadState.LOADING_SESSION
                 val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
                 val newSession = createSession(modelPath)
@@ -118,6 +119,7 @@ class LocalFallbackProvider(
                 // Log after assignment so session?.let inside logSessionInfo() sees the session.
                 logSessionInfo()
             } catch (e: Exception) {
+                _copyProgress.value = 0f
                 _modelLoadState.value = ModelLoadState.ERROR
                 initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)

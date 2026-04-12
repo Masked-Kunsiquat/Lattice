@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.lattice.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -19,9 +20,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
+
+sealed class EntryDetailState {
+    object Loading : EntryDetailState()
+    data class Found(val entry: JournalEntry) : EntryDetailState()
+    object NotFound : EntryDetailState()
+}
 
 class EntryDetailViewModel(
     private val journalRepository: JournalRepository,
@@ -31,9 +39,10 @@ class EntryDetailViewModel(
     private val entryId: UUID,
 ) : ViewModel() {
 
-    /** Live entry — content is unmasked for display via [JournalRepository.getEntryById]. */
-    val entry: StateFlow<JournalEntry?> = journalRepository.getEntryById(entryId)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    /** Live entry state — distinguishes initial loading from a missing entry. */
+    val entryState: StateFlow<EntryDetailState> = journalRepository.getEntryById(entryId)
+        .map { entry -> if (entry != null) EntryDetailState.Found(entry) else EntryDetailState.NotFound }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EntryDetailState.Loading)
 
     private val _reframeState = MutableStateFlow<ReframeState>(ReframeState.Idle)
     val reframeState: StateFlow<ReframeState> = _reframeState.asStateFlow()
@@ -50,7 +59,8 @@ class EntryDetailViewModel(
      * reaching the LLM — PII never leaves the device in raw form.
      */
     fun requestReframe() {
-        val content = entry.value?.content?.takeIf { it.isNotBlank() } ?: return
+        val content = (entryState.value as? EntryDetailState.Found)
+            ?.entry?.content?.takeIf { it.isNotBlank() } ?: return
         reframeJob?.cancel()
         reframeJob = viewModelScope.launch {
             _reframeState.value = ReframeState.Loading
@@ -77,14 +87,18 @@ class EntryDetailViewModel(
                 if (partial.isBlank()) throw IllegalStateException("Model returned an empty reframe.")
                 _reframeState.value = ReframeState.Done(partial.trim())
 
-                transitEventDao.insertEvent(
-                    TransitEvent(
-                        id            = UUID.randomUUID(),
-                        timestamp     = System.currentTimeMillis(),
-                        providerName  = "llama3_onnx_local",
-                        operationType = "reframe",
+                runCatching {
+                    transitEventDao.insertEvent(
+                        TransitEvent(
+                            id            = UUID.randomUUID(),
+                            timestamp     = System.currentTimeMillis(),
+                            providerName  = "llama3_onnx_local",
+                            operationType = "reframe",
+                        )
                     )
-                )
+                }.onFailure { e ->
+                    Log.w(TAG, "Failed to insert TransitEvent — reframe result unaffected", e)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -115,7 +129,7 @@ class EntryDetailViewModel(
     }
 
     fun deleteEntry() {
-        val e = entry.value ?: return
+        val e = (entryState.value as? EntryDetailState.Found)?.entry ?: return
         viewModelScope.launch {
             journalRepository.deleteEntry(e)
             _deletedEvent.emit(Unit)
@@ -123,6 +137,8 @@ class EntryDetailViewModel(
     }
 
     companion object {
+        private const val TAG = "EntryDetailViewModel"
+
         fun factory(app: LatticeApplication, entryId: UUID) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

@@ -278,7 +278,7 @@ class LlamaTokenizer(private val context: Context) {
                 reader.endArray()
             } else {
                 val merge = reader.nextString()
-                val parts = merge.split(Regex("\\s+"), 2)
+                val parts = merge.split(MERGE_SPLIT_REGEX, 2)
                 if (parts.size != 2 || parts[0].isEmpty() || parts[1].isEmpty()) {
                     rank++; continue
                 }
@@ -344,5 +344,7 @@ class LlamaTokenizer(private val context: Context) {
         private val PRE_TOKENIZER_PATTERN: Pattern = Pattern.compile(
             """(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"""
         )
+
+        private val MERGE_SPLIT_REGEX = Regex("\\s+")
     }
 }
