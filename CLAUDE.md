@@ -4,6 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## MCP Toolset (Android Studio integration)
+
+Two MCP tool groups are available in this project. Prefer them over raw Bash for device and IDE operations.
+
+### `mcp__android__*` — device / build / logcat
+
+| Tool | When to use |
+|---|---|
+| `build_apk` | Compile a debug APK (wraps `assembleDebug`) |
+| `install_apk` / `uninstall_apk` | Push/remove APK on connected device |
+| `launch_app` / `stop_app` | Start or kill the running app |
+| `get_logcat` / `clear_logcat` | Read or flush device log |
+| `get_build_errors` | Surface Gradle/compiler errors after a failed build |
+| `get_test_results` | Read instrumented test results from device |
+| `list_devices` / `get_device_info` | Query connected ADB devices |
+
+### `mcp__Intelli-j__*` — IDE / project operations
+
+| Tool | When to use |
+|---|---|
+| `get_file_problems` / `getDiagnostics` | Read IntelliJ inspections / lint errors for a file |
+| `search_in_files_by_text` / `search_in_files_by_regex` | Cross-project text/regex search |
+| `find_files_by_name_keyword` / `find_files_by_glob` | Locate files when path is unknown |
+| `get_symbol_info` | Resolve a symbol's type/declaration |
+| `reformat_file` | Apply Kotlin code style to a file |
+| `rename_refactoring` | Safe rename across all usages |
+| `replace_text_in_file` | Targeted in-file replacement via IDE |
+| `build_project` | Trigger an IDE build (alternative to Gradle CLI) |
+| `execute_terminal_command` | Run a shell command inside the IDE terminal |
+| `get_project_modules` / `get_project_dependencies` | Inspect Gradle module graph |
+| `list_directory_tree` / `get_all_open_file_paths` | Navigate project structure |
+| `open_file_in_editor` / `create_new_file` | Open or create files in the IDE |
+
+---
+
 ## Commands
 
 ```bash

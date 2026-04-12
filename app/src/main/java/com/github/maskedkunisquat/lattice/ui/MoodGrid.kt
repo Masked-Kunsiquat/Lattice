@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -58,10 +61,32 @@ private val QUADRANT_LABELS = listOf(
 @Composable
 fun MoodGrid(
     modifier: Modifier = Modifier,
+    initialValence: Float = 0f,
+    initialArousal: Float = 0f,
+    hasInitialMood: Boolean = false,
     onMoodChanged: (valence: Float, arousal: Float, label: MoodLabel) -> Unit = { _, _, _ -> },
 ) {
     var moodState by remember { mutableStateOf<MoodState?>(null) }
+    var canvasSize by remember { mutableStateOf<IntSize?>(null) }
     val textMeasurer = rememberTextMeasurer()
+
+    // Re-anchor the dot whenever the canvas resizes (e.g. keyboard open/close or rotation).
+    // If the user has already tapped, use their stored valence/arousal so the dot stays put
+    // relative to the grid. Otherwise fall back to the entry's initial coordinates.
+    LaunchedEffect(hasInitialMood, canvasSize) {
+        val size = canvasSize ?: return@LaunchedEffect
+        val w = size.width.toFloat()
+        val h = size.height.toFloat()
+        val existing = moodState
+        val (v, a) = when {
+            existing != null -> existing.valence to existing.arousal
+            hasInitialMood   -> initialValence to initialArousal
+            else             -> return@LaunchedEffect
+        }
+        val x = (v + 1f) / 2f * w
+        val y = (1f - (a + 1f) / 2f) * h
+        handlePosition(Offset(x, y), w, h) { state -> moodState = state }
+    }
 
     // Capture outside the draw scope (no Composable context inside Canvas block).
     val quadrantLabelStyle = TextStyle(
@@ -97,6 +122,7 @@ fun MoodGrid(
                     .weight(1f)
                     .fillMaxHeight()
                     .padding(4.dp)
+                    .onSizeChanged { canvasSize = it }
                     .pointerInput(Unit) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)

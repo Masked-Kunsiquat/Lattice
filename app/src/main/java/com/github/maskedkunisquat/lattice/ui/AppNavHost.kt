@@ -103,13 +103,18 @@ fun AppNavHost(app: LatticeApplication) {
                 }
             }
 
-            // TODO: pre-populate editor from entryId (edit mode)
-            composable("history/{entryId}") {
-                val vm: JournalEditorViewModel = viewModel(
-                    factory = JournalEditorViewModel.factory(app),
+            composable("history/{entryId}") { backStackEntry ->
+                val entryId = backStackEntry.arguments?.getString("entryId")
+                    ?.let { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
+                    ?: return@composable
+                val vm: EntryDetailViewModel = viewModel(
+                    factory = EntryDetailViewModel.factory(app, entryId),
                 )
-                Box(Modifier.fillMaxSize().testTag("screen:editor")) {
-                    JournalEditorScreen(viewModel = vm)
+                Box(Modifier.fillMaxSize().testTag("screen:entry-detail")) {
+                    EntryDetailScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
             }
 

@@ -44,8 +44,58 @@ class JournalRepository(
             personDao.getPersons(),
             placeDao.getAll(),
         ) { entry, people, places ->
-            entry?.copy(content = entry.content?.let { PiiShield.unmask(it, people, places) })
+            entry?.copy(
+                content         = entry.content?.let { PiiShield.unmask(it, people, places) },
+                reframedContent = entry.reframedContent?.let { PiiShield.unmask(it, people, places) },
+            )
         }
+    }
+
+    /**
+     * Returns an entry loaded for the editor: `[PERSON_uuid]` placeholders are replaced
+     * with `@displayName` (and `[PLACE_uuid]` with `!displayName`) so the editor text
+     * reflects the mention-syntax the user typed. Also returns the resolved maps needed
+     * by [PiiHighlightTransformation] to colour the mentions.
+     */
+    fun getEntryForEditor(id: UUID): Flow<Triple<JournalEntry?, Map<String, UUID>, Map<String, UUID>>> {
+        return combine(
+            journalDao.getEntryById(id),
+            personDao.getPersons(),
+            placeDao.getAll(),
+        ) { entry, people, places ->
+            val raw: String = entry?.content
+                ?: return@combine Triple(entry, emptyMap<String, UUID>(), emptyMap<String, UUID>())
+
+            val personById = people.associateBy { it.id }
+            val placeById  = places.associateBy { it.id }
+            val resolvedPersons = mutableMapOf<String, UUID>()
+            val resolvedPlaces  = mutableMapOf<String, UUID>()
+
+            PERSON_PLACEHOLDER.findAll(raw).forEach { m ->
+                val uuid = UUID.fromString(m.groupValues[1])
+                personById[uuid]?.let { p ->
+                    resolvedPersons[p.nickname ?: p.firstName] = uuid
+                }
+            }
+            PLACE_PLACEHOLDER.findAll(raw).forEach { m ->
+                val uuid = UUID.fromString(m.groupValues[1])
+                placeById[uuid]?.let { pl -> resolvedPlaces[pl.name] = uuid }
+            }
+
+            var text = raw
+            // Longest names first so "John Smith" isn't split by "John"
+            resolvedPersons.entries.sortedByDescending { it.key.length }
+                .forEach { (name, uuid) -> text = text.replace("[PERSON_$uuid]", "@$name") }
+            resolvedPlaces.entries.sortedByDescending { it.key.length }
+                .forEach { (name, uuid) -> text = text.replace("[PLACE_$uuid]", "!$name") }
+
+            Triple(entry.copy(content = text), resolvedPersons.toMap(), resolvedPlaces.toMap())
+        }
+    }
+
+    companion object {
+        private val PERSON_PLACEHOLDER = Regex("""\[PERSON_([a-fA-F0-9\-]{36})]""")
+        private val PLACE_PLACEHOLDER  = Regex("""\[PLACE_([a-fA-F0-9\-]{36})]""")
     }
 
     /**
@@ -75,8 +125,7 @@ class JournalRepository(
 
         // Vibe Evolution: Update vibe scores for mentioned persons
         // Extract UUIDs from [PERSON_UUID] placeholders
-        val regex = Regex("\\[PERSON_([a-fA-F0-9-]{36})\\]")
-        val mentions = maskedContent?.let { regex.findAll(it) }
+        val mentions = maskedContent?.let { PERSON_PLACEHOLDER.findAll(it) }
             ?.map { it.groupValues[1] }
             ?.distinct()
             ?.map { UUID.fromString(it) }

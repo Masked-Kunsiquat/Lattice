@@ -10,6 +10,7 @@ import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
+import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,8 @@ class SettingsViewModel(
     private val activityDao: ActivityHierarchyDao,
     private val exportManager: ExportManager,
     private val cloudCredentialStore: CloudCredentialStore,
+    val modelLoadState: StateFlow<ModelLoadState>,
+    val copyProgress: StateFlow<Float>,
 ) : ViewModel() {
 
     val settings: StateFlow<LatticeSettings> = settingsRepository.settings.stateIn(
@@ -122,6 +125,8 @@ class SettingsViewModel(
                     activityDao = app.database.activityHierarchyDao(),
                     exportManager = app.exportManager,
                     cloudCredentialStore = app.cloudCredentialStore,
+                    modelLoadState = app.localFallbackProvider.modelLoadState,
+                    copyProgress = app.localFallbackProvider.copyProgress,
                 ) as T
         }
     }

@@ -71,69 +71,105 @@ Frees `!` as the place trigger.
 
 ### 8.3 — `@` Person Mention Autocomplete
 
-**Goal:** Typing `@` opens a dropdown of existing `Person` records filtered by query.
-Selecting a result inserts the person's display name inline; on save the token resolves to
-`[PERSON_uuid]` via `PiiShield.mask()` (no changes needed to masking logic — name is in DB).
-"Create new" adds a minimal `Person` record and selects it.
+**Goal:** Typing `@` opens a docked suggestion strip of existing `Person` records filtered by
+query. The strip is pinned above the soft keyboard using `Modifier.imePadding()` — no popup
+or overlay. Selecting a chip inserts the display name inline; on save the token resolves to
+`[PERSON_uuid]` via pre-save substitution in `save()`.
+
+#### Completed — ViewModel & Data Layer
 
 - [x] `MentionState` sealed class in `JournalEditorViewModel`:
   `Idle | SuggestingPerson(query, results: List<Person>) | SuggestingTag(query, results: List<Tag>) | SuggestingPlace(query, results: List<Place>)`
-- [x] `onTextChanged()`: detects `@(\w*)$` / `#(\w*)$` / `!(\w*)$`; cancels previous `currentMentionJob` before launching new lookup; emits `SuggestingPerson` / `SuggestingTag` / `SuggestingPlace`
-- [x] `PersonDao`: `searchByName(query: String): Flow<List<Person>>` — `LIKE '%query%'` on `firstName`, `lastName`, `nickname`; limit 20
-- [x] `onMentionSelected(person: Person)`: replaces `@<query>` token using lambda overload (safe for `\`/`$` in names); sets `MentionState.Idle`
-- [x] `onMentionCreateNew(name: String)`: constructs `Person(ACQUAINTANCE)` locally, calls `PeopleRepository.insertPerson` (fire-and-forget, returns `Unit`), then calls `onMentionSelected(person)`
-- [x] `MentionDropdown` composable: single dropdown handling all three `Suggesting*` states with appropriate rows and "Create" footer
-- [x] Wire `MentionDropdown` into `JournalEditorScreen` — inside `Box` wrapping `OutlinedTextField`
-- [x] `PeopleRepository`: `suspend fun insertPerson(person: Person)` (Unit), `suspend fun searchByName(query: String): List<Person>` (via `Flow.first()`)
+- [x] `onTextChanged()`: detects `@((?:\w+ )*\w+|\w*)$` (spaces allowed); cancels previous `currentMentionJob` before launching new lookup; emits `SuggestingPerson`
+- [x] `PersonDao`: `searchByName(query): Flow<List<Person>>` — `LIKE '%query%'` on `firstName`, `lastName`, `nickname`; limit 20
+- [x] `onMentionSelected(person)`: replaces `@<query>` with `@displayName` (nickname ?? "First Last" ?? firstName); stores `displayName → UUID` in `resolvedPersons`; sets `MentionState.Idle`
+- [x] `onMentionCreateNew(name)`: splits query on first space into `firstName` + `lastName`; constructs `Person(ACQUAINTANCE)`; calls `insertPerson`; calls `onMentionSelected`
+- [x] `PeopleRepository`: `suspend fun insertPerson(person)`, `suspend fun searchByName(query): List<Person>`
+- [x] `save()`: substitutes `@displayName` → `[PERSON_uuid]` (longest-first) before handing content to `JournalRepository`
+
+#### Completed — Original Dropdown UI (superseded)
+
+- [x] `MentionDropdown` composable: `DropdownMenu` with `PopupProperties(focusable = false)`; `SuggestingPerson` branch
+- [x] Wired into `JournalEditorScreen` inside `Box(Alignment.BottomStart)` wrapping `OutlinedTextField`
+
+#### Completed — Docked Suggestion Strip
+
+- [x] **`SuggestionStrip` composable** — `LazyRow` of `SuggestionChip`s (results) + trailing `AssistChip` (create-new); handles all three `Suggesting*` states in a single `when` block; keyed by entity id; renders nothing when `Idle`
+  - Person chips: leading `Icons.Filled.Person`; label = `@displayName`; trailing `AssistChip` with `Icons.Filled.PersonAdd`
+  - Tag chips: label = `#name`; trailing `AssistChip` with `Icons.Filled.Add`
+  - Place chips: leading `Icons.Filled.LocationOn`; label = `!name`; trailing `AssistChip` with `Icons.Filled.AddLocation`
+- [x] **IME anchor** — `Modifier.imePadding()` on the editor `Column`; strip placed between text field and save/reframe row so it floats above the soft keyboard naturally
+- [x] Strip animates in/out with `fadeIn + expandVertically` / `fadeOut + shrinkVertically`; takes no layout space when `Idle`
+- [x] `TextField.onFocusChanged` calls `onMentionDismiss()` when focus leaves the field
+- [x] Removed `MentionDropdown`, `DropdownMenu`, `PopupProperties` — no popup overhead
+- [x] `PiiHighlightTransformation` already highlights `@\S+` fallback; multi-word resolved names covered by `resolvedPersonNames` set
 
 **Acceptance criteria:**
-- [ ] Typing `@Wat` surfaces Watson if seeded; selecting replaces token with display name
-- [ ] On save, display name is masked to `[PERSON_uuid]` by existing `PiiShield.mask()`
-- [ ] "Create new" inserts a `Person` row and immediately resolves the mention
-- [ ] Dropdown closes on selection, Escape, or tap-outside
+- [x] Typing `@Wat` surfaces Watson (if seeded) as an `AssistChip` above the keyboard; tapping replaces `@Wat` with `@Watson` (or full name)
+- [x] Typing `@John Smith` (multi-word) surfaces results matching first + last; chip inserts `@John Smith` as a highlighted token
+- [x] "Add @{query}" chip creates a new Person and immediately resolves the mention
+- [x] Strip is invisible when `mentionState == Idle`; reappears on next `@` trigger
+- [x] Keyboard remains visible and focussed throughout interaction (no IME steal)
 
 ---
 
 ### 8.4 — `#` Tag Autocomplete
 
-**Goal:** Typing `#` opens a dropdown of existing `Tag` records. Tags are unmasked
+**Goal:** Typing `#` shows existing `Tag` records in the docked strip. Tags are unmasked
 organizational labels — no PII implications. Selecting or creating a tag appends it to
 `JournalEntry.tagIds` on save.
 
-- [x] Extend `MentionState` with `SuggestingTag(query, results: List<Tag>)` alongside `SuggestingPerson`
-- [x] `onTextChanged()`: detect `#(\w*)$` pattern; query `TagRepository.searchTags(query)`; emit `MentionState.SuggestingTag`
-- [x] `onTagSelected(tag: Tag)`: replace `#<query>` with `#${tag.name}` in display text; store `tag.name→tag.id` in `resolvedTags` map
-- [x] `onTagCreateNew(name: String)`: get-or-create via `TagRepository.insertTag(name)`; call `onTagSelected`
-- [x] `TagRepository`: `suspend fun insertTag(name: String): Tag` (get-or-create by name), `suspend fun searchTags(query): List<Tag>`
-- [x] `TagDao`: add `getByName(name): Tag?` for get-or-create semantics
-- [x] `JournalEditorViewModel.save()`: scan text for `#(\w+)` tokens, resolve against `resolvedTags` map, include `tagIds` in `JournalEntry`
-- [x] `PiiHighlightTransformation`: add `tagHighlightColor` param; highlights `#\w+` tokens in `colorScheme.secondary`
+#### Completed — ViewModel & Data Layer
+
+- [x] `MentionState.SuggestingTag(query, results: List<Tag>)`
+- [x] `onTextChanged()`: detects `#(\w*)$`; queries `TagRepository.searchTags(query)`; emits `SuggestingTag`
+- [x] `onTagSelected(tag)`: replaces `#<query>` with `#${tag.name}`; stores `tag.name → tag.id` in `resolvedTags`
+- [x] `onTagCreateNew(name)`: get-or-create via `TagRepository.insertTag(name)`; calls `onTagSelected`
+- [x] `TagRepository`: `suspend fun insertTag(name): Tag`, `suspend fun searchTags(query): List<Tag>`
+- [x] `TagDao`: `getByName(name): Tag?` for get-or-create semantics
+- [x] `save()`: scans text for `#(\w+)` tokens, resolves against `resolvedTags`, includes `tagIds` in `JournalEntry`
+- [x] `PiiHighlightTransformation`: `tagHighlightColor` param; highlights `#\w+` tokens in `colorScheme.secondary`
+
+#### Completed — Docked Strip Integration
+
+- [x] `SuggestionStrip` handles `MentionState.SuggestingTag`: chips labelled `#name`; trailing "Add #" `AssistChip`
+- [x] Tags single-word only (`\w*` regex); no multi-word handling needed
+- [x] `PiiHighlightTransformation` `TAG_REGEX` covers resolved tags; no changes needed
 
 **Acceptance criteria:**
-- [ ] Typing `#work` surfaces existing "work" tag; creates it if absent
-- [ ] Saved entry has correct `tagIds` list in DB
-- [ ] Tags display unmasked in history screen
+- [x] Typing `#work` surfaces existing "work" tag as a chip; creates it if absent
+- [x] Strip chip reads `#work`; tapping inserts `#work` highlighted in `secondary` color
+- [ ] Saved entry has correct `tagIds` list in DB — *not yet device-verified*
 
 ---
 
 ### 8.5 — `!` Place Autocomplete + PiiShield Extension
 
-**Goal:** Typing `!` opens a dropdown of existing `Place` records. Places are masked like
+**Goal:** Typing `!` shows existing `Place` records in the docked strip. Places are masked like
 persons — `[PLACE_uuid]` tokens stored in DB, display names shown in UI.
 
-- [x] Extend `MentionState` with `SuggestingPlace(query, results: List<Place>)` — `!(\w*)$` trigger
+#### Completed — ViewModel & Data Layer
+
+- [x] `MentionState.SuggestingPlace(query, results: List<Place>)` — `!((?:\w+ )*\w+|\w*)$` trigger
 - [x] `PlaceRepository`: `suspend fun searchPlaces(query): List<Place>`, `suspend fun insertPlace(name): Place` (get-or-create)
-- [x] `onPlaceSelected` / `onPlaceCreateNew` — mirror the `@` person flow; replaces `!query` with `place.name`; stores `name→UUID` in `resolvedPlaces`
-- [x] `PiiShield.mask()`: add place masking pass — `[PLACE_uuid]` tokens, word-boundary, longest-first; `places: List<Place> = emptyList()` (backward-compatible)
-- [x] `PiiShield.unmask()`: add place unmask pass — `[PLACE_uuid]` → `place.name`
-- [x] `JournalRepository`: inject `PlaceDao`; `saveEntry()` and `maskText()` pass places to `PiiShield.mask()`; `getEntries()` and `getEntryById()` pass places to `PiiShield.unmask()`
-- [x] `PiiHighlightTransformation`: `placeHighlightColor` param; highlights `[PLACE_uuid]` tokens in `PlaceGreen` (0xFF2E7D32)
-- [x] `JournalEntry.placeIds` already present (v9 schema); `save()` collects UUIDs for place names still in text
+- [x] `onPlaceSelected(place)`: replaces `!<query>` with `!${place.name}`; stores `name → UUID` in `resolvedPlaces`; sets `MentionState.Idle`
+- [x] `onPlaceCreateNew(name)`: get-or-create via `PlaceRepository.insertPlace(name)`; calls `onPlaceSelected`
+- [x] `PiiShield.mask()`: place masking pass — `[PLACE_uuid]` tokens, longest-first; backward-compatible `places` param
+- [x] `PiiShield.unmask()`: place unmask pass — `[PLACE_uuid]` → `place.name`
+- [x] `JournalRepository`: injects `PlaceDao`; `saveEntry()` + `maskText()` pass places to `PiiShield.mask()`; `getEntries()` + `getEntryById()` pass places to `PiiShield.unmask()`
+- [x] `save()`: substitutes `!name` → `[PLACE_uuid]` (longest-first) before handoff; collects `placeIds` from `resolvedPlaces` map
+- [x] `PiiHighlightTransformation`: `placeHighlightColor` param + `resolvedPlaceNames` set; highlights multi-word `!Place Name` tokens in `PlaceGreen`
+
+#### Completed — Docked Strip Integration
+
+- [x] `SuggestionStrip` handles `MentionState.SuggestingPlace`: chips with `Icons.Filled.LocationOn` + `!name`; trailing "Add !" `AssistChip` with `Icons.Filled.AddLocation`
+- [x] Multi-word place names handled by `PLACE_REGEX` and `resolvedPlaceNames` highlight set; no regex changes needed
 
 **Acceptance criteria:**
-- [ ] `!library` → stored as `[PLACE_<uuid>]`; displayed as "library" in history
-- [ ] `PiiShield.mask()` masks both persons and places before any entry reaches the LLM
-- [ ] `[PLACE_uuid]` tokens highlighted in a distinct color in the editor
+- [x] `!library` → strip shows "!library" chip → tap → stored as `[PLACE_<uuid>]`; displayed as "!library" in editor (highlighted green), "library" unmasked in history
+- [x] `!Central Park` (multi-word) → chip inserts `!Central Park` as a single green-highlighted token
+- [ ] `PiiShield.mask()` masks both persons and places before any entry reaches the LLM — *requires reframe smoke-test to verify*
+- [ ] Strip dismiss (tap outside text field) sets `mentionState = Idle`; strip disappears
 
 ---
 
@@ -143,10 +179,11 @@ persons — `[PLACE_uuid]` tokens stored in DB, display names shown in UI.
 friction points before any wider testing.
 
 - [ ] Fresh install: confirm lock screen → biometric → editor flow works
-- [ ] Write a journal entry with `@`, `#`, `!` tags — verify all three dropdowns fire
+- [ ] Write a journal entry with `@`, `#`, `!` tags — verify all three strips fire above the keyboard
+- [ ] **IME-Padding and Keyboard-Anchor Validation** — confirm `SuggestionStrip` sits flush above the soft keyboard on API 29+ in both gesture-nav and 3-button-nav modes; test with `WindowCompat.setDecorFitsSystemWindows(window, false)` enabled; confirm strip does not overlap the bottom nav bar when keyboard is dismissed
 - [ ] Trigger a reframe via the new button — verify `Loading → Streaming → Done` states
 - [ ] Accept the reframe — verify it persists to the entry
-- [ ] Navigate to History — confirm the entry appears with unmasked content + tags
+- [ ] Navigate to History — confirm the entry appears with unmasked content + tags; mood dot positioned correctly in circumplex on open
 - [ ] Navigate to Audit Trail — confirm `TransitEvent` for the reframe is logged
 - [ ] Navigate to Settings — confirm cloud toggle, export, and Debug screen (debug build only) all open
 - [ ] Delete the entry — confirm swipe-delete removes it from history

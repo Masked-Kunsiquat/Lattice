@@ -267,13 +267,25 @@ class LlamaTokenizer(private val context: Context) {
         reader.beginArray()
         var rank = 0
         while (reader.hasNext()) {
-            val merge = reader.nextString()
-            val spaceIdx = merge.indexOf(' ')
-            if (spaceIdx > 0) {
-                val left = merge.substring(0, spaceIdx)
-                val right = merge.substring(spaceIdx + 1)
-                mergeRanks["$left\u0001$right"] = rank
+            // Llama-3 tokenizer.json stores merges as ["left", "right"] pairs;
+            // some older tokenizers use "left right" single strings. Handle both.
+            val left: String
+            val right: String
+            if (reader.peek() == JsonToken.BEGIN_ARRAY) {
+                reader.beginArray()
+                left = reader.nextString()
+                right = reader.nextString()
+                reader.endArray()
+            } else {
+                val merge = reader.nextString()
+                val parts = merge.split(MERGE_SPLIT_REGEX, 2)
+                if (parts.size != 2 || parts[0].isEmpty() || parts[1].isEmpty()) {
+                    rank++; continue
+                }
+                left = parts[0]
+                right = parts[1]
             }
+            mergeRanks["$left\u0001$right"] = rank
             rank++
         }
         reader.endArray()
@@ -332,5 +344,7 @@ class LlamaTokenizer(private val context: Context) {
         private val PRE_TOKENIZER_PATTERN: Pattern = Pattern.compile(
             """(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"""
         )
+
+        private val MERGE_SPLIT_REGEX = Regex("\\s+")
     }
 }

@@ -3,8 +3,10 @@ package com.github.maskedkunisquat.lattice.core.logic
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.providers.NNAPIFlags
 import android.content.Context
 import android.util.Log
+import java.util.EnumSet
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -18,6 +20,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 
@@ -76,6 +81,10 @@ class LocalFallbackProvider(
     private val _modelLoadState = MutableStateFlow(ModelLoadState.IDLE)
     val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
 
+    /** 0.0–1.0 progress during [ModelLoadState.COPYING_SHARDS]; 0 otherwise. */
+    private val _copyProgress = MutableStateFlow(0f)
+    val copyProgress: StateFlow<Float> = _copyProgress.asStateFlow()
+
     /**
      * Copies the model shards from assets to internal storage (if needed) then
      * opens an [OrtSession] with NNAPI acceleration and initialises the tokenizer.
@@ -91,6 +100,7 @@ class LocalFallbackProvider(
                 loadArchConfig()
                 _modelLoadState.value = ModelLoadState.COPYING_SHARDS
                 copyAssetsToFilesDir()
+                _copyProgress.value = 0f
                 _modelLoadState.value = ModelLoadState.LOADING_SESSION
                 val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
                 val newSession = createSession(modelPath)
@@ -109,6 +119,7 @@ class LocalFallbackProvider(
                 // Log after assignment so session?.let inside logSessionInfo() sees the session.
                 logSessionInfo()
             } catch (e: Exception) {
+                _copyProgress.value = 0f
                 _modelLoadState.value = ModelLoadState.ERROR
                 initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
@@ -156,8 +167,11 @@ class LocalFallbackProvider(
                 return@flow
             }
 
-            // KV cache: Array<Pair<keyFloats, valueFloats>>, both start empty.
-            var kvCache = Array(numLayers) { Pair(FloatArray(0), FloatArray(0)) }
+            // KV cache: off-heap DirectByteBuffers so they don't count against the
+            // 256 MB Java heap limit. Both start empty (capacity 0).
+            var kvCache = Array(numLayers) {
+                Pair(ByteBuffer.allocateDirect(0), ByteBuffer.allocateDirect(0))
+            }
             var pastLen = 0
             val byteBuffer = ByteArrayOutputStream()
 
@@ -221,7 +235,7 @@ class LocalFallbackProvider(
 
     private data class ForwardResult(
         var logits: FloatArray,
-        val presentKv: Array<Pair<FloatArray, FloatArray>>,
+        val presentKv: Array<Pair<ByteBuffer, ByteBuffer>>,
         val numLayers: Int,
     )
 
@@ -237,14 +251,15 @@ class LocalFallbackProvider(
         sess: OrtSession,
         inputIds: LongArray,
         pastLen: Int,
-        kvCache: Array<Pair<FloatArray, FloatArray>>,
+        kvCache: Array<Pair<ByteBuffer, ByteBuffer>>,
         numLayers: Int,
     ): ForwardResult {
         val seqLen = inputIds.size
         val inputs = mutableMapOf<String, OnnxTensor>()
 
         try {
-            // Standard input tensors
+            // Standard input tensors.
+            // position_ids is NOT passed — this model computes positions internally.
             inputs["input_ids"] = OnnxTensor.createTensor(
                 env, LongBuffer.wrap(inputIds), longArrayOf(1, seqLen.toLong())
             )
@@ -253,43 +268,42 @@ class LocalFallbackProvider(
                 LongBuffer.wrap(LongArray(pastLen + seqLen) { 1L }),
                 longArrayOf(1, (pastLen + seqLen).toLong())
             )
-            inputs["position_ids"] = OnnxTensor.createTensor(
-                env,
-                LongBuffer.wrap(LongArray(seqLen) { (pastLen + it).toLong() }),
-                longArrayOf(1, seqLen.toLong())
-            )
 
             // Past KV cache tensors (empty on first pass: shape [1, kvHeads, 0, headDim])
             for (i in 0 until numLayers) {
                 val (kd, vd) = kvCache[i]
-                val kvPastLen = if (kd.isEmpty()) 0L else pastLen.toLong()
+                val kvPastLen = if (kd.capacity() == 0) 0L else pastLen.toLong()
                 val kvShape = longArrayOf(1, numKvHeads, kvPastLen, headDim)
                 inputs["past_key_values.$i.key"] = OnnxTensor.createTensor(
-                    env, FloatBuffer.wrap(kd), kvShape
+                    env, (kd.rewind() as ByteBuffer).order(ByteOrder.nativeOrder()).asFloatBuffer(), kvShape
                 )
                 inputs["past_key_values.$i.value"] = OnnxTensor.createTensor(
-                    env, FloatBuffer.wrap(vd), kvShape
+                    env, (vd.rewind() as ByteBuffer).order(ByteOrder.nativeOrder()).asFloatBuffer(), kvShape
                 )
             }
 
             val outputs = sess.run(inputs)
             return outputs.use { out ->
-                // Extract logits for the last sequence position
+                // Read only the last-position logits from the native tensor buffer.
+                // OnnxTensor.getFloatBuffer() copies the entire [1,seqLen,vocab] tensor
+                // (~114 MB at seqLen=233) to the Java heap. Instead, we reflect into the
+                // private getBuffer() which returns the direct ByteBuffer wrapping native
+                // memory (zero-copy), then read just vocabSize floats from the last position.
                 val logitsTensor = out["logits"].get() as OnnxTensor
-                val allLogits = FloatArray(logitsTensor.floatBuffer.remaining())
-                logitsTensor.floatBuffer.get(allLogits)
-                // Only keep the last position's logits ([1, seqLen, vocab] → [vocab])
-                val lastPosLogits = allLogits.copyOfRange(
-                    (seqLen - 1) * vocabSize,
-                    seqLen * vocabSize
-                )
+                val lastPosLogits = FloatArray(vocabSize)
+                nativeFloatsAt(logitsTensor, (seqLen - 1) * vocabSize, lastPosLogits)
 
-                // Extract present KV cache for the next step
+                // Extract present KV cache into off-heap DirectByteBuffers so the
+                // growing KV state doesn't count against the 256 MB Java heap limit.
                 val presentKv = Array(numLayers) { i ->
                     val kTensor = out["present.$i.key"].get() as OnnxTensor
                     val vTensor = out["present.$i.value"].get() as OnnxTensor
-                    val kData = FloatArray(kTensor.floatBuffer.remaining()).also { kTensor.floatBuffer.get(it) }
-                    val vData = FloatArray(vTensor.floatBuffer.remaining()).also { vTensor.floatBuffer.get(it) }
+                    val kBytes = kTensor.info.getNumElements().toInt() * Float.SIZE_BYTES
+                    val vBytes = vTensor.info.getNumElements().toInt() * Float.SIZE_BYTES
+                    val kData = ByteBuffer.allocateDirect(kBytes).order(ByteOrder.nativeOrder())
+                    val vData = ByteBuffer.allocateDirect(vBytes).order(ByteOrder.nativeOrder())
+                    nativeBytesAt(kTensor, kData)
+                    nativeBytesAt(vTensor, vData)
                     Pair(kData, vData)
                 }
 
@@ -393,23 +407,66 @@ class LocalFallbackProvider(
     }
 
     private fun copyAssetsToFilesDir() {
+        // Known total for the three model shards — used for determinate progress.
+        // Slight over/under-count is fine; progress is clamped to [0, 1].
+        val approxTotalBytes = 3_435_000_000L
+        var copiedBytes = 0L
+
         for (asset in ASSET_FILES) {
             val dest = File(context.filesDir, asset)
-            if (!dest.exists()) {
+            val tmp  = File(context.filesDir, "$asset.tmp")
+            // Clean up any leftover temp file from a previous interrupted copy.
+            if (tmp.exists()) tmp.delete()
+            if (dest.exists()) {
+                // Already present from a previous launch — count its size and move on.
+                copiedBytes += dest.length()
+                _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
+                continue
+            }
+            try {
                 context.assets.open(asset).use { src ->
-                    dest.outputStream().use { dst -> src.copyTo(dst) }
+                    tmp.outputStream().use { dst ->
+                        val buf = ByteArray(2 * 1024 * 1024) // 2 MB chunks
+                        var n: Int
+                        while (src.read(buf).also { n = it } != -1) {
+                            dst.write(buf, 0, n)
+                            copiedBytes += n
+                            _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
+                        }
+                    }
                 }
+                // Atomic rename: dest is only visible after a complete write.
+                if (!tmp.renameTo(dest)) {
+                    throw IOException("Failed to rename $tmp to $dest")
+                }
+            } catch (e: Exception) {
+                tmp.delete()
+                throw e
             }
         }
+        _copyProgress.value = 1f
     }
 
     private fun createSession(modelPath: String): OrtSession {
+        val t0 = System.currentTimeMillis()
         return try {
-            val opts = OrtSession.SessionOptions().apply { addNnapi() }
-            env.createSession(modelPath, opts)
-        } catch (_: Exception) {
-            Log.i(TAG, "NNAPI unavailable, falling back to CPU execution provider.")
-            env.createSession(modelPath, OrtSession.SessionOptions())
+            // USE_FP16 lets NNAPI run eligible ops in FP16 — smaller compilation
+            // units, less NNAPI IR to compile, and faster inference on NPU/GPU.
+            OrtSession.SessionOptions().use { opts ->
+                opts.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16))
+                opts.setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(4))
+                env.createSession(modelPath, opts).also {
+                    Log.i(TAG, "NNAPI session ready in ${System.currentTimeMillis() - t0} ms")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "NNAPI unavailable (${e.message}) — CPU fallback after ${System.currentTimeMillis() - t0} ms")
+            OrtSession.SessionOptions().use { cpuOpts ->
+                cpuOpts.setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(4))
+                env.createSession(modelPath, cpuOpts).also {
+                    Log.i(TAG, "CPU session ready in ${System.currentTimeMillis() - t0} ms total")
+                }
+            }
         }
     }
 
@@ -417,6 +474,54 @@ class LocalFallbackProvider(
         session?.let { sess ->
             Log.d(TAG, "Session inputs:  ${sess.inputInfo.keys.sorted()}")
             Log.d(TAG, "Session outputs: ${sess.outputInfo.keys.sorted()}")
+        }
+    }
+
+    // ── Zero-copy tensor read ─────────────────────────────────────────────────
+
+    /**
+     * Reads [dst.size] floats from [tensor]'s native memory starting at float-index [offset],
+     * without copying the whole tensor to the Java heap.
+     *
+     * OnnxTensor.getFloatBuffer() / getByteBuffer() both call FloatBuffer.allocate() /
+     * ByteBuffer.allocate() internally, copying the entire tensor to a new heap buffer.
+     * For the logits tensor that's ~114 MB per step at seqLen=233 — enough to OOM.
+     *
+     * The private `getBuffer()` method returns a DirectByteBuffer wrapping the native C++
+     * tensor memory directly (zero-copy). We access it via reflection and position to the
+     * slice we need. Falls back to the heap copy on reflection failure.
+     */
+    /**
+     * Copies all bytes from [tensor]'s native memory into [dst] (a pre-sized DirectByteBuffer)
+     * without routing through a heap-allocated intermediate buffer.
+     */
+    private fun nativeBytesAt(tensor: OnnxTensor, dst: ByteBuffer) {
+        try {
+            val m = OnnxTensor::class.java.getDeclaredMethod("getBuffer")
+                .also { it.isAccessible = true }
+            val src = (m.invoke(tensor) as ByteBuffer).order(ByteOrder.nativeOrder())
+            dst.clear()
+            dst.put(src)
+            dst.rewind()
+        } catch (_: Exception) {
+            dst.clear()
+            dst.order(ByteOrder.nativeOrder()).asFloatBuffer().put(tensor.floatBuffer)
+            dst.rewind()
+        }
+    }
+
+    private fun nativeFloatsAt(tensor: OnnxTensor, offset: Int, dst: FloatArray) {
+        try {
+            val m = OnnxTensor::class.java.getDeclaredMethod("getBuffer")
+                .also { it.isAccessible = true }
+            val buf = (m.invoke(tensor) as ByteBuffer)
+                .order(ByteOrder.nativeOrder())
+            (buf.position(offset * Float.SIZE_BYTES) as ByteBuffer)
+                .asFloatBuffer()
+                .get(dst)
+        } catch (_: Exception) {
+            // Reflection unavailable — fall back to heap copy.
+            (tensor.floatBuffer.position(offset) as FloatBuffer).get(dst)
         }
     }
 
