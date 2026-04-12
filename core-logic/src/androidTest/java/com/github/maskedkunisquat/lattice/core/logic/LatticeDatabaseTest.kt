@@ -30,7 +30,7 @@ class LatticeDatabaseTest {
         db = Room.inMemoryDatabaseBuilder(
             context, LatticeDatabase::class.java
         ).build()
-        repository = JournalRepository(db.journalDao(), db.personDao(), db.mentionDao(), db.transitEventDao(), EmbeddingProvider())
+        repository = JournalRepository(db.journalDao(), db.personDao(), db.mentionDao(), db.transitEventDao(), EmbeddingProvider(), db.placeDao())
     }
 
     @After
