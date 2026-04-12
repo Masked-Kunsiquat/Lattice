@@ -92,8 +92,16 @@ fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
                 301, 302, 303, 307, 308 -> {
                     val raw = conn.getHeaderField("Location")
                         ?: throw GradleException("Redirect $code with no Location header (attempt $attempt) for $url")
-                    // Resolve relative redirects (e.g. "/path") against the current absolute URL.
-                    location = java.net.URI(location).resolve(raw).toString()
+                    // Resolve relative redirects against the current URL, then validate the
+                    // result before following it (guards against open-redirect exploitation).
+                    val resolved = java.net.URI(location).resolve(raw)
+                    val originalHost = java.net.URI(url).host
+                    if (resolved.scheme != "https" || resolved.host != originalHost) {
+                        throw GradleException(
+                            "Redirect to untrusted location '${resolved}' rejected (expected https://$originalHost)"
+                        )
+                    }
+                    location = resolved.toString()
                 }
                 else -> throw GradleException("HTTP $code downloading $url")
             }

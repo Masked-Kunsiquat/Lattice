@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -411,22 +412,34 @@ class LocalFallbackProvider(
 
         for (asset in ASSET_FILES) {
             val dest = File(context.filesDir, asset)
+            val tmp  = File(context.filesDir, "$asset.tmp")
+            // Clean up any leftover temp file from a previous interrupted copy.
+            if (tmp.exists()) tmp.delete()
             if (dest.exists()) {
                 // Already present from a previous launch — count its size and move on.
                 copiedBytes += dest.length()
                 _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
                 continue
             }
-            context.assets.open(asset).use { src ->
-                dest.outputStream().use { dst ->
-                    val buf = ByteArray(2 * 1024 * 1024) // 2 MB chunks
-                    var n: Int
-                    while (src.read(buf).also { n = it } != -1) {
-                        dst.write(buf, 0, n)
-                        copiedBytes += n
-                        _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
+            try {
+                context.assets.open(asset).use { src ->
+                    tmp.outputStream().use { dst ->
+                        val buf = ByteArray(2 * 1024 * 1024) // 2 MB chunks
+                        var n: Int
+                        while (src.read(buf).also { n = it } != -1) {
+                            dst.write(buf, 0, n)
+                            copiedBytes += n
+                            _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
+                        }
                     }
                 }
+                // Atomic rename: dest is only visible after a complete write.
+                if (!tmp.renameTo(dest)) {
+                    throw IOException("Failed to rename $tmp to $dest")
+                }
+            } catch (e: Exception) {
+                tmp.delete()
+                throw e
             }
         }
         _copyProgress.value = 1f

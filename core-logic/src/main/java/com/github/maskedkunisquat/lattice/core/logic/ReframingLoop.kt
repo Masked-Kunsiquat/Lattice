@@ -210,19 +210,26 @@ class ReframingLoop(
 
         val techniqueBlock = when (strategy) {
             ReframeStrategy.SOCRATIC_REALITY_TESTING ->
-                "Write a 2–3 sentence reframe in the writer's own voice that:\n" +
+                "Use Socratic Reality Testing (probability calibration): write a 2–3 sentence " +
+                "reframe in the writer's own voice that:\n" +
                 "1. Names the core fear or assumption driving the thought.\n" +
-                "2. Questions its certainty — what evidence supports or contradicts it?\n" +
+                "2. Questions its certainty — what is the actual probability this belief is true?\n" +
                 "3. Lands on a more balanced, realistic interpretation."
 
             ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
+                val stepTwo = if (evidenceEntries.isNotEmpty())
+                    "2. Counters the belief with a specific past experience contrary to it " +
+                    "(draw from the Evidence for the Contrary provided above).\n"
+                else
+                    "2. Offers a realistic counterthought contrary to the belief — " +
+                    "acknowledge difficulty without inventing past journal evidence.\n"
                 val stepThree = if (baActivity != null)
                     "3. Ends with one small concrete step: \"${baActivity.taskName}\"."
                 else
                     "3. Ends with one small concrete action to restore a sense of agency."
-                "Write a 2–3 sentence reframe in the writer's own voice that:\n" +
+                "Use Behavioral Activation: write a 2–3 sentence reframe in the writer's own voice that:\n" +
                 "1. Acknowledges the difficulty without catastrophising.\n" +
-                "2. Counters the belief with a specific past experience that contradicts it.\n" +
+                stepTwo +
                 stepThree
             }
 
@@ -240,7 +247,7 @@ class ReframingLoop(
             "- $snippet"
         }
         val evidenceBlock = if (evidenceBullets.isNotEmpty()) {
-            "\n\nPast journal moments that contradict this belief:\n" +
+            "\n\nEvidence for the Contrary (past journal moments that contradict this belief):\n" +
                 evidenceBullets.joinToString("\n")
         } else ""
 

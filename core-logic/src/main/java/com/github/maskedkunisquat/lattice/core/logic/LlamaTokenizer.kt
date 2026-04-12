@@ -278,10 +278,12 @@ class LlamaTokenizer(private val context: Context) {
                 reader.endArray()
             } else {
                 val merge = reader.nextString()
-                val spaceIdx = merge.indexOf(' ')
-                if (spaceIdx <= 0) { rank++; continue }
-                left = merge.substring(0, spaceIdx)
-                right = merge.substring(spaceIdx + 1)
+                val parts = merge.split(Regex("\\s+"), 2)
+                if (parts.size != 2 || parts[0].isEmpty() || parts[1].isEmpty()) {
+                    rank++; continue
+                }
+                left = parts[0]
+                right = parts[1]
             }
             mergeRanks["$left\u0001$right"] = rank
             rank++

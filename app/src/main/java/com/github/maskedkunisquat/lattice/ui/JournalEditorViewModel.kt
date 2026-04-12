@@ -262,16 +262,21 @@ class JournalEditorViewModel(
 
     fun save() {
         val state = _uiState.value
-        val newId = UUID.randomUUID()
+        // Reuse the original entry ID when editing an existing entry so we UPDATE the row
+        // rather than inserting a duplicate. For new entries, generate a fresh UUID.
+        val newId = initialEntryId ?: UUID.randomUUID()
         savedEntryId = null  // invalidate any prior entry before the async write
         // Collect UUIDs for #tag tokens still present in the text
         val tagIds = TAG_WORD_REGEX.findAll(state.text)
             .mapNotNull { state.resolvedTags[it.groupValues[1]] }
             .distinct()
             .toList()
-        // Collect placeIds from resolved map — no sentinel parsing needed since
-        // onPlaceSelected now keeps !name display form in text until save.
-        val placeIds = state.resolvedPlaces.values.distinct().toList()
+        // Collect UUIDs only for !place tokens actually present in the text, mirroring
+        // the tag logic above. This avoids carrying stale UUIDs for places the user deleted.
+        val placeIds = PLACE_WORD_REGEX.findAll(state.text)
+            .mapNotNull { state.resolvedPlaces[it.groupValues[1]] }
+            .distinct()
+            .toList()
 
         // Substitute display-form mentions with PII sentinels before handing off to
         // JournalRepository (which will further mask any remaining plain-text names via PiiShield).
@@ -441,6 +446,8 @@ class JournalEditorViewModel(
         private val PLACE_REGEX    = Regex("!((?:$W+ )*$W+|$W*)$")
         /** Matches all resolved #tag tokens in saved text for tagId collection. */
         private val TAG_WORD_REGEX = Regex("#($W+)")
+        /** Matches all resolved !place tokens in saved text for placeId collection. */
+        private val PLACE_WORD_REGEX = Regex("!((?:$W+ )*$W+)")
 
         fun factory(app: LatticeApplication, initialEntryId: UUID? = null) =
             object : ViewModelProvider.Factory {
