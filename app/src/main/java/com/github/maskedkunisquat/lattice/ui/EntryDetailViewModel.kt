@@ -115,7 +115,8 @@ class EntryDetailViewModel(
         val reframe = (_reframeState.value as? ReframeState.Done)?.text ?: return
         viewModelScope.launch {
             try {
-                journalRepository.updateReframedContent(entryId.toString(), reframe)
+                val maskedReframe = journalRepository.maskText(reframe)
+                journalRepository.updateReframedContent(entryId.toString(), maskedReframe)
                 _reframeState.value = ReframeState.Idle
             } catch (e: Exception) {
                 _reframeState.value = ReframeState.Error("Failed to save reframe: ${e.message}")
