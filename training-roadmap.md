@@ -23,10 +23,10 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Assert output dimensionality is 384 and no zero-vector is returned for non-empty input
 
 ### 1.3 `SearchBenchmark`
-- [ ] Create `core-logic/src/androidTest/.../SearchBenchmark.kt`
-- [ ] Seed in-memory Room with all 3 personas (90+ entries) using `SeedManager` in `@Before`
-- [ ] Benchmark `findSimilarEntries(query, limit=5)` — record median and p99 across 100 calls
-- [ ] Benchmark `findEvidenceEntries(placeholders)` separately
+- [x] Create `core-logic/src/androidTest/.../SearchBenchmark.kt`
+- [x] Seed in-memory Room with all 3 personas (90+ entries) using `SeedManager` in `@Before`
+- [x] Benchmark `findSimilarEntries(query, limit=5)` — record median and p99 across 100 calls
+- [x] Benchmark `findEvidenceEntries(placeholders)` separately
 
 ### 1.4 `CognitiveLoopBenchmark`
 - [ ] Create `core-logic/src/androidTest/.../CognitiveLoopBenchmark.kt`
