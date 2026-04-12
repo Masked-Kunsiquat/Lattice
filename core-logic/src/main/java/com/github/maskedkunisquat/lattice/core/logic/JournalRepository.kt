@@ -125,8 +125,7 @@ class JournalRepository(
 
         // Vibe Evolution: Update vibe scores for mentioned persons
         // Extract UUIDs from [PERSON_UUID] placeholders
-        val regex = Regex("\\[PERSON_([a-fA-F0-9-]{36})\\]")
-        val mentions = maskedContent?.let { regex.findAll(it) }
+        val mentions = maskedContent?.let { PERSON_PLACEHOLDER.findAll(it) }
             ?.map { it.groupValues[1] }
             ?.distinct()
             ?.map { UUID.fromString(it) }

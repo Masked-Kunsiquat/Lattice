@@ -131,8 +131,12 @@ class EntryDetailViewModel(
     fun deleteEntry() {
         val e = (entryState.value as? EntryDetailState.Found)?.entry ?: return
         viewModelScope.launch {
-            journalRepository.deleteEntry(e)
-            _deletedEvent.emit(Unit)
+            try {
+                journalRepository.deleteEntry(e)
+                _deletedEvent.emit(Unit)
+            } catch (ex: Exception) {
+                Log.e(TAG, "Failed to delete entry ${e.id}", ex)
+            }
         }
     }
 

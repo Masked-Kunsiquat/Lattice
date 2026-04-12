@@ -452,20 +452,20 @@ class LocalFallbackProvider(
         return try {
             // USE_FP16 lets NNAPI run eligible ops in FP16 — smaller compilation
             // units, less NNAPI IR to compile, and faster inference on NPU/GPU.
-            val opts = OrtSession.SessionOptions().apply {
-                addNnapi(EnumSet.of(NNAPIFlags.USE_FP16))
-                setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(4))
-            }
-            env.createSession(modelPath, opts).also {
-                Log.i(TAG, "NNAPI session ready in ${System.currentTimeMillis() - t0} ms")
+            OrtSession.SessionOptions().use { opts ->
+                opts.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16))
+                opts.setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(4))
+                env.createSession(modelPath, opts).also {
+                    Log.i(TAG, "NNAPI session ready in ${System.currentTimeMillis() - t0} ms")
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "NNAPI unavailable (${e.message}) — CPU fallback after ${System.currentTimeMillis() - t0} ms")
-            val cpuOpts = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(4))
-            }
-            env.createSession(modelPath, cpuOpts).also {
-                Log.i(TAG, "CPU session ready in ${System.currentTimeMillis() - t0} ms total")
+            OrtSession.SessionOptions().use { cpuOpts ->
+                cpuOpts.setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(4))
+                env.createSession(modelPath, cpuOpts).also {
+                    Log.i(TAG, "CPU session ready in ${System.currentTimeMillis() - t0} ms total")
+                }
             }
         }
     }
