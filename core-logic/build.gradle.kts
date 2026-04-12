@@ -20,6 +20,11 @@ android {
                 "proguard-rules.pro"
             )
         }
+        create("benchmark") {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
     testOptions {
         // Log.w (and other Android stubs) throw RuntimeException by default on the desktop JVM.
@@ -49,4 +54,5 @@ dependencies {
     androidTestImplementation(libs.androidx.core)
     androidTestImplementation(libs.androidx.runner)
     androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.benchmark.junit4)
 }
