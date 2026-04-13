@@ -143,7 +143,7 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] **2.7-h** `AffectiveMlp.kt:load` — reaching into `AffectiveMlpInitializer.PREF_KEY` to perform eviction is tight coupling; introduce `AffectiveManifestStore.resetAll(prefs)` that owns both key removals so a rename doesn't silently break eviction
 
 #### Test coverage
-- [ ] **2.7-i** Add end-to-end warm-start integration test in `AffectiveMlpInitializerTest`: load asset → `trainBatch` → save weights → write manifest → assert guard flag set → second call is a no-op
+- [x] **2.7-i** Add end-to-end warm-start integration test in `AffectiveMlpInitializerTest`: load asset → `trainBatch` → save weights → write manifest → assert guard flag set → second call is a no-op
 - [ ] **2.7-j** Add convergence assertion to `AffectiveMlpTest`: after `AffectiveMlpTrainer.trainBatch()` on a small synthetic dataset, `forward(sample.embedding)` output must be closer to the target than before training
 - [ ] **2.7-k** Add edge-case tests to `AffectiveMlpTrainerTest`: (1) `lr=1.0` → loss stays finite; (2) zero-gradient step with `weightDecay > 0` → weight magnitudes still decrease
 - [ ] **2.7-l** Add fallback scenario to `ReframingLoopTest`: embedder present but `generateEmbedding()` throws → source must be `REGEX`, not a crash
