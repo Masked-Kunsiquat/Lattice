@@ -3,10 +3,12 @@ package com.github.maskedkunisquat.lattice.ui
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Mention
 import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
@@ -45,6 +47,17 @@ class JournalEditorViewModelTest {
         override fun getPersons(): Flow<List<Person>> = flowOf(emptyList())
         override fun getPersonById(id: UUID): Flow<Person?> = flowOf(null)
         override suspend fun incrementVibeScore(personId: UUID, delta: Float) = Unit
+        override suspend fun deletePersonById(id: UUID) = Unit
+        override fun searchByName(query: String): Flow<List<Person>> = flowOf(emptyList())
+    }
+
+    private class FakePlaceDao : PlaceDao {
+        override suspend fun insertPlace(place: Place) = Unit
+        override suspend fun deleteById(id: UUID) = Unit
+        override fun getAll(): Flow<List<Place>> = flowOf(emptyList())
+        override fun searchByName(query: String): Flow<List<Place>> = flowOf(emptyList())
+        override suspend fun getById(id: UUID): Place? = null
+        override suspend fun getByName(name: String): Place? = null
     }
 
     private class FakeJournalDao : JournalDao {
@@ -59,6 +72,9 @@ class JournalEditorViewModelTest {
             updatedReframes.add(entryId to content)
         }
         override suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry> = emptyList()
+        override suspend fun deleteEntryById(id: UUID) = Unit
+        override suspend fun getLabeledEntriesSince(timestamp: Long): List<JournalEntry> = emptyList()
+        override suspend fun countLabeledEntriesSince(timestamp: Long): Int = 0
     }
 
     private class FakeTransitEventDao : TransitEventDao {
@@ -98,7 +114,8 @@ class JournalEditorViewModelTest {
             transitEventDao = FakeTransitEventDao(),
             embeddingProvider = object : EmbeddingProvider() {
                 override suspend fun generateEmbedding(text: String) = FloatArray(384)
-            }
+            },
+            placeDao = FakePlaceDao(),
         )
         val unavailableProvider = object : LlmProvider {
             override val id = "none"

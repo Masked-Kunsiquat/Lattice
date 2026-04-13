@@ -54,8 +54,8 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Add DAO query: `countLabeledEntriesSince(timestamp: Long): Int` — used by WorkManager gate
 
 ### 1.6 Capture `reframeEditedByUser` signal
-- [ ] In `EntryDetailViewModel.acceptReframe(editedText: String)`: compare `editedText` to the model's original reframe string; if they differ, set `reframeEditedByUser = true` before calling `journalRepository.updateEntry()`
-- [ ] Unit test: `acceptReframe` with identical text → `reframeEditedByUser = false`; with modified text → `true`
+- [x] In `EntryDetailViewModel.acceptReframe(editedText: String)`: compare `editedText` to the model's original reframe string; if they differ, set `reframeEditedByUser = true` before calling `journalRepository.updateEntry()`
+- [x] Unit test: `acceptReframe` with identical text → `reframeEditedByUser = false`; with modified text → `true`
 
 ### 1.7 Mood grid UI (user valence/arousal input)
 - [ ] Add a 2D touch target (draggable point on a circumplex grid) to `EntryDetailScreen` — shown after the reframe is displayed, labelled "How does this land?"

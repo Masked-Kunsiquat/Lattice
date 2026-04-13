@@ -108,6 +108,33 @@ class EntryDetailViewModel(
     }
 
     /**
+     * Persists the reframe text the user accepted, capturing whether they edited it.
+     *
+     * Compares [editedText] to the model's original output ([ReframeState.Done.text]);
+     * sets [JournalEntry.reframeEditedByUser] to `true` if the trimmed strings differ.
+     * No-op if [reframeState] is not [ReframeState.Done] or the entry is not loaded.
+     */
+    fun acceptReframe(editedText: String) {
+        val original = (_reframeState.value as? ReframeState.Done)?.text ?: return
+        val entry = (entryState.value as? EntryDetailState.Found)?.entry ?: return
+        val edited = editedText.trim() != original.trim()
+        viewModelScope.launch {
+            try {
+                val maskedReframe = journalRepository.maskText(editedText)
+                journalRepository.updateEntry(
+                    entry.copy(
+                        reframedContent = maskedReframe,
+                        reframeEditedByUser = edited,
+                    )
+                )
+                _reframeState.value = ReframeState.Idle
+            } catch (e: Exception) {
+                _reframeState.value = ReframeState.Error("Failed to save reframe: ${e.message}")
+            }
+        }
+    }
+
+    /**
      * Persists the accepted reframe text to [JournalEntry.reframedContent].
      * No-op if [reframeState] is not [ReframeState.Done].
      */
