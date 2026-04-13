@@ -281,7 +281,7 @@ def write_bin(
     with path.open("wb") as f:
         f.write(struct.pack("<ii", count, EMBEDDING_DIM))
         for emb, v, a in rows:
-            f.write(emb.tobytes())           # 384 × float32 LE
+            f.write(emb.astype("<f4").tobytes())  # 384 × float32 LE
             f.write(struct.pack("<ff", v, a))
     size_mb = path.stat().st_size / 1_048_576
     print(f"  wrote {count} rows -> {path}  ({size_mb:.2f} MB)")
