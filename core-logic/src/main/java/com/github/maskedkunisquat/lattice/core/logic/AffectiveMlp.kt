@@ -72,7 +72,12 @@ class AffectiveMlp(
      * The file size will always be exactly [WEIGHT_BYTES] bytes.
      */
     fun saveWeights(file: File) {
-        file.parentFile?.mkdirs()
+        val parentDir = file.parentFile
+        if (parentDir != null) {
+            require(parentDir.mkdirs() || parentDir.exists()) {
+                "Failed to create weight directory: $parentDir"
+            }
+        }
         val buf = ByteBuffer.allocate(WEIGHT_BYTES).order(ByteOrder.LITTLE_ENDIAN)
         for (arr in listOf(w1, b1, w2, b2)) {
             arr.forEach { buf.putFloat(it) }
@@ -121,7 +126,7 @@ class AffectiveMlp(
             if (manifest.schemaVersion != CURRENT_SCHEMA_VERSION) {
                 Log.e(TAG_LOAD, "Manifest schema version ${manifest.schemaVersion} != $CURRENT_SCHEMA_VERSION — discarding stale checkpoint")
                 context.filesDir.resolve(manifest.headPath).delete()
-                prefs.edit().remove(AffectiveMlpInitializer.PREF_KEY).remove(AffectiveManifestStore.PREF_KEY).apply()
+                AffectiveManifestStore.resetAll(prefs)
                 return null
             }
 
@@ -129,7 +134,7 @@ class AffectiveMlp(
             if (manifest.baseModelHash != currentHash) {
                 Log.w(TAG_LOAD, "Embedding model hash mismatch — deleting stale head and resetting warm-start")
                 context.filesDir.resolve(manifest.headPath).delete()
-                prefs.edit().remove(AffectiveMlpInitializer.PREF_KEY).apply()
+                AffectiveManifestStore.resetAll(prefs)
                 return null
             }
 
@@ -150,7 +155,12 @@ class AffectiveMlp(
             val bytes = file.readBytes()
             val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
 
-            fun next(n: Int) = FloatArray(n) { buf.get() }
+            fun next(n: Int) = FloatArray(n) {
+                require(buf.hasRemaining()) {
+                    "Unexpected end of weight data at float index ${buf.position()} while reading $n floats"
+                }
+                buf.get()
+            }
 
             return AffectiveMlp(
                 w1 = next(OUT1 * IN),

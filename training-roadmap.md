@@ -138,9 +138,9 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] **2.7-e** `ReframingLoop.kt:runStage1AffectiveMap` — add a `require()` assertion that `maskedText` contains at least one `[PERSON_<uuid>]` placeholder or is blank; CLAUDE.md mandates enforcement at every system boundary, not caller trust
 
 #### Robustness
-- [ ] **2.7-f** `AffectiveMlp.kt:loadWeights` — the file-size `require()` check races with a possible mid-read modification; add `require(buf.hasRemaining())` inside the `next(n)` lambda with a position-aware error message so `BufferUnderflowException` is never the user-visible failure
-- [ ] **2.7-g** `AffectiveMlp.kt:saveWeights` — `file.parentFile?.mkdirs()` silently discards a `false` return; replace with `require(parentDir.mkdirs() || parentDir.exists()) { "Failed to create $parentDir" }`
-- [ ] **2.7-h** `AffectiveMlp.kt:load` — reaching into `AffectiveMlpInitializer.PREF_KEY` to perform eviction is tight coupling; introduce `AffectiveManifestStore.resetAll(prefs)` that owns both key removals so a rename doesn't silently break eviction
+- [x] **2.7-f** `AffectiveMlp.kt:loadWeights` — the file-size `require()` check races with a possible mid-read modification; add `require(buf.hasRemaining())` inside the `next(n)` lambda with a position-aware error message so `BufferUnderflowException` is never the user-visible failure
+- [x] **2.7-g** `AffectiveMlp.kt:saveWeights` — `file.parentFile?.mkdirs()` silently discards a `false` return; replace with `require(parentDir.mkdirs() || parentDir.exists()) { "Failed to create $parentDir" }`
+- [x] **2.7-h** `AffectiveMlp.kt:load` — reaching into `AffectiveMlpInitializer.PREF_KEY` to perform eviction is tight coupling; introduce `AffectiveManifestStore.resetAll(prefs)` that owns both key removals so a rename doesn't silently break eviction
 
 #### Test coverage
 - [ ] **2.7-i** Add end-to-end warm-start integration test in `AffectiveMlpInitializerTest`: load asset → `trainBatch` → save weights → write manifest → assert guard flag set → second call is a no-op

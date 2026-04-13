@@ -63,6 +63,20 @@ object AffectiveManifestStore {
         prefs.edit().putString(PREF_KEY, manifest.toJson()).apply()
     }
 
+    /**
+     * Clears both the manifest ([PREF_KEY]) and the [AffectiveMlpInitializer] guard flag
+     * so warm-start re-runs on next launch.
+     *
+     * Centralises the eviction logic here so that renaming either key does not silently
+     * break the reset path in [AffectiveMlp.load].
+     */
+    fun resetAll(prefs: SharedPreferences) {
+        prefs.edit()
+            .remove(PREF_KEY)
+            .remove(AffectiveMlpInitializer.PREF_KEY)
+            .apply()
+    }
+
     // ── Serialisation helpers (internal so they can be exercised by unit tests) ──
 
     internal fun AffectiveManifest.toJson(): String = JSONObject()
