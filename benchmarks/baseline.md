@@ -12,11 +12,11 @@
 
 | Test | Per-call median | Notes |
 |---|---|---|
-| `cold_generateEmbedding` | ~400 ms | Full `OrtSession` init (23 MB asset load) + inference per iteration. Thermal throttle at iter 0. Clean passing run pending. |
-| `warm_generateEmbedding` | **1.5 ms** | 50-call batch, session persistent. Extremely stable — no thermal variance across 50 iterations. |
+| `cold_generateEmbedding` | **287 ms** (median), 169 ms (min) | Full `OrtSession` init (23 MB asset load) + inference per iteration. Clean passing run — no thermal throttle. ~91,881 allocs/call. |
+| `warm_generateEmbedding` | **1.58 ms** | 50-call batch, session persistent. Extremely stable — no thermal variance across 50 iterations. |
 | `embedding_outputIsValid` | — | Functional assertion. Passed. 384-dim output, non-zero vector confirmed. |
 
-> `warm_generateEmbedding` raw: ~75 ms / 50 calls. Allocation count: ~13,650 / 50 calls (~273 per call).
+> `warm_generateEmbedding` raw: ~78.8 ms / 50 calls. Allocation count: 13,650 / 50 calls (~273 per call).
 
 ---
 
@@ -32,12 +32,16 @@
 > `findSimilarEntries` raw: ~600 ms / 100 calls (stable window, iters 1–15). Allocation count: ~613,940 / 100 calls.  
 > `findEvidenceEntries` raw: ~35–40 ms / 100 calls (stable floor). Allocation count: ~34,298 / 100 calls.
 
-### After optimization (index-based scoring + suspend fun)
+### After optimization (index-based scoring + suspend fun + zero-vector guard)
 
-| Test | Per-call median | Allocations/call | Notes |
+| Test | Per-call floor | Allocations/call | Notes |
 |---|---|---|---|
-| `findSimilarEntries` | _TBD_ | _TBD_ | |
-| `findEvidenceEntries` | _TBD_ | _TBD_ | Unchanged — no Pair allocations or Flow in this path. |
+| `findSimilarEntries` | **5.65 ms** | **5,899** (−4%) | 100-call batch. Floor stable iters 2–22 at 565–619 ms/100. Thermal pause skews median to ~8.5 ms. |
+| `findEvidenceEntries` | **0.35 ms** | **294** (−14%) | 100-call batch. Median ~1.0 ms due to GC variance; floor unchanged vs before. |
+
+> `findSimilarEntries` raw floor: 565,310,521 ns / 100 calls. Allocation count: 589,898–589,908 / 100 calls.  
+> `findEvidenceEntries` raw floor: 34,546,563 ns / 100 calls. Allocation count: 29,400 / 100 calls.  
+> Allocation savings are real but modest — dominant cost remains `PiiShield.mask()` + `generateEmbedding()`, not the scoring loop.
 
 ---
 
