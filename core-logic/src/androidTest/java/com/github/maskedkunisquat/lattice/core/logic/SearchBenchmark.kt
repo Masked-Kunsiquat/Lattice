@@ -9,7 +9,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedManager
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedPersona
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -59,7 +58,7 @@ class SearchBenchmark {
         val query = "I feel completely overwhelmed and cannot focus on anything today."
         benchmarkRule.measureRepeated {
             repeat(100) {
-                runBlocking { searchRepository.findSimilarEntries(query, limit = 5).first() }
+                runBlocking { searchRepository.findSimilarEntries(query, limit = 5) }
             }
         }
     }
@@ -74,7 +73,7 @@ class SearchBenchmark {
         val placeholders = setOf("[PERSON_a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1]")
         benchmarkRule.measureRepeated {
             repeat(100) {
-                runBlocking { searchRepository.findEvidenceEntries(placeholders).first() }
+                runBlocking { searchRepository.findEvidenceEntries(placeholders) }
             }
         }
     }
