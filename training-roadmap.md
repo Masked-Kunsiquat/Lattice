@@ -82,7 +82,7 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
   - Run each text through Arctic Embed XS → 384-dim embedding (use the same ONNX model as production)
   - Output `assets/training/goEmotions_base_v1.bin`: header (count, dim) + packed `float32` rows of (384 embedding + 2 labels)
   - Subsample to ~1k balanced examples (equal quadrant representation) to keep asset <6MB
-- [ ] Commit the generated asset (run `python scripts/prepare_goEmotions_base.py` with model present, then `git add core-logic/src/main/assets/training/goEmotions_base_v1.bin`)
+- [x] Commit the generated asset (run `python scripts/prepare_goEmotions_base.py` with model present, then `git add core-logic/src/main/assets/training/goEmotions_base_v1.bin`)
 - [x] Add path to `.gitattributes` as `binary`
 - [x] Document the label mapping in a comment block at the top of the script
 
