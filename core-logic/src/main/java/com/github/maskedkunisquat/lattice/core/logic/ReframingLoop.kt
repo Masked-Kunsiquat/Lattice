@@ -47,8 +47,15 @@ class ReframingLoop(
      * @return [Result.success] with [AffectiveMapResult], or [Result.failure] if the
      *   model is unavailable or its output cannot be parsed.
      */
-    suspend fun runStage1AffectiveMap(maskedText: String): Result<AffectiveMapResult> =
-        withContext(dispatcher) {
+    suspend fun runStage1AffectiveMap(maskedText: String): Result<AffectiveMapResult> {
+        // 2.7-e: enforce PII boundary — text must be blank (no names in entry) or already masked
+        // by PiiShield (contains [PERSON_<uuid>] tokens). Throws immediately as a programming
+        // error rather than wrapping in Result, so raw-PII leaks surface at the call site.
+        require(maskedText.isBlank() || PLACEHOLDER_REGEX.containsMatchIn(maskedText)) {
+            "maskedText must be PII-masked before entering the pipeline — " +
+            "call PiiShield.mask() first. Raw text must not reach EmbeddingProvider or LLM."
+        }
+        return withContext(dispatcher) {
             runCatching {
                 val mlp = affectiveMlp
                 val embedder = embeddingProvider
@@ -73,6 +80,7 @@ class ReframingLoop(
                 }
             }
         }
+    }
 
     // ── Stage 2 ──────────────────────────────────────────────────────────────
 

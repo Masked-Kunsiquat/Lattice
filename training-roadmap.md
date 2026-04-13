@@ -135,7 +135,7 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] **2.7-d** `AffectiveMlpTrainer.kt` — `data class TrainingSample(val embedding: FloatArray, ...)` — Kotlin generates reference-based `equals`/`hashCode` for `FloatArray`; override both using `embedding.contentEquals()` / `embedding.contentHashCode()`
 
 #### Security
-- [ ] **2.7-e** `ReframingLoop.kt:runStage1AffectiveMap` — add a `require()` assertion that `maskedText` contains at least one `[PERSON_<uuid>]` placeholder or is blank; CLAUDE.md mandates enforcement at every system boundary, not caller trust
+- [x] **2.7-e** `ReframingLoop.kt:runStage1AffectiveMap` — add a `require()` assertion that `maskedText` contains at least one `[PERSON_<uuid>]` placeholder or is blank; CLAUDE.md mandates enforcement at every system boundary, not caller trust
 
 #### Robustness
 - [ ] **2.7-f** `AffectiveMlp.kt:loadWeights` — the file-size `require()` check races with a possible mid-read modification; add `require(buf.hasRemaining())` inside the `next(n)` lambda with a position-aware error message so `BufferUnderflowException` is never the user-visible failure
