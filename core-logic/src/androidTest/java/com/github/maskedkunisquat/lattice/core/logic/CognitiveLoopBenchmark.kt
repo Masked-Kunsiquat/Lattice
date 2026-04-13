@@ -18,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assume.assumeTrue
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -170,6 +171,7 @@ class CognitiveLoopBenchmark {
     // ── Stage 2: Diagnosis of Thought ────────────────────────────────────────
     // Longest output per run — full chain-of-thought reasoning + DISTORTIONS sentinel.
 
+    @Ignore("Slow — full CoT output. Re-enable for full baseline run.")
     @Test
     fun stage2_holmes() {
         val l = loop!!
@@ -252,6 +254,7 @@ class CognitiveLoopBenchmark {
     // Results are emitted via Log.i since BenchmarkRule does not natively surface
     // custom metrics — grep for "CognitiveLoopBenchmark" in logcat after the run.
 
+    @Ignore("Skipping for abridged run - remove to measure PSS delta")
     @Test
     fun memoryDelta_fullLoop_holmes() {
         val l = loop!!
@@ -270,9 +273,10 @@ class CognitiveLoopBenchmark {
             }
             deltaPssKb = (after.totalPss - before.totalPss).toLong()
         }
-        Log.i(TAG, "memoryDelta_fullLoop_holmes  totalPSS Δ = ${deltaPssKb} KB")
+        Log.i(TAG, "memoryDelta_fullLoop_holmes  totalPSS Δ = $deltaPssKb KB")
     }
 
+    @Ignore("Skipping for abridged run - remove to measure PSS delta")
     @Test
     fun memoryDelta_fullLoop_watson() {
         val l = loop!!
@@ -291,6 +295,6 @@ class CognitiveLoopBenchmark {
             }
             deltaPssKb = (after.totalPss - before.totalPss).toLong()
         }
-        Log.i(TAG, "memoryDelta_fullLoop_watson  totalPSS Δ = ${deltaPssKb} KB")
+        Log.i(TAG, "memoryDelta_fullLoop_watson  totalPSS Δ = $deltaPssKb KB")
     }
 }
