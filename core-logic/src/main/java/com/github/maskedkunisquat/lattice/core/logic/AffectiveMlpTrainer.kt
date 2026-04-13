@@ -13,7 +13,24 @@ data class TrainingSample(
     val embedding: FloatArray,
     val targetValence: Float,
     val targetArousal: Float,
-)
+) {
+    // 2.7-d: FloatArray equality is reference-based in Kotlin data classes; override
+    // so that two samples with identical float values compare and hash correctly.
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TrainingSample) return false
+        return embedding.contentEquals(other.embedding) &&
+            targetValence == other.targetValence &&
+            targetArousal == other.targetArousal
+    }
+
+    override fun hashCode(): Int {
+        var result = embedding.contentHashCode()
+        result = 31 * result + targetValence.hashCode()
+        result = 31 * result + targetArousal.hashCode()
+        return result
+    }
+}
 
 /**
  * On-device AdamW trainer for [AffectiveMlp].

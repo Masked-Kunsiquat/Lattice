@@ -126,6 +126,29 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
   ```
 - [x] `AffectiveMlp.load()` checks `baseModelHash` against current asset SHA-256 — mismatch deletes stale weights, re-runs base warm-start on next WorkManager trigger
 
+### 2.7 Audit follow-ups (post-implementation findings)
+
+#### Correctness
+- [x] **2.7-a** `AffectiveMlpInitializer.kt` — set `PREF_KEY` guard flag **before** writing weights + manifest, not after; if the process dies between `AffectiveManifestStore.write()` and the `putBoolean()` call, the guard never gets set and warm-start retries forever
+- [x] **2.7-b** `AffectiveMlpInitializer.kt` — the `samples.isEmpty()` early-return path (`"No samples in $ASSET_PATH — skipping"`) exits without setting the guard flag; add `prefs.edit().putBoolean(PREF_KEY, true).apply()` before `return@launch`
+- [x] **2.7-c** `AffectiveMlpInitializer.kt:loadSamples` — add a pre-read bounds check: `require(bytes.size >= 8 + count * (dim + 2) * 4)` before the deserialization loop; a truncated asset currently throws `BufferUnderflowException` with no diagnostic
+- [x] **2.7-d** `AffectiveMlpTrainer.kt` — `data class TrainingSample(val embedding: FloatArray, ...)` — Kotlin generates reference-based `equals`/`hashCode` for `FloatArray`; override both using `embedding.contentEquals()` / `embedding.contentHashCode()`
+
+#### Security
+- [ ] **2.7-e** `ReframingLoop.kt:runStage1AffectiveMap` — add a `require()` assertion that `maskedText` contains at least one `[PERSON_<uuid>]` placeholder or is blank; CLAUDE.md mandates enforcement at every system boundary, not caller trust
+
+#### Robustness
+- [ ] **2.7-f** `AffectiveMlp.kt:loadWeights` — the file-size `require()` check races with a possible mid-read modification; add `require(buf.hasRemaining())` inside the `next(n)` lambda with a position-aware error message so `BufferUnderflowException` is never the user-visible failure
+- [ ] **2.7-g** `AffectiveMlp.kt:saveWeights` — `file.parentFile?.mkdirs()` silently discards a `false` return; replace with `require(parentDir.mkdirs() || parentDir.exists()) { "Failed to create $parentDir" }`
+- [ ] **2.7-h** `AffectiveMlp.kt:load` — reaching into `AffectiveMlpInitializer.PREF_KEY` to perform eviction is tight coupling; introduce `AffectiveManifestStore.resetAll(prefs)` that owns both key removals so a rename doesn't silently break eviction
+
+#### Test coverage
+- [ ] **2.7-i** Add end-to-end warm-start integration test in `AffectiveMlpInitializerTest`: load asset → `trainBatch` → save weights → write manifest → assert guard flag set → second call is a no-op
+- [ ] **2.7-j** Add convergence assertion to `AffectiveMlpTest`: after `AffectiveMlpTrainer.trainBatch()` on a small synthetic dataset, `forward(sample.embedding)` output must be closer to the target than before training
+- [ ] **2.7-k** Add edge-case tests to `AffectiveMlpTrainerTest`: (1) `lr=1.0` → loss stays finite; (2) zero-gradient step with `weightDecay > 0` → weight magnitudes still decrease
+- [ ] **2.7-l** Add fallback scenario to `ReframingLoopTest`: embedder present but `generateEmbedding()` throws → source must be `REGEX`, not a crash
+- [ ] **2.7-m** Add `scripts/test_prepare_goEmotions_base.py` covering: quadrant boundary conditions, binary output byte order (read back as `<f4` and verify first embedding matches input), and single-label filter count
+
 **Milestone 2 exit criteria:**
 - `AffectiveMlp.forward()` produces valid (v, a) coordinates for all 3 seed persona entries
 - Stage 1 uses MLP path when head is initialized, regex fallback when not — covered by unit tests

@@ -63,6 +63,25 @@ class AffectiveMlpInitializerTest {
         initializer.loadSamples(fakeAsset(count = 1, dim = 128))
     }
 
+    // 2.7-b: zero-count asset returns empty list (confirms the early-return path is reachable;
+    // the guard-flag side-effect requires an Android Context and is covered by instrumented tests)
+    @Test
+    fun `loadSamples returns empty list when count is zero`() {
+        val samples = initializer.loadSamples(fakeAsset(count = 0))
+        assertEquals(0, samples.size)
+    }
+
+    // 2.7-c: header claims more rows than the payload contains → clear IllegalArgumentException
+    @Test(expected = IllegalArgumentException::class)
+    fun `loadSamples rejects truncated asset whose header count exceeds available bytes`() {
+        // Build correct bytes for 3 rows, then replace the count header with 5
+        val realBytes  = fakeAsset(count = 3).readBytes()
+        val spoofHeader = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
+            .putInt(5).putInt(AffectiveMlp.IN).array()          // lie: claim count=5
+        val truncated = spoofHeader + realBytes.drop(8).toByteArray()
+        initializer.loadSamples(ByteArrayInputStream(truncated))
+    }
+
     // ── loadSamples → trainBatch integration ──────────────────────────────────
 
     @Test

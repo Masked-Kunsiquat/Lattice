@@ -146,6 +146,31 @@ class AffectiveMlpTrainerTest {
         AffectiveMlpTrainer(AffectiveMlp()).trainBatch(emptyList())
     }
 
+    // ── TrainingSample equality (2.7-d) ──────────────────────────────────────────
+
+    @Test
+    fun `TrainingSample equals is value-based not reference-based`() {
+        val emb = FloatArray(AffectiveMlp.IN) { it * 0.001f }
+        val a = TrainingSample(emb.copyOf(), 0.5f, -0.3f)
+        val b = TrainingSample(emb.copyOf(), 0.5f, -0.3f)
+        assertEquals("Two samples with identical values must be equal", a, b)
+    }
+
+    @Test
+    fun `TrainingSample hashCode is consistent with equals`() {
+        val emb = FloatArray(AffectiveMlp.IN) { it * 0.001f }
+        val a = TrainingSample(emb.copyOf(), 0.5f, -0.3f)
+        val b = TrainingSample(emb.copyOf(), 0.5f, -0.3f)
+        assertEquals("Equal samples must have the same hashCode", a.hashCode(), b.hashCode())
+    }
+
+    @Test
+    fun `TrainingSample with different embedding values are not equal`() {
+        val a = TrainingSample(FloatArray(AffectiveMlp.IN) { 0.1f }, 0.5f, -0.3f)
+        val b = TrainingSample(FloatArray(AffectiveMlp.IN) { 0.2f }, 0.5f, -0.3f)
+        assertTrue("Samples with different embeddings must not be equal", a != b)
+    }
+
     // ── hyperparameter wiring ─────────────────────────────────────────────────
 
     @Test

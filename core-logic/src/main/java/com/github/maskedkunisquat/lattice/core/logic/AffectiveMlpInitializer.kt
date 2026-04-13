@@ -57,8 +57,11 @@ class AffectiveMlpInitializer(
         scope.launch(dispatcher) {
             try {
                 val samples = context.assets.open(ASSET_PATH).use { loadSamples(it) }
+
+                // 2.7-b: empty asset must still set the guard — otherwise every launch retries
                 if (samples.isEmpty()) {
-                    Log.w(TAG, "No samples in $ASSET_PATH — skipping warm-start")
+                    Log.w(TAG, "No samples in $ASSET_PATH — skipping warm-start, marking initialized to prevent retry loop")
+                    prefs.edit().putBoolean(PREF_KEY, true).apply()
                     return@launch
                 }
 
@@ -66,23 +69,31 @@ class AffectiveMlpInitializer(
                 val finalLoss = trainer.trainBatch(samples)
                 Log.i(TAG, "Warm-start complete: ${samples.size} samples, final loss=${"%.6f".format(finalLoss)}")
 
-                val weightFile = context.filesDir.resolve(WEIGHT_FILE)
-                mlp.saveWeights(weightFile)
-                Log.i(TAG, "Weights saved to ${weightFile.absolutePath}")
-
-                val modelHash = "sha256:${context.assets.open(AffectiveMlp.EMBEDDING_ASSET).use { sha256Hex(it) }}"
-                val manifest = AffectiveManifest(
-                    schemaVersion         = 1,
-                    baseModelHash         = modelHash,
-                    headPath              = WEIGHT_FILE,
-                    trainedOnCount        = samples.size,
-                    lastTrainingTimestamp = System.currentTimeMillis(),
-                    baseLayerVersion      = BASE_LAYER_VERSION,
-                )
-                AffectiveManifestStore.write(prefs, manifest)
-                Log.i(TAG, "Manifest written: trainedOnCount=${samples.size}, hash=$modelHash")
-
+                // 2.7-a: set guard BEFORE writing weights/manifest so a process kill here
+                // does not cause an infinite retry loop on next launch
                 prefs.edit().putBoolean(PREF_KEY, true).apply()
+
+                // Persist weights + manifest; clear guard on I/O failure so next launch retries
+                try {
+                    val weightFile = context.filesDir.resolve(WEIGHT_FILE)
+                    mlp.saveWeights(weightFile)
+                    Log.i(TAG, "Weights saved to ${weightFile.absolutePath}")
+
+                    val modelHash = "sha256:${context.assets.open(AffectiveMlp.EMBEDDING_ASSET).use { sha256Hex(it) }}"
+                    val manifest = AffectiveManifest(
+                        schemaVersion         = 1,
+                        baseModelHash         = modelHash,
+                        headPath              = WEIGHT_FILE,
+                        trainedOnCount        = samples.size,
+                        lastTrainingTimestamp = System.currentTimeMillis(),
+                        baseLayerVersion      = BASE_LAYER_VERSION,
+                    )
+                    AffectiveManifestStore.write(prefs, manifest)
+                    Log.i(TAG, "Manifest written: trainedOnCount=${samples.size}, hash=$modelHash")
+                } catch (e: Exception) {
+                    prefs.edit().putBoolean(PREF_KEY, false).apply()
+                    throw e
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Warm-start failed: ${e.message}", e)
             }
@@ -99,7 +110,7 @@ class AffectiveMlpInitializer(
      * desktop-JVM unit tests without an Android [Context].
      *
      * @throws IllegalArgumentException if the header dimension does not match
-     *   [AffectiveMlp.IN].
+     *   [AffectiveMlp.IN], or if the file is too short to contain the declared row count.
      */
     internal fun loadSamples(stream: InputStream): List<TrainingSample> {
         val bytes = stream.readBytes()
@@ -109,6 +120,13 @@ class AffectiveMlpInitializer(
         val dim   = buf.int
         require(dim == AffectiveMlp.IN) {
             "Asset embedding dim=$dim; expected ${AffectiveMlp.IN}"
+        }
+
+        // 2.7-c: guard against truncated/corrupted assets before the read loop;
+        // use Long arithmetic to avoid Int overflow on a malformed count header
+        val expectedBytes = 8L + count.toLong() * (dim + 2) * Float.SIZE_BYTES
+        require(bytes.size.toLong() >= expectedBytes) {
+            "Asset truncated: ${bytes.size} bytes present, need $expectedBytes for $count samples of dim=$dim"
         }
 
         return List(count) {
