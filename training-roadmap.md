@@ -29,12 +29,12 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Benchmark `findEvidenceEntries(placeholders)` separately
 
 ### 1.4 `CognitiveLoopBenchmark`
-- [ ] Create `core-logic/src/androidTest/.../CognitiveLoopBenchmark.kt`
-- [ ] Gate entire class with `assumeTrue(LocalFallbackProvider.isInitialized())` — skips gracefully on emulators without the Llama shards
-- [ ] Measure TTFT: time from `reframingLoop.run(entry)` call to receipt of first `LlmResult.Token`
-- [ ] Measure total wall time per stage (Stage 1, 2, 3 individually)
-- [ ] Record peak memory via `Debug.MemoryInfo` before and after full loop
-- [ ] Run Watson entry (Q3/BA) and Holmes entry (Q2/Socratic) as separate benchmark cases
+- [x] Create `core-logic/src/androidTest/.../CognitiveLoopBenchmark.kt`
+- [x] Gate entire class with `assumeTrue(LocalFallbackProvider.isInitialized())` — skips gracefully on emulators without the Llama shards
+- [x] Measure TTFT: time from `reframingLoop.run(entry)` call to receipt of first `LlmResult.Token`
+- [x] Measure total wall time per stage (Stage 1, 2, 3 individually)
+- [x] Record peak memory via `Debug.MemoryInfo` before and after full loop
+- [x] Run Watson entry (Q3/BA) and Holmes entry (Q2/Socratic) as separate benchmark cases
 
 ### 1.5 Schema v11 migration
 - [ ] Add 3 columns to `JournalEntry`:
