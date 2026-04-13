@@ -94,12 +94,12 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Serialization: `saveWeights(path: File)` / `loadWeights(path: File)` — raw IEEE 754 LE binary, same convention as existing embedding BLOB
 
 ### 2.3 `AffectiveMlpTrainer` class (`:core-logic`)
-- [ ] Create `core-logic/src/main/java/.../AffectiveMlpTrainer.kt`
-- [ ] Implements AdamW in Kotlin: maintain `m`/`v` moment buffers alongside weights
-- [ ] `trainStep(embedding: FloatArray, targetValence: Float, targetArousal: Float)`: forward pass → MSE loss → backward pass → AdamW update
-- [ ] `trainBatch(samples: List<TrainingSample>)`: shuffle, iterate, call `trainStep` per sample
-- [ ] Hyperparameters: `lr = 1e-3`, `weightDecay = 1e-4`, `epochs = 10` (all configurable, not hardcoded)
-- [ ] Unit test: loss decreases over 100 steps on a trivial synthetic dataset
+- [x] Create `core-logic/src/main/java/.../AffectiveMlpTrainer.kt`
+- [x] Implements AdamW in Kotlin: maintain `m`/`v` moment buffers alongside weights
+- [x] `trainStep(embedding: FloatArray, targetValence: Float, targetArousal: Float)`: forward pass → MSE loss → backward pass → AdamW update
+- [x] `trainBatch(samples: List<TrainingSample>)`: shuffle, iterate, call `trainStep` per sample
+- [x] Hyperparameters: `lr = 1e-3`, `weightDecay = 1e-4`, `epochs = 10` (all configurable, not hardcoded)
+- [x] Unit test: loss decreases over 100 steps on a trivial synthetic dataset
 
 ### 2.4 Base layer warm-start
 - [ ] Create `AffectiveMlpInitializer.kt`: reads `goEmotions_base_v1.bin` from assets, deserializes (embedding, v, a) pairs, runs `AffectiveMlpTrainer.trainBatch()` for `epochs=5`, saves weights to `filesDir/affective_head_v1.bin`
