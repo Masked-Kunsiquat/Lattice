@@ -1,5 +1,7 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
+import android.content.Context
+import android.util.Log
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -91,6 +93,44 @@ class AffectiveMlp(
 
         /** Expected file size in bytes. */
         val WEIGHT_BYTES = WEIGHT_COUNT * Float.SIZE_BYTES         // 198 152
+
+        private const val TAG_LOAD      = "AffectiveMlp"
+        internal const val EMBEDDING_ASSET = "snowflake-arctic-embed-xs.onnx"
+
+        /**
+         * Loads [AffectiveMlp] from the checkpoint recorded in [AffectiveManifestStore].
+         *
+         * Steps:
+         * 1. Read the manifest — returns `null` if none is present (first launch or reset).
+         * 2. Compute SHA-256 of the bundled embedding asset and compare to
+         *    [AffectiveManifest.baseModelHash].
+         * 3. Hash mismatch (embedding model replaced): delete the stale weight file,
+         *    clear the [AffectiveMlpInitializer] guard so warm-start re-runs on next
+         *    launch, and return `null`.
+         * 4. Weight file absent or wrong size: return `null`.
+         * 5. On success: call [loadWeights] and return the trained [AffectiveMlp].
+         *
+         * @param context Android context — used for asset access, SharedPreferences, and `filesDir`.
+         * @return A trained [AffectiveMlp], or `null` when the head is unavailable or stale.
+         */
+        fun load(context: Context): AffectiveMlp? {
+            val prefs = context.getSharedPreferences(
+                AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE
+            )
+            val manifest = AffectiveManifestStore.read(prefs) ?: return null
+
+            val currentHash = "sha256:${context.assets.open(EMBEDDING_ASSET).use { sha256Hex(it) }}"
+            if (manifest.baseModelHash != currentHash) {
+                Log.w(TAG_LOAD, "Embedding model hash mismatch — deleting stale head and resetting warm-start")
+                context.filesDir.resolve(manifest.headPath).delete()
+                prefs.edit().remove(AffectiveMlpInitializer.PREF_KEY).apply()
+                return null
+            }
+
+            val weightFile = context.filesDir.resolve(manifest.headPath)
+            if (!weightFile.exists() || weightFile.length() != WEIGHT_BYTES.toLong()) return null
+            return runCatching { loadWeights(weightFile) }.getOrNull()
+        }
 
         /**
          * Loads weights from [file] and returns a ready-to-use [AffectiveMlp].

@@ -113,7 +113,7 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Update `AffectiveMapResult` to include `source: AffectiveSource` enum (`MLP`, `REGEX`) for debugging
 
 ### 2.6 Checkpoint manifest (MLP)
-- [ ] `SharedPreferences` key `lattice_affective_manifest`, JSON:
+- [x] `SharedPreferences` key `lattice_affective_manifest`, JSON:
   ```json
   {
     "schemaVersion": 1,
@@ -124,7 +124,7 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
     "baseLayerVersion": "goEmotions-1.0"
   }
   ```
-- [ ] `AffectiveMlp.load()` checks `baseModelHash` against current asset SHA-256 — mismatch deletes stale weights, re-runs base warm-start on next WorkManager trigger
+- [x] `AffectiveMlp.load()` checks `baseModelHash` against current asset SHA-256 — mismatch deletes stale weights, re-runs base warm-start on next WorkManager trigger
 
 **Milestone 2 exit criteria:**
 - `AffectiveMlp.forward()` produces valid (v, a) coordinates for all 3 seed persona entries

@@ -51,7 +51,7 @@ class AffectiveMlpInitializer(
         mlp: AffectiveMlp,
         scope: CoroutineScope,
     ) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE)
         if (prefs.getBoolean(PREF_KEY, false)) return
 
         scope.launch(dispatcher) {
@@ -69,6 +69,18 @@ class AffectiveMlpInitializer(
                 val weightFile = context.filesDir.resolve(WEIGHT_FILE)
                 mlp.saveWeights(weightFile)
                 Log.i(TAG, "Weights saved to ${weightFile.absolutePath}")
+
+                val modelHash = "sha256:${context.assets.open(AffectiveMlp.EMBEDDING_ASSET).use { sha256Hex(it) }}"
+                val manifest = AffectiveManifest(
+                    schemaVersion         = 1,
+                    baseModelHash         = modelHash,
+                    headPath              = WEIGHT_FILE,
+                    trainedOnCount        = samples.size,
+                    lastTrainingTimestamp = System.currentTimeMillis(),
+                    baseLayerVersion      = BASE_LAYER_VERSION,
+                )
+                AffectiveManifestStore.write(prefs, manifest)
+                Log.i(TAG, "Manifest written: trainedOnCount=${samples.size}, hash=$modelHash")
 
                 prefs.edit().putBoolean(PREF_KEY, true).apply()
             } catch (e: Exception) {
@@ -108,11 +120,11 @@ class AffectiveMlpInitializer(
     }
 
     companion object {
-        private const val TAG        = "AffectiveMlpInit"
-        private const val PREFS_NAME = "lattice_training"
-        const val PREF_KEY           = "affective_head_initialized"
-        const val WEIGHT_FILE        = "affective_head_v1.bin"
-        const val ASSET_PATH         = "training/goEmotions_base_v1.bin"
-        const val EPOCHS             = 5
+        private const val TAG         = "AffectiveMlpInit"
+        const val PREF_KEY            = "affective_head_initialized"
+        const val WEIGHT_FILE         = "affective_head_v1.bin"
+        const val ASSET_PATH          = "training/goEmotions_base_v1.bin"
+        const val EPOCHS              = 5
+        const val BASE_LAYER_VERSION  = "goEmotions-1.0"
     }
 }
