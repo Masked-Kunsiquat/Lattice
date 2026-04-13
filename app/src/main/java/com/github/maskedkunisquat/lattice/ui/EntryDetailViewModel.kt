@@ -108,6 +108,36 @@ class EntryDetailViewModel(
     }
 
     /**
+     * Persists the reframe text the user accepted, capturing whether they edited it.
+     *
+     * Compares [editedText] to the model's original output ([ReframeState.Done.text]);
+     * sets [JournalEntry.reframeEditedByUser] to `true` if the trimmed strings differ.
+     * No-op if [reframeState] is not [ReframeState.Done] or the entry is not loaded.
+     */
+    fun acceptReframe(editedText: String) {
+        val original = (_reframeState.value as? ReframeState.Done)?.text ?: return
+        val entry = (entryState.value as? EntryDetailState.Found)?.entry ?: return
+        val editedNormalized = editedText.trim()
+        val edited = editedNormalized != original.trim()
+        viewModelScope.launch {
+            try {
+                val maskedReframe = journalRepository.maskText(editedNormalized)
+                journalRepository.updateEntry(
+                    entry.copy(
+                        reframedContent = maskedReframe,
+                        reframeEditedByUser = edited,
+                    )
+                )
+                _reframeState.value = ReframeState.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _reframeState.value = ReframeState.Error("Failed to save reframe: ${e.message}")
+            }
+        }
+    }
+
+    /**
      * Persists the accepted reframe text to [JournalEntry.reframedContent].
      * No-op if [reframeState] is not [ReframeState.Done].
      */
@@ -118,8 +148,29 @@ class EntryDetailViewModel(
                 val maskedReframe = journalRepository.maskText(reframe)
                 journalRepository.updateReframedContent(entryId.toString(), maskedReframe)
                 _reframeState.value = ReframeState.Idle
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _reframeState.value = ReframeState.Error("Failed to save reframe: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Persists the user's mood coordinates from the circumplex grid ("How does this land?").
+     * No-op if the entry is not loaded. Coordinates remain null if the user skips the grid.
+     */
+    fun confirmMoodCoordinates(v: Float, a: Float) {
+        val entry = (entryState.value as? EntryDetailState.Found)?.entry ?: return
+        viewModelScope.launch {
+            try {
+                val clampedValence = v.coerceIn(-1f, 1f)
+                val clampedArousal = a.coerceIn(-1f, 1f)
+                journalRepository.updateEntry(entry.copy(userValence = clampedValence, userArousal = clampedArousal))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save mood coordinates", e)
             }
         }
     }

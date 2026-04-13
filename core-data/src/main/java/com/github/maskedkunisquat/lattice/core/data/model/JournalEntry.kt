@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.lattice.core.data.model
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -24,6 +25,12 @@ data class JournalEntry(
     val tagIds: List<UUID> = emptyList(),
     /** UUIDs of [Place] records linked to this entry via `!place` inline tagging. */
     val placeIds: List<UUID> = emptyList(),
+    /** User-provided valence correction after seeing the reframe ("How does this land?"). Null until submitted. */
+    @ColumnInfo(name = "user_valence") val userValence: Float? = null,
+    /** User-provided arousal correction after seeing the reframe ("How does this land?"). Null until submitted. */
+    @ColumnInfo(name = "user_arousal") val userArousal: Float? = null,
+    /** True if the user edited the model's reframe text before accepting it. */
+    @ColumnInfo(name = "reframe_edited_by_user") val reframeEditedByUser: Boolean = false,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -42,6 +49,9 @@ data class JournalEntry(
         if (reframedContent != other.reframedContent) return false
         if (tagIds != other.tagIds) return false
         if (placeIds != other.placeIds) return false
+        if (userValence != other.userValence) return false
+        if (userArousal != other.userArousal) return false
+        if (reframeEditedByUser != other.reframeEditedByUser) return false
 
         return true
     }
@@ -58,6 +68,9 @@ data class JournalEntry(
         result = 31 * result + (reframedContent?.hashCode() ?: 0)
         result = 31 * result + tagIds.hashCode()
         result = 31 * result + placeIds.hashCode()
+        result = 31 * result + (userValence?.hashCode() ?: 0)
+        result = 31 * result + (userArousal?.hashCode() ?: 0)
+        result = 31 * result + reframeEditedByUser.hashCode()
         return result
     }
 }

@@ -47,6 +47,7 @@ class LatticeApplication : Application() {
                 LatticeDatabase.MIGRATION_7_8,
                 LatticeDatabase.MIGRATION_8_9,
                 LatticeDatabase.MIGRATION_9_10,
+                LatticeDatabase.MIGRATION_10_11,
             )
             .build()
     }

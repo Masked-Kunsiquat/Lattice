@@ -73,8 +73,9 @@ fun EntryDetailScreen(
         onBack = onBack,
         onDelete = viewModel::deleteEntry,
         onReframe = viewModel::requestReframe,
-        onApplyReframe = viewModel::applyReframe,
+        onApplyReframe = viewModel::acceptReframe,
         onDismissReframe = viewModel::dismissReframe,
+        onConfirmMood = viewModel::confirmMoodCoordinates,
     )
 }
 
@@ -89,11 +90,13 @@ private fun EntryDetailContent(
     onBack: () -> Unit,
     onDelete: () -> Unit,
     onReframe: () -> Unit,
-    onApplyReframe: () -> Unit,
+    onApplyReframe: (String) -> Unit,
     onDismissReframe: () -> Unit,
+    onConfirmMood: (valence: Float, arousal: Float) -> Unit,
 ) {
     val entry = (entryState as? EntryDetailState.Found)?.entry
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var moodGridSkipped by remember(entry?.id) { mutableStateOf(false) }
 
     if (showDeleteConfirm) {
         AlertDialog(
@@ -242,6 +245,17 @@ private fun EntryDetailContent(
                             modifier = Modifier.padding(16.dp),
                         )
                     }
+
+                    // Mood grid — shown once after reframe, until user confirms or skips.
+                    // Disappears permanently once userValence is written (entry reloads from DB).
+                    if (entry.userValence == null && !moodGridSkipped) {
+                        Spacer(Modifier.height(16.dp))
+                        CircumplexGrid(
+                            onConfirm = { v, a -> onConfirmMood(v, a) },
+                            onSkip = { moodGridSkipped = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -282,8 +296,9 @@ private fun PreviewOriginalOnly() {
             onBack = {},
             onDelete = {},
             onReframe = {},
-            onApplyReframe = {},
+            onApplyReframe = { _ -> },
             onDismissReframe = {},
+            onConfirmMood = { _, _ -> },
         )
     }
 }
@@ -301,8 +316,9 @@ private fun PreviewWithReframe() {
             onBack = {},
             onDelete = {},
             onReframe = {},
-            onApplyReframe = {},
+            onApplyReframe = { _ -> },
             onDismissReframe = {},
+            onConfirmMood = { _, _ -> },
         )
     }
 }
@@ -318,8 +334,9 @@ private fun PreviewModelLoading() {
             onBack = {},
             onDelete = {},
             onReframe = {},
-            onApplyReframe = {},
+            onApplyReframe = { _ -> },
             onDismissReframe = {},
+            onConfirmMood = { _, _ -> },
         )
     }
 }
@@ -335,8 +352,9 @@ private fun PreviewMoodLog() {
             onBack = {},
             onDelete = {},
             onReframe = {},
-            onApplyReframe = {},
+            onApplyReframe = { _ -> },
             onDismissReframe = {},
+            onConfirmMood = { _, _ -> },
         )
     }
 }

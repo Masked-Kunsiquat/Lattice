@@ -32,6 +32,14 @@ android {
             matchingFallbacks += listOf("release")
         }
     }
+    sourceSets {
+        // Make the Llama-3.2-3B shards (gitignored, in :app assets) available to
+        // CognitiveLoopBenchmark without duplicating the 3.5 GB files.
+        // The benchmark's assumeTrue gate skips gracefully if shards are absent.
+        getByName("androidTest") {
+            assets.srcDirs("../app/src/main/assets")
+        }
+    }
     testOptions {
         // Log.w (and other Android stubs) throw RuntimeException by default on the desktop JVM.
         // returnDefaultValues silences them so unit tests can exercise EmbeddingProvider's

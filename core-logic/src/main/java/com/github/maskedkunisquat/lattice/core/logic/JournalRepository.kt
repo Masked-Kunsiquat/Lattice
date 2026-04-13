@@ -159,6 +159,20 @@ class JournalRepository(
     }
 
     /**
+     * Persists field changes to an existing entry, re-masking [JournalEntry.content] and
+     * [JournalEntry.reframedContent] before writing. Does not regenerate the embedding,
+     * distortions, or mood label — use [saveEntry] for new entries.
+     */
+    suspend fun updateEntry(entry: JournalEntry) {
+        val people = personDao.getPersons().first()
+        val places = placeDao.getAll().first()
+        journalDao.updateEntry(entry.copy(
+            content = entry.content?.let { PiiShield.mask(it, people, places) },
+            reframedContent = entry.reframedContent?.let { PiiShield.mask(it, people, places) },
+        ))
+    }
+
+    /**
      * Returns [text] with all known people's names replaced by [PERSON_uuid] placeholders.
      * Used by callers that need masked text without persisting an entry (e.g. the reframe pipeline).
      */

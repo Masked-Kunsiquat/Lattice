@@ -24,10 +24,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -53,7 +57,7 @@ import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
 @Composable
 fun ReframeBottomSheet(
     reframeState: ReframeState,
-    onApply: () -> Unit,
+    onApply: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -146,25 +150,22 @@ private fun StreamingContent(partial: String) {
 // ── Done ──────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun DoneContent(text: String, onApply: () -> Unit, onDismiss: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
+private fun DoneContent(text: String, onApply: (String) -> Unit, onDismiss: () -> Unit) {
+    var editedText by remember { mutableStateOf(text) }
+    OutlinedTextField(
+        value = editedText,
+        onValueChange = { editedText = it },
+        modifier = Modifier.fillMaxWidth(),
+        textStyle = MaterialTheme.typography.bodyMedium,
+        minLines = 3,
+    )
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
     ) {
         OutlinedButton(onClick = onDismiss) { Text("Dismiss") }
         Spacer(Modifier.width(12.dp))
-        Button(onClick = onApply) { Text("Apply") }
+        Button(onClick = { onApply(editedText) }) { Text("Apply") }
     }
 }
 
@@ -190,7 +191,7 @@ private fun PreviewLoading() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         ReframeBottomSheet(
             reframeState = ReframeState.Loading,
-            onApply = {},
+            onApply = { _ -> },
             onDismiss = {},
         )
     }
@@ -202,7 +203,7 @@ private fun PreviewStreaming() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         ReframeBottomSheet(
             reframeState = ReframeState.Streaming("What evidence do you have that this will go wrong?"),
-            onApply = {},
+            onApply = { _ -> },
             onDismiss = {},
         )
     }
@@ -217,7 +218,7 @@ private fun PreviewDone() {
                 "You've navigated uncertain situations before and found your footing. " +
                 "What's one small piece of evidence that contradicts the feeling that this is hopeless?"
             ),
-            onApply = {},
+            onApply = { _ -> },
             onDismiss = {},
         )
     }
@@ -229,7 +230,7 @@ private fun PreviewError() {
     LatticeTheme(darkTheme = true, dynamicColor = false) {
         ReframeBottomSheet(
             reframeState = ReframeState.Error("Unable to generate reframe. Please try again."),
-            onApply = {},
+            onApply = { _ -> },
             onDismiss = {},
         )
     }

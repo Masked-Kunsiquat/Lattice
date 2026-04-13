@@ -29,39 +29,39 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Benchmark `findEvidenceEntries(placeholders)` separately
 
 ### 1.4 `CognitiveLoopBenchmark`
-- [ ] Create `core-logic/src/androidTest/.../CognitiveLoopBenchmark.kt`
-- [ ] Gate entire class with `assumeTrue(LocalFallbackProvider.isInitialized())` — skips gracefully on emulators without the Llama shards
-- [ ] Measure TTFT: time from `reframingLoop.run(entry)` call to receipt of first `LlmResult.Token`
-- [ ] Measure total wall time per stage (Stage 1, 2, 3 individually)
-- [ ] Record peak memory via `Debug.MemoryInfo` before and after full loop
-- [ ] Run Watson entry (Q3/BA) and Holmes entry (Q2/Socratic) as separate benchmark cases
+- [x] Create `core-logic/src/androidTest/.../CognitiveLoopBenchmark.kt`
+- [x] Gate entire class with `assumeTrue(LocalFallbackProvider.isInitialized())` — skips gracefully on emulators without the Llama shards
+- [x] Measure TTFT: time from `reframingLoop.run(entry)` call to receipt of first `LlmResult.Token`
+- [x] Measure total wall time per stage (Stage 1, 2, 3 individually)
+- [x] Record peak memory via `Debug.MemoryInfo` before and after full loop
+- [x] Run Watson entry (Q3/BA) and Holmes entry (Q2/Socratic) as separate benchmark cases
 
 ### 1.5 Schema v11 migration
-- [ ] Add 3 columns to `JournalEntry`:
+- [x] Add 3 columns to `JournalEntry`:
   ```kotlin
   @ColumnInfo(name = "user_valence") val userValence: Float? = null,
   @ColumnInfo(name = "user_arousal") val userArousal: Float? = null,
   @ColumnInfo(name = "reframe_edited_by_user") val reframeEditedByUser: Boolean = false,
   ```
-- [ ] Write migration `MIGRATION_10_11` in `LatticeDatabase.kt`:
+- [x] Write migration `MIGRATION_10_11` in `LatticeDatabase.kt`:
   ```kotlin
   ALTER TABLE journal_entries ADD COLUMN user_valence REAL;
   ALTER TABLE journal_entries ADD COLUMN user_arousal REAL;
   ALTER TABLE journal_entries ADD COLUMN reframe_edited_by_user INTEGER NOT NULL DEFAULT 0;
   ```
-- [ ] Bump `LatticeDatabase` version to 11
-- [ ] Add DAO query: `getLabeledEntriesSince(timestamp: Long): List<JournalEntry>` — filters `user_valence IS NOT NULL AND timestamp > :timestamp`
-- [ ] Add DAO query: `countLabeledEntriesSince(timestamp: Long): Int` — used by WorkManager gate
+- [x] Bump `LatticeDatabase` version to 11
+- [x] Add DAO query: `getLabeledEntriesSince(timestamp: Long): List<JournalEntry>` — filters `user_valence IS NOT NULL AND timestamp > :timestamp`
+- [x] Add DAO query: `countLabeledEntriesSince(timestamp: Long): Int` — used by WorkManager gate
 
 ### 1.6 Capture `reframeEditedByUser` signal
-- [ ] In `EntryDetailViewModel.acceptReframe(editedText: String)`: compare `editedText` to the model's original reframe string; if they differ, set `reframeEditedByUser = true` before calling `journalRepository.updateEntry()`
-- [ ] Unit test: `acceptReframe` with identical text → `reframeEditedByUser = false`; with modified text → `true`
+- [x] In `EntryDetailViewModel.acceptReframe(editedText: String)`: compare `editedText` to the model's original reframe string; if they differ, set `reframeEditedByUser = true` before calling `journalRepository.updateEntry()`
+- [x] Unit test: `acceptReframe` with identical text → `reframeEditedByUser = false`; with modified text → `true`
 
 ### 1.7 Mood grid UI (user valence/arousal input)
-- [ ] Add a 2D touch target (draggable point on a circumplex grid) to `EntryDetailScreen` — shown after the reframe is displayed, labelled "How does this land?"
-- [ ] Wire drag-end coordinates → `EntryDetailViewModel.confirmMoodCoordinates(v: Float, a: Float)`
-- [ ] `confirmMoodCoordinates` writes `userValence`/`userArousal` to the entry via `journalRepository.updateEntry()`
-- [ ] The grid is optional — skip button dismisses without writing coordinates (coordinates remain `null`)
+- [x] Add a 2D touch target (draggable point on a circumplex grid) to `EntryDetailScreen` — shown after the reframe is displayed, labelled "How does this land?"
+- [x] Wire drag-end coordinates → `EntryDetailViewModel.confirmMoodCoordinates(v: Float, a: Float)`
+- [x] `confirmMoodCoordinates` writes `userValence`/`userArousal` to the entry via `journalRepository.updateEntry()`
+- [x] The grid is optional — skip button dismisses without writing coordinates (coordinates remain `null`)
 
 **Milestone 1 exit criteria:**
 - All 3 benchmark classes run on a physical device without crashing

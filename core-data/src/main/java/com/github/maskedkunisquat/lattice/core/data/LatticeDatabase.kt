@@ -34,7 +34,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         Tag::class,
         Place::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -214,6 +214,19 @@ abstract class LatticeDatabase : RoomDatabase() {
          * entries from concurrent inserts. Existing duplicates (if any) are deduplicated
          * by keeping the first inserted row (lowest rowid) via INSERT OR IGNORE.
          */
+        /**
+         * Adds user feedback columns to `journal_entries` for on-device MLP training signal:
+         * - `user_valence` / `user_arousal`: coordinates from the mood grid ("How does this land?")
+         * - `reframe_edited_by_user`: true if the user modified the model's reframe before accepting
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE journal_entries ADD COLUMN user_valence REAL")
+                db.execSQL("ALTER TABLE journal_entries ADD COLUMN user_arousal REAL")
+                db.execSQL("ALTER TABLE journal_entries ADD COLUMN reframe_edited_by_user INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Tags — recreate with unique name index
