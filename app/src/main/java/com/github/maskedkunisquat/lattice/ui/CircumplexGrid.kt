@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.lattice.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +25,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
@@ -108,7 +117,52 @@ fun CircumplexGrid(
                                     y = (dotOffset.y + dragAmount.y).coerceIn(-half, half),
                                 )
                             }
-                        },
+                        }
+                        .onKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown || canvasSize == 0f) return@onKeyEvent false
+                            val step = canvasSize * 0.1f
+                            val half = canvasSize / 2f
+                            when (event.key) {
+                                Key.DirectionRight -> { dotOffset = dotOffset.copy(x = (dotOffset.x + step).coerceIn(-half, half)); true }
+                                Key.DirectionLeft  -> { dotOffset = dotOffset.copy(x = (dotOffset.x - step).coerceIn(-half, half)); true }
+                                Key.DirectionDown  -> { dotOffset = dotOffset.copy(y = (dotOffset.y + step).coerceIn(-half, half)); true }
+                                Key.DirectionUp    -> { dotOffset = dotOffset.copy(y = (dotOffset.y - step).coerceIn(-half, half)); true }
+                                else               -> false
+                            }
+                        }
+                        .semantics {
+                            customActions = listOf(
+                                CustomAccessibilityAction("Increase valence") {
+                                    if (canvasSize > 0f) {
+                                        val half = canvasSize / 2f
+                                        dotOffset = dotOffset.copy(y = (dotOffset.y - canvasSize * 0.1f).coerceIn(-half, half))
+                                    }
+                                    true
+                                },
+                                CustomAccessibilityAction("Decrease valence") {
+                                    if (canvasSize > 0f) {
+                                        val half = canvasSize / 2f
+                                        dotOffset = dotOffset.copy(y = (dotOffset.y + canvasSize * 0.1f).coerceIn(-half, half))
+                                    }
+                                    true
+                                },
+                                CustomAccessibilityAction("Increase arousal") {
+                                    if (canvasSize > 0f) {
+                                        val half = canvasSize / 2f
+                                        dotOffset = dotOffset.copy(x = (dotOffset.x + canvasSize * 0.1f).coerceIn(-half, half))
+                                    }
+                                    true
+                                },
+                                CustomAccessibilityAction("Decrease arousal") {
+                                    if (canvasSize > 0f) {
+                                        val half = canvasSize / 2f
+                                        dotOffset = dotOffset.copy(x = (dotOffset.x - canvasSize * 0.1f).coerceIn(-half, half))
+                                    }
+                                    true
+                                },
+                            )
+                        }
+                        .focusable(),
                 ) {
                     canvasSize = size.minDimension
                     val half = size.minDimension / 2f

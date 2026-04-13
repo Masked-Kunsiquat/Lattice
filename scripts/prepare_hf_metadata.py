@@ -29,7 +29,7 @@ import json
 import pathlib
 
 SEED_DIR = pathlib.Path("core-data/src/main/assets/seeds")
-OUT_DIR = pathlib.Path("scripts")
+OUT_DIR = pathlib.Path("metadata")
 
 # Fields to drop from journal entries before writing.
 # embeddingBase64 is a 1536-byte blob that causes TooBigContentError in the viewer.

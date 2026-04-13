@@ -245,7 +245,8 @@ class JournalEditorViewModelTest {
             transitEventDao = FakeTransitEventDao(),
             embeddingProvider = object : EmbeddingProvider() {
                 override suspend fun generateEmbedding(text: String) = FloatArray(384)
-            }
+            },
+            placeDao = FakePlaceDao(),
         )
         val orchestrator = LlmOrchestrator(
             nanoProvider = object : LlmProvider {
@@ -290,7 +291,8 @@ class JournalEditorViewModelTest {
             transitEventDao = FakeTransitEventDao(),
             embeddingProvider = object : EmbeddingProvider() {
                 override suspend fun generateEmbedding(text: String) = FloatArray(384)
-            }
+            },
+            placeDao = FakePlaceDao(),
         )
         val fakeLocal = object : LlmProvider {
             override val id = "fake_local"

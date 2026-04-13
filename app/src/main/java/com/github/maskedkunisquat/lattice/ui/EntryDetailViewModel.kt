@@ -117,10 +117,11 @@ class EntryDetailViewModel(
     fun acceptReframe(editedText: String) {
         val original = (_reframeState.value as? ReframeState.Done)?.text ?: return
         val entry = (entryState.value as? EntryDetailState.Found)?.entry ?: return
-        val edited = editedText.trim() != original.trim()
+        val editedNormalized = editedText.trim()
+        val edited = editedNormalized != original.trim()
         viewModelScope.launch {
             try {
-                val maskedReframe = journalRepository.maskText(editedText)
+                val maskedReframe = journalRepository.maskText(editedNormalized)
                 journalRepository.updateEntry(
                     entry.copy(
                         reframedContent = maskedReframe,
@@ -159,7 +160,9 @@ class EntryDetailViewModel(
         val entry = (entryState.value as? EntryDetailState.Found)?.entry ?: return
         viewModelScope.launch {
             try {
-                journalRepository.updateEntry(entry.copy(userValence = v, userArousal = a))
+                val clampedValence = v.coerceIn(-1f, 1f)
+                val clampedArousal = a.coerceIn(-1f, 1f)
+                journalRepository.updateEntry(entry.copy(userValence = clampedValence, userArousal = clampedArousal))
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to save mood coordinates", e)
             }

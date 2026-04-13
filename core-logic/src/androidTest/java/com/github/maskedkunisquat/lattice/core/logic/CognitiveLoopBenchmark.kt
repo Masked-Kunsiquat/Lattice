@@ -8,6 +8,7 @@ import androidx.benchmark.junit4.measureRepeated
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedManager
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedPersona
@@ -18,7 +19,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assume.assumeTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -171,9 +171,12 @@ class CognitiveLoopBenchmark {
     // ── Stage 2: Diagnosis of Thought ────────────────────────────────────────
     // Longest output per run — full chain-of-thought reasoning + DISTORTIONS sentinel.
 
-    @Ignore("Slow — full CoT output. Re-enable for full baseline run.")
     @Test
     fun stage2_holmes() {
+        assumeTrue(
+            "Pass -e enableSlowBenchmarks true to enable this slow benchmark.",
+            InstrumentationRegistry.getArguments().getString("enableSlowBenchmarks") != null,
+        )
         val l = loop!!
         benchmarkRule.measureRepeated {
             runBlocking { l.runStage2DiagnosisOfThought(HOLMES_TEXT).getOrThrow() }
@@ -254,9 +257,12 @@ class CognitiveLoopBenchmark {
     // Results are emitted via Log.i since BenchmarkRule does not natively surface
     // custom metrics — grep for "CognitiveLoopBenchmark" in logcat after the run.
 
-    @Ignore("Skipping for abridged run - remove to measure PSS delta")
     @Test
     fun memoryDelta_fullLoop_holmes() {
+        assumeTrue(
+            "Pass -e enableSlowBenchmarks true to enable this slow benchmark.",
+            InstrumentationRegistry.getArguments().getString("enableSlowBenchmarks") != null,
+        )
         val l = loop!!
         var deltaPssKb = 0L
         benchmarkRule.measureRepeated {
@@ -276,9 +282,12 @@ class CognitiveLoopBenchmark {
         Log.i(TAG, "memoryDelta_fullLoop_holmes  totalPSS Δ = $deltaPssKb KB")
     }
 
-    @Ignore("Skipping for abridged run - remove to measure PSS delta")
     @Test
     fun memoryDelta_fullLoop_watson() {
+        assumeTrue(
+            "Pass -e enableSlowBenchmarks true to enable this slow benchmark.",
+            InstrumentationRegistry.getArguments().getString("enableSlowBenchmarks") != null,
+        )
         val l = loop!!
         var deltaPssKb = 0L
         benchmarkRule.measureRepeated {

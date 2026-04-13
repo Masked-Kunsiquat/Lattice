@@ -251,10 +251,7 @@ private fun EntryDetailContent(
                     if (entry.userValence == null && !moodGridSkipped) {
                         Spacer(Modifier.height(16.dp))
                         CircumplexGrid(
-                            onConfirm = { v, a ->
-                                onConfirmMood(v, a)
-                                moodGridSkipped = true
-                            },
+                            onConfirm = { v, a -> onConfirmMood(v, a) },
                             onSkip = { moodGridSkipped = true },
                             modifier = Modifier.fillMaxWidth(),
                         )
