@@ -102,9 +102,9 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Unit test: loss decreases over 100 steps on a trivial synthetic dataset
 
 ### 2.4 Base layer warm-start
-- [ ] Create `AffectiveMlpInitializer.kt`: reads `goEmotions_base_v1.bin` from assets, deserializes (embedding, v, a) pairs, runs `AffectiveMlpTrainer.trainBatch()` for `epochs=5`, saves weights to `filesDir/affective_head_v1.bin`
-- [ ] This runs once on first launch (guarded by `SharedPreferences` flag `affective_head_initialized`)
-- [ ] Runs on `Dispatchers.Default`, non-blocking — `EmbeddingProvider` uses the zero-initialized head (random weights) until initialization completes, then reloads
+- [x] Create `AffectiveMlpInitializer.kt`: reads `goEmotions_base_v1.bin` from assets, deserializes (embedding, v, a) pairs, runs `AffectiveMlpTrainer.trainBatch()` for `epochs=5`, saves weights to `filesDir/affective_head_v1.bin`
+- [x] This runs once on first launch (guarded by `SharedPreferences` flag `affective_head_initialized`)
+- [x] Runs on `Dispatchers.Default`, non-blocking — MLP uses random weights until initialization completes
 
 ### 2.5 Wire MLP into Stage 1
 - [ ] In `ReframingLoop.runStage1()`: after `EmbeddingProvider.generateEmbedding(maskedText)`, pass the resulting `FloatArray` to `AffectiveMlp.forward()` → get `(mlpValence, mlpArousal)`
