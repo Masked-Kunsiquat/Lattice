@@ -9,7 +9,7 @@ import kotlin.math.tanh
  * [embedding] must be produced from PII-masked text only (already guaranteed
  * upstream by [EmbeddingProvider]).
  */
-class TrainingSample(
+data class TrainingSample(
     val embedding: FloatArray,
     val targetValence: Float,
     val targetArousal: Float,

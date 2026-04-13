@@ -84,7 +84,7 @@ class AffectiveMlpInitializer(
 
                 prefs.edit().putBoolean(PREF_KEY, true).apply()
             } catch (e: Exception) {
-                Log.e(TAG, "Warm-start failed: ${e.message}")
+                Log.e(TAG, "Warm-start failed: ${e.message}", e)
             }
         }
     }

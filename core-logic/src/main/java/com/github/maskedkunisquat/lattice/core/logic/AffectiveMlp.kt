@@ -2,10 +2,7 @@ package com.github.maskedkunisquat.lattice.core.logic
 
 import android.content.Context
 import android.util.Log
-import java.io.DataInputStream
-import java.io.DataOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -94,6 +91,8 @@ class AffectiveMlp(
         /** Expected file size in bytes. */
         val WEIGHT_BYTES = WEIGHT_COUNT * Float.SIZE_BYTES         // 198 152
 
+        const val CURRENT_SCHEMA_VERSION = 1
+
         private const val TAG_LOAD      = "AffectiveMlp"
         internal const val EMBEDDING_ASSET = "snowflake-arctic-embed-xs.onnx"
 
@@ -118,6 +117,13 @@ class AffectiveMlp(
                 AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE
             )
             val manifest = AffectiveManifestStore.read(prefs) ?: return null
+
+            if (manifest.schemaVersion != CURRENT_SCHEMA_VERSION) {
+                Log.e(TAG_LOAD, "Manifest schema version ${manifest.schemaVersion} != $CURRENT_SCHEMA_VERSION — discarding stale checkpoint")
+                context.filesDir.resolve(manifest.headPath).delete()
+                prefs.edit().remove(AffectiveMlpInitializer.PREF_KEY).remove(AffectiveManifestStore.PREF_KEY).apply()
+                return null
+            }
 
             val currentHash = "sha256:${context.assets.open(EMBEDDING_ASSET).use { sha256Hex(it) }}"
             if (manifest.baseModelHash != currentHash) {

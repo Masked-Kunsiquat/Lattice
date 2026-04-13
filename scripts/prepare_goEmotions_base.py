@@ -152,9 +152,12 @@ LABEL_NAMES: dict[int, str] = {
 
 def quadrant(v: float, a: float) -> int:
     """Return 1–4 following the CBT pipeline convention (matches CircumplexMapper.kt)."""
-    if v >= 0 and a >= 0: return 1
-    if v <  0 and a >= 0: return 2
-    if v <  0 and a <  0: return 3
+    if v >= 0 and a >= 0:
+        return 1
+    if v < 0 and a >= 0:
+        return 2
+    if v < 0 and a < 0:
+        return 3
     return 4  # v >= 0, a < 0
 
 
