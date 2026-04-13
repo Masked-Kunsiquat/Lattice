@@ -75,6 +75,7 @@ fun EntryDetailScreen(
         onReframe = viewModel::requestReframe,
         onApplyReframe = viewModel::applyReframe,
         onDismissReframe = viewModel::dismissReframe,
+        onConfirmMood = viewModel::confirmMoodCoordinates,
     )
 }
 
@@ -91,9 +92,11 @@ private fun EntryDetailContent(
     onReframe: () -> Unit,
     onApplyReframe: () -> Unit,
     onDismissReframe: () -> Unit,
+    onConfirmMood: (valence: Float, arousal: Float) -> Unit,
 ) {
     val entry = (entryState as? EntryDetailState.Found)?.entry
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var moodGridSkipped by remember(entry?.id) { mutableStateOf(false) }
 
     if (showDeleteConfirm) {
         AlertDialog(
@@ -242,6 +245,20 @@ private fun EntryDetailContent(
                             modifier = Modifier.padding(16.dp),
                         )
                     }
+
+                    // Mood grid — shown once after reframe, until user confirms or skips.
+                    // Disappears permanently once userValence is written (entry reloads from DB).
+                    if (entry.userValence == null && !moodGridSkipped) {
+                        Spacer(Modifier.height(16.dp))
+                        CircumplexGrid(
+                            onConfirm = { v, a ->
+                                onConfirmMood(v, a)
+                                moodGridSkipped = true
+                            },
+                            onSkip = { moodGridSkipped = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -284,6 +301,7 @@ private fun PreviewOriginalOnly() {
             onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
+            onConfirmMood = { _, _ -> },
         )
     }
 }
@@ -303,6 +321,7 @@ private fun PreviewWithReframe() {
             onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
+            onConfirmMood = { _, _ -> },
         )
     }
 }
@@ -320,6 +339,7 @@ private fun PreviewModelLoading() {
             onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
+            onConfirmMood = { _, _ -> },
         )
     }
 }
@@ -337,6 +357,7 @@ private fun PreviewMoodLog() {
             onReframe = {},
             onApplyReframe = {},
             onDismissReframe = {},
+            onConfirmMood = { _, _ -> },
         )
     }
 }

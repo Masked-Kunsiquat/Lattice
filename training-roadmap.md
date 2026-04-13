@@ -58,10 +58,10 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Unit test: `acceptReframe` with identical text → `reframeEditedByUser = false`; with modified text → `true`
 
 ### 1.7 Mood grid UI (user valence/arousal input)
-- [ ] Add a 2D touch target (draggable point on a circumplex grid) to `EntryDetailScreen` — shown after the reframe is displayed, labelled "How does this land?"
-- [ ] Wire drag-end coordinates → `EntryDetailViewModel.confirmMoodCoordinates(v: Float, a: Float)`
-- [ ] `confirmMoodCoordinates` writes `userValence`/`userArousal` to the entry via `journalRepository.updateEntry()`
-- [ ] The grid is optional — skip button dismisses without writing coordinates (coordinates remain `null`)
+- [x] Add a 2D touch target (draggable point on a circumplex grid) to `EntryDetailScreen` — shown after the reframe is displayed, labelled "How does this land?"
+- [x] Wire drag-end coordinates → `EntryDetailViewModel.confirmMoodCoordinates(v: Float, a: Float)`
+- [x] `confirmMoodCoordinates` writes `userValence`/`userArousal` to the entry via `journalRepository.updateEntry()`
+- [x] The grid is optional — skip button dismisses without writing coordinates (coordinates remain `null`)
 
 **Milestone 1 exit criteria:**
 - All 3 benchmark classes run on a physical device without crashing

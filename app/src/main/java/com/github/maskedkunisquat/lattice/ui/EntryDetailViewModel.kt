@@ -151,6 +151,21 @@ class EntryDetailViewModel(
         }
     }
 
+    /**
+     * Persists the user's mood coordinates from the circumplex grid ("How does this land?").
+     * No-op if the entry is not loaded. Coordinates remain null if the user skips the grid.
+     */
+    fun confirmMoodCoordinates(v: Float, a: Float) {
+        val entry = (entryState.value as? EntryDetailState.Found)?.entry ?: return
+        viewModelScope.launch {
+            try {
+                journalRepository.updateEntry(entry.copy(userValence = v, userArousal = a))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save mood coordinates", e)
+            }
+        }
+    }
+
     fun dismissReframe() {
         reframeJob?.cancel()
         _reframeState.value = ReframeState.Idle
