@@ -22,19 +22,27 @@
 
 ## SearchBenchmark
 
-| Test | Per-call median | Notes |
-|---|---|---|
-| `findSimilarEntries` | **~6 ms** | 100-call batch. Includes `PiiShield.mask()` + `generateEmbedding()` + O(95) cosine scan. Two thermal throttle pauses; climbs to ~11 ms/call by end of run. |
-| `findEvidenceEntries` | **~0.4 ms** | 100-call batch. Pure Room valence filter + placeholder match. High variance from GC (floor ~0.35 ms, spikes to ~1.8 ms). |
+### Before optimization (Pair allocations + Flow wrapper)
 
-> `findSimilarEntries` raw: ~600 ms / 100 calls (stable window, iters 1–15). Allocation count: ~613,940 / 100 calls (~6,140 per call — dominated by embedding pipeline).  
-> `findEvidenceEntries` raw: ~35–40 ms / 100 calls (stable floor). Allocation count: ~34,298 / 100 calls (~343 per call).
+| Test | Per-call median | Allocations/call | Notes |
+|---|---|---|---|
+| `findSimilarEntries` | **~6 ms** | ~6,140 | 100-call batch. Includes `PiiShield.mask()` + `generateEmbedding()` + O(95) cosine scan. Two thermal throttle pauses; climbs to ~11 ms/call by end of run. |
+| `findEvidenceEntries` | **~0.4 ms** | ~343 | 100-call batch. Pure Room valence filter + placeholder match. High variance from GC (floor ~0.35 ms, spikes to ~1.8 ms). |
+
+> `findSimilarEntries` raw: ~600 ms / 100 calls (stable window, iters 1–15). Allocation count: ~613,940 / 100 calls.  
+> `findEvidenceEntries` raw: ~35–40 ms / 100 calls (stable floor). Allocation count: ~34,298 / 100 calls.
+
+### After optimization (index-based scoring + suspend fun)
+
+| Test | Per-call median | Allocations/call | Notes |
+|---|---|---|---|
+| `findSimilarEntries` | _TBD_ | _TBD_ | |
+| `findEvidenceEntries` | _TBD_ | _TBD_ | Unchanged — no Pair allocations or Flow in this path. |
 
 ---
 
 ## Observations
 
-- **findSimilarEntries allocation count** (~6,140/call) is high and worth revisiting — the embedding pipeline generates significant short-lived object pressure. Candidate for pooling in a future pass.
 - **findEvidenceEntries** is fast enough to be invisible in the CBT pipeline; no optimization needed.
 - **warm inference** at 1.5 ms is well within the 16 ms frame budget for any UI-adjacent work.
 - All numbers from a `debuggable=true` build — expect 20–40% improvement on a proper release-signed benchmark once the app module hosts the benchmark variant.
