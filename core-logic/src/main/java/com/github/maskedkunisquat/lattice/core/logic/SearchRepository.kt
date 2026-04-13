@@ -64,7 +64,8 @@ class SearchRepository(
      * since evidence is injected into LLM prompts which operate on masked text).
      *
      * @param placeholders Set of `[PERSON_UUID]` tokens extracted from the current entry's
-     *   masked text. Used for cross-entry entity anchoring.
+     *   masked text. Used for cross-entry entity anchoring. An empty set returns no results —
+     *   evidence is only meaningful when anchored to a specific entity.
      * @param minValence Minimum valence threshold (exclusive). Defaults to 0.5.
      * @param limit Maximum number of evidence entries to return. Defaults to 5.
      */
@@ -78,7 +79,7 @@ class SearchRepository(
                 val c = entry.content
                 c != null &&
                 entry.embedding.any { it != 0f } &&
-                (placeholders.isEmpty() || placeholders.any { it in c })
+                (placeholders.isNotEmpty() && placeholders.any { it in c })
             }
             .take(limit)
     }

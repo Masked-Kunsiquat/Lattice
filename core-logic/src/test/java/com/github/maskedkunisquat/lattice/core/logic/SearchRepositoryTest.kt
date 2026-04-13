@@ -124,7 +124,7 @@ class SearchRepositoryTest {
     }
 
     @Test
-    fun `findEvidenceEntries - empty placeholders returns all high-valence entries`() = runTest {
+    fun `findEvidenceEntries - empty placeholders returns no entries`() = runTest {
         val personId = UUID.randomUUID()
         val placeholder = "[PERSON_$personId]"
 
@@ -137,10 +137,7 @@ class SearchRepositoryTest {
             placeholders = emptySet(),
             minValence = 0.5f,
         )
-        assertEquals("Empty placeholder set must return all high-valence entries", 2, results.size)
-        val ids = results.map { it.id }.toSet()
-        assertTrue(withPlaceholder.id in ids)
-        assertTrue(withoutPlaceholder.id in ids)
+        assertEquals("Empty placeholder set must return no entries — evidence requires entity anchoring", 0, results.size)
     }
 
     @Test
