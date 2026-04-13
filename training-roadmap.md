@@ -87,11 +87,11 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Document the label mapping in a comment block at the top of the script
 
 ### 2.2 `AffectiveMlp` class (`:core-logic`)
-- [ ] Create `core-logic/src/main/java/.../AffectiveMlp.kt`
-- [ ] Architecture: `Linear(384→128) → ReLU → Linear(128→2) → Tanh`
-- [ ] `forward(embedding: FloatArray): Pair<Float, Float>` — returns (valence, arousal) in [-1, 1]
-- [ ] Weight storage: two `FloatArray` weight matrices + bias vectors, total ~50K floats (~200KB)
-- [ ] Serialization: `saveWeights(path: File)` / `loadWeights(path: File)` — raw IEEE 754 LE binary, same convention as existing embedding BLOB
+- [x] Create `core-logic/src/main/java/.../AffectiveMlp.kt`
+- [x] Architecture: `Linear(384→128) → ReLU → Linear(128→2) → Tanh`
+- [x] `forward(embedding: FloatArray): Pair<Float, Float>` — returns (valence, arousal) in [-1, 1]
+- [x] Weight storage: two `FloatArray` weight matrices + bias vectors, total ~50K floats (~200KB)
+- [x] Serialization: `saveWeights(path: File)` / `loadWeights(path: File)` — raw IEEE 754 LE binary, same convention as existing embedding BLOB
 
 ### 2.3 `AffectiveMlpTrainer` class (`:core-logic`)
 - [ ] Create `core-logic/src/main/java/.../AffectiveMlpTrainer.kt`

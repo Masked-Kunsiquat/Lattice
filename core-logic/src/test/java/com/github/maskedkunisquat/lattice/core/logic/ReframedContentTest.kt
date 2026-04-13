@@ -75,6 +75,8 @@ class ReframedContentTest {
         }
         override suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry> = emptyList()
         override suspend fun deleteEntryById(id: UUID) = Unit
+        override suspend fun getLabeledEntriesSince(timestamp: Long): List<JournalEntry> = emptyList()
+        override suspend fun countLabeledEntriesSince(timestamp: Long): Int = 0
     }
 
     private fun makeRepo(journalDao: FakeJournalDao): JournalRepository =
