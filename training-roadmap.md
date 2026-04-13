@@ -76,9 +76,10 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 
 ### 2.1 GoEmotions base layer asset (offline, Python)
 - [ ] Write `scripts/prepare_goEmotions_base.py`:
-  - Load GoEmotions dataset (HuggingFace `datasets`)
-  - Map 27 labels → (valence, arousal) using published circumplex coordinates (Russell & Barrett 1999 lookup table)
-  - Run each text through Arctic Embed XS → 384-dim embedding (use the same ONNX model)
+  - Load GoEmotions via HuggingFace: `load_dataset("google-research-datasets/go_emotions", "simplified")` — use the `train` split (43,410 examples, ≥2/3 rater agreement required for inclusion)
+  - The dataset has **28 classes** (emotions 0–26 + neutral=27); each comment carries 1–5 labels (multi-label). Strategy: keep only single-label examples to avoid ambiguous v/a targets; this leaves ~30–40% of train (~13–17k examples)
+  - Map all 28 class IDs → (valence, arousal) using the Russell & Barrett 1999 circumplex coordinates lookup table — document the full 28-entry table in a comment block at the top of the script; neutral maps to (0.0, 0.0)
+  - Run each text through Arctic Embed XS → 384-dim embedding (use the same ONNX model as production)
   - Output `assets/training/goEmotions_base_v1.bin`: header (count, dim) + packed `float32` rows of (384 embedding + 2 labels)
   - Subsample to ~1k balanced examples (equal quadrant representation) to keep asset <6MB
 - [ ] Commit the generated asset; add path to `.gitattributes` as `binary`
