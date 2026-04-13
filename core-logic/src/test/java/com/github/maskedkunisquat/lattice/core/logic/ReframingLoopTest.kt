@@ -292,7 +292,7 @@ class ReframingLoopTest {
     fun `selectStrategy - Q2 when negative valence and positive arousal`() {
         assertEquals(
             ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
-            loop.selectStrategy(-0.5f, 0.8f)
+            ReframingLoop.selectStrategy(-0.5f, 0.8f)
         )
     }
 
@@ -300,7 +300,7 @@ class ReframingLoopTest {
     fun `selectStrategy - Q3 when negative valence and negative arousal`() {
         assertEquals(
             ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
-            loop.selectStrategy(-0.4f, -0.6f)
+            ReframingLoop.selectStrategy(-0.4f, -0.6f)
         )
     }
 
@@ -308,11 +308,11 @@ class ReframingLoopTest {
     fun `selectStrategy - strengths affirmation for positive valence`() {
         assertEquals(
             ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
-            loop.selectStrategy(0.3f, 0.7f)  // Q1
+            ReframingLoop.selectStrategy(0.3f, 0.7f)  // Q1
         )
         assertEquals(
             ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
-            loop.selectStrategy(0.6f, -0.4f)  // Q4
+            ReframingLoop.selectStrategy(0.6f, -0.4f)  // Q4
         )
     }
 
@@ -320,7 +320,7 @@ class ReframingLoopTest {
     fun `selectStrategy - Q2 on zero arousal boundary with negative valence`() {
         assertEquals(
             ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
-            loop.selectStrategy(-0.1f, 0f)
+            ReframingLoop.selectStrategy(-0.1f, 0f)
         )
     }
 
@@ -437,6 +437,7 @@ class ReframingLoopTest {
             lastMaxDifficulty = max
             return activities.filter { it.difficulty <= max }.sortedBy { it.difficulty }
         }
+        override suspend fun deleteActivityById(id: java.util.UUID) = Unit
     }
 
     private fun loopWithResponseAndDao(

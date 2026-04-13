@@ -7,7 +7,6 @@ import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
@@ -158,7 +157,7 @@ class ReframingLoop(
         val placeholders = PLACEHOLDER_REGEX.findAll(maskedText)
             .map { it.value }
             .toSet()
-        return repo.findEvidenceEntries(placeholders).first()
+        return repo.findEvidenceEntries(placeholders)
     }
 
     // ── Prompt builders ──────────────────────────────────────────────────────
@@ -224,7 +223,7 @@ class ReframingLoop(
                     "2. Offers a realistic counterthought contrary to the belief — " +
                     "acknowledge difficulty without inventing past journal evidence.\n"
                 val stepThree = if (baActivity != null)
-                    "3. Ends with one small concrete step: \"${baActivity.taskName}\"."
+                    "3. Ends with one small concrete step: \"${baActivity.taskName}\" (value area: ${baActivity.valueCategory})."
                 else
                     "3. Ends with one small concrete action to restore a sense of agency."
                 "Use Behavioral Activation: write a 2–3 sentence reframe in the writer's own voice that:\n" +

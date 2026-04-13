@@ -163,7 +163,7 @@ Seed JSON must satisfy:
 
 `EmbeddingProvider` loads `snowflake-arctic-embed-xs.onnx` directly from assets (23 MB, int8, 384-dim). It does **not** copy to `filesDir` — reads from assets on every init. Fallback is a zero-vector `FloatArray(384)`.
 
-Seed JSON files currently contain zero-vector placeholders (`embeddingBase64` = 1536 null bytes). Real embeddings must be computed via `EmbeddingProvider` on-device (planned for `DebugSeedScreen` §4.1).
+Seed JSON files contain real 384-dim embeddings generated from the masked entry text via Arctic Embed XS.
 
 ---
 

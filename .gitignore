@@ -30,3 +30,6 @@ app/src/main/assets/generation_config.json
 # Misc Agent Files
 .agent/
 .idea/
+Test Results - EmbeddingBenchmark.html
+Test Results - *.html
+parse_results.ps1

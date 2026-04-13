@@ -4,10 +4,8 @@ import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import kotlin.math.sqrt
 
 /**
@@ -34,22 +32,23 @@ class SearchRepository(
      * @param limit Maximum number of results to return.
      * @return Flow emitting a ranked list of the [limit] most similar entries.
      */
-    fun findSimilarEntries(queryText: String, limit: Int): Flow<List<JournalEntry>> = flow {
-        val people = personDao.getPersons().first()
+    suspend fun findSimilarEntries(queryText: String, limit: Int): List<JournalEntry> =
+        withContext(Dispatchers.Default) {
+            val people = personDao.getPersons().first()
 
-        // Privacy: mask PII in the query so it aligns with masked stored embeddings
-        val maskedQuery = PiiShield.mask(queryText, people)
-        val queryEmbedding = embeddingProvider.generateEmbedding(maskedQuery)
+            // Privacy: mask PII in the query so it aligns with masked stored embeddings
+            val maskedQuery = PiiShield.mask(queryText, people)
+            val queryEmbedding = embeddingProvider.generateEmbedding(maskedQuery)
 
-        val results = journalDao.getAllEntries()
-            .map { entry -> entry to cosineSimilarity(queryEmbedding, entry.embedding) }
-            .filter { (_, score) -> score.isFinite() && score > 0f }
-            .sortedByDescending { (_, score) -> score }
-            .take(limit)
-            .map { (entry, _) -> entry.copy(content = entry.content?.let { PiiShield.unmask(it, people) }) }
-
-        emit(results)
-    }.flowOn(Dispatchers.Default)
+            val entries = journalDao.getAllEntries()
+            // Pre-allocated score array avoids a Pair<JournalEntry, Float> per entry
+            val scores = FloatArray(entries.size) { i -> cosineSimilarity(queryEmbedding, entries[i].embedding) }
+            scores.indices
+                .filter { scores[it].isFinite() && scores[it] > 0f }
+                .sortedByDescending { scores[it] }
+                .take(limit)
+                .map { i -> entries[i].copy(content = entries[i].content?.let { PiiShield.unmask(it, people) }) }
+        }
 
     /**
      * Finds past journal entries that serve as "Evidence for the Contrary" — positive
@@ -65,21 +64,25 @@ class SearchRepository(
      * since evidence is injected into LLM prompts which operate on masked text).
      *
      * @param placeholders Set of `[PERSON_UUID]` tokens extracted from the current entry's
-     *   masked text. Used for cross-entry entity anchoring.
+     *   masked text. Used for cross-entry entity anchoring. An empty set returns no results —
+     *   evidence is only meaningful when anchored to a specific entity.
      * @param minValence Minimum valence threshold (exclusive). Defaults to 0.5.
      * @param limit Maximum number of evidence entries to return. Defaults to 5.
      */
-    fun findEvidenceEntries(
+    suspend fun findEvidenceEntries(
         placeholders: Set<String>,
         minValence: Float = 0.5f,
         limit: Int = 5,
-    ): Flow<List<JournalEntry>> = flow {
-        val candidates = journalDao.getEntriesWithMinValence(minValence)
-        val results = candidates
-            .filter { entry -> val c = entry.content; c != null && (placeholders.isEmpty() || placeholders.any { it in c }) }
+    ): List<JournalEntry> = withContext(Dispatchers.Default) {
+        journalDao.getEntriesWithMinValence(minValence)
+            .filter { entry ->
+                val c = entry.content
+                c != null &&
+                entry.embedding.any { it != 0f } &&
+                (placeholders.isNotEmpty() && placeholders.any { it in c })
+            }
             .take(limit)
-        emit(results)
-    }.flowOn(Dispatchers.Default)
+    }
 
     /**
      * Computes the cosine similarity between two 384-dimensional float vectors.

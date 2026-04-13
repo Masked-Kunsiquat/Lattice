@@ -5,7 +5,6 @@ import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -24,6 +23,8 @@ class SearchRepositoryTest {
         override fun getPersons(): Flow<List<Person>> = flowOf(emptyList())
         override fun getPersonById(id: UUID): Flow<Person?> = flowOf(null)
         override suspend fun incrementVibeScore(personId: UUID, delta: Float) = Unit
+        override suspend fun deletePersonById(id: UUID) = Unit
+        override fun searchByName(query: String): Flow<List<Person>> = flowOf(emptyList())
     }
 
     private fun entry(
@@ -49,6 +50,7 @@ class SearchRepositoryTest {
             override fun getEntryById(id: UUID): Flow<JournalEntry?> = flowOf(null)
             override suspend fun getAllEntries(): List<JournalEntry> = emptyList()
             override suspend fun updateReframedContent(id: String, content: String) = Unit
+            override suspend fun deleteEntryById(id: UUID) = Unit
             override suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry> =
                 entries.filter { it.valence > minValence }.sortedByDescending { it.valence }
         }
@@ -76,8 +78,7 @@ class SearchRepositoryTest {
         val results = repo.findEvidenceEntries(
             placeholders = setOf(placeholder),
             minValence = 0.5f,
-        ).first()
-
+        )
         assertTrue("Only entries above minValence=0.5 should be returned", results.all { it.valence > 0.5f })
         assertEquals(1, results.size)
         assertEquals(aboveThreshold.id, results[0].id)
@@ -95,8 +96,7 @@ class SearchRepositoryTest {
         val results = repo.findEvidenceEntries(
             placeholders = setOf(placeholder),
             minValence = 0.5f,
-        ).first()
-
+        )
         assertEquals("Zero-vector entries must be excluded", 1, results.size)
         assertEquals(withEmbedding.id, results[0].id)
     }
@@ -117,15 +117,14 @@ class SearchRepositoryTest {
             placeholders = setOf(placeholder),
             minValence = 0.5f,
             limit = 2,
-        ).first()
-
+        )
         assertEquals("limit=2 must cap results to 2 entries", 2, results.size)
         assertEquals(highest.id, results[0].id)
         assertEquals(middle.id, results[1].id)
     }
 
     @Test
-    fun `findEvidenceEntries - empty placeholders returns all high-valence entries`() = runTest {
+    fun `findEvidenceEntries - empty placeholders returns no entries`() = runTest {
         val personId = UUID.randomUUID()
         val placeholder = "[PERSON_$personId]"
 
@@ -137,12 +136,8 @@ class SearchRepositoryTest {
         val results = repo.findEvidenceEntries(
             placeholders = emptySet(),
             minValence = 0.5f,
-        ).first()
-
-        assertEquals("Empty placeholder set must return all high-valence entries", 2, results.size)
-        val ids = results.map { it.id }.toSet()
-        assertTrue(withPlaceholder.id in ids)
-        assertTrue(withoutPlaceholder.id in ids)
+        )
+        assertEquals("Empty placeholder set must return no entries — evidence requires entity anchoring", 0, results.size)
     }
 
     @Test
@@ -160,8 +155,7 @@ class SearchRepositoryTest {
         val results = repo.findEvidenceEntries(
             placeholders = setOf(placeholderA),
             minValence = 0.5f,
-        ).first()
-
+        )
         assertEquals("Only entries containing a matching placeholder should be returned", 1, results.size)
         assertEquals(matchingEntry.id, results[0].id)
     }
