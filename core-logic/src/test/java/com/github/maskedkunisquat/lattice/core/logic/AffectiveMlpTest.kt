@@ -6,6 +6,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 class AffectiveMlpTest {
 
@@ -138,6 +139,35 @@ class AffectiveMlpTest {
     @Test(expected = IllegalArgumentException::class)
     fun `constructor rejects wrong w1 size`() {
         AffectiveMlp(w1 = FloatArray(10))
+    }
+
+    // ── convergence (2.7-j) ──────────────────────────────────────────────────
+
+    @Test
+    fun `forward output converges toward target after trainBatch`() {
+        val mlp = AffectiveMlp()
+        val targetV = 0.7f
+        val targetA = -0.3f
+        val samples = List(5) {
+            TrainingSample(
+                embedding = FloatArray(AffectiveMlp.IN) { it * 0.001f },
+                targetValence = targetV,
+                targetArousal = targetA,
+            )
+        }
+
+        val (v0, a0) = mlp.forward(samples[0].embedding)
+        val distBefore = sqrt((v0 - targetV) * (v0 - targetV) + (a0 - targetA) * (a0 - targetA))
+
+        AffectiveMlpTrainer(mlp, lr = 1e-3f, epochs = 20).trainBatch(samples)
+
+        val (v1, a1) = mlp.forward(samples[0].embedding)
+        val distAfter = sqrt((v1 - targetV) * (v1 - targetV) + (a1 - targetA) * (a1 - targetA))
+
+        assertTrue(
+            "forward() output must be closer to target after training: before=$distBefore, after=$distAfter",
+            distAfter < distBefore,
+        )
     }
 
     // ── helper ────────────────────────────────────────────────────────────────

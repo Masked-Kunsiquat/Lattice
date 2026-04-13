@@ -144,10 +144,10 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 
 #### Test coverage
 - [x] **2.7-i** Add end-to-end warm-start integration test in `AffectiveMlpInitializerTest`: load asset → `trainBatch` → save weights → write manifest → assert guard flag set → second call is a no-op
-- [ ] **2.7-j** Add convergence assertion to `AffectiveMlpTest`: after `AffectiveMlpTrainer.trainBatch()` on a small synthetic dataset, `forward(sample.embedding)` output must be closer to the target than before training
-- [ ] **2.7-k** Add edge-case tests to `AffectiveMlpTrainerTest`: (1) `lr=1.0` → loss stays finite; (2) zero-gradient step with `weightDecay > 0` → weight magnitudes still decrease
-- [ ] **2.7-l** Add fallback scenario to `ReframingLoopTest`: embedder present but `generateEmbedding()` throws → source must be `REGEX`, not a crash
-- [ ] **2.7-m** Add `scripts/test_prepare_goEmotions_base.py` covering: quadrant boundary conditions, binary output byte order (read back as `<f4` and verify first embedding matches input), and single-label filter count
+- [x] **2.7-j** Add convergence assertion to `AffectiveMlpTest`: after `AffectiveMlpTrainer.trainBatch()` on a small synthetic dataset, `forward(sample.embedding)` output must be closer to the target than before training
+- [x] **2.7-k** Add edge-case tests to `AffectiveMlpTrainerTest`: (1) `lr=1.0` → loss stays finite; (2) zero-gradient step with `weightDecay > 0` → weight magnitudes still decrease
+- [x] **2.7-l** Add fallback scenario to `ReframingLoopTest`: embedder present but `generateEmbedding()` throws → source must be `REGEX`, not a crash
+- [x] **2.7-m** Add `scripts/test_prepare_goEmotions_base.py` covering: quadrant boundary conditions, binary output byte order (read back as `<f4` and verify first embedding matches input), and single-label filter count
 
 **Milestone 2 exit criteria:**
 - `AffectiveMlp.forward()` produces valid (v, a) coordinates for all 3 seed persona entries

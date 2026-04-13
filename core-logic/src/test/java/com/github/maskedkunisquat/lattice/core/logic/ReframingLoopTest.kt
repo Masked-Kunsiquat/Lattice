@@ -266,6 +266,40 @@ class ReframingLoopTest {
         assertTrue("arousal must be in [-1, 1]", mapped.arousal in -1f..1f)
     }
 
+    // 2.7-l: embedder present but throws → source must be REGEX, not a crash
+    private class ThrowingEmbeddingProvider : EmbeddingProvider() {
+        override suspend fun generateEmbedding(text: String): FloatArray =
+            throw RuntimeException("inference failed")
+    }
+
+    private fun loopWithThrowingEmbedder(): ReframingLoop {
+        val results: List<LlmResult> =
+            listOf("v=", "0.5", " a=", "-0.3").map { LlmResult.Token(it) } + LlmResult.Complete
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = FakeProvider("local", results),
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = { false },
+        )
+        return ReframingLoop(
+            orchestrator = orchestrator,
+            embeddingProvider = ThrowingEmbeddingProvider(),
+            affectiveMlp = AffectiveMlp(),
+        )
+    }
+
+    @Test
+    fun `runStage1AffectiveMap - fallback to REGEX when embedder throws`() = runTest {
+        val result = loopWithThrowingEmbedder()
+            .runStage1AffectiveMap("$MASKED feels uncertain.")
+        assertTrue("must succeed (not crash)", result.isSuccess)
+        assertEquals(ReframingLoop.AffectiveSource.REGEX, result.getOrThrow().source)
+    }
+
     // ── Stage 2: parseDotOutput ───────────────────────────────────────────────
 
     @Test

@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -199,5 +200,37 @@ class AffectiveMlpTrainerTest {
     fun `trainer exposes configurable epochs`() {
         val trainer = AffectiveMlpTrainer(AffectiveMlp(), epochs = 7)
         assertEquals(7, trainer.epochs)
+    }
+
+    // ── edge cases (2.7-k) ───────────────────────────────────────────────────
+
+    @Test
+    fun `loss stays finite under lr=1_0`() {
+        val trainer = AffectiveMlpTrainer(AffectiveMlp(), lr = 1.0f)
+        val emb = FloatArray(AffectiveMlp.IN) { 0.1f }
+        repeat(20) { step ->
+            val loss = trainer.trainStep(emb, targetValence = 0.7f, targetArousal = -0.3f)
+            assertTrue("loss must be finite at step $step, got $loss", loss.isFinite())
+        }
+    }
+
+    @Test
+    fun `weight magnitudes decrease under weight decay with zero-gradient step`() {
+        val mlp = AffectiveMlp()
+        val emb = FloatArray(AffectiveMlp.IN) { 0.1f }
+
+        // Use the current output as the target so MSE gradient = 0
+        val (tv, ta) = mlp.forward(emb)
+
+        val sumBefore = mlp.w1.sumOf { abs(it.toDouble()) }
+
+        // High weight decay so shrinkage is measurable in a single step
+        AffectiveMlpTrainer(mlp, lr = 1e-2f, weightDecay = 1e-1f).trainStep(emb, tv, ta)
+
+        val sumAfter = mlp.w1.sumOf { abs(it.toDouble()) }
+        assertTrue(
+            "w1 magnitudes must shrink due to weight decay even with zero gradient: before=$sumBefore, after=$sumAfter",
+            sumAfter < sumBefore,
+        )
     }
 }

@@ -59,19 +59,25 @@ class ReframingLoop(
             runCatching {
                 val mlp = affectiveMlp
                 val embedder = embeddingProvider
-                if (mlp != null && embedder != null) {
-                    val embedding = embedder.generateEmbedding(maskedText)
-                    val (v, a) = mlp.forward(embedding)
-                    val vc = v.coerceIn(-1f, 1f)
-                    val ac = a.coerceIn(-1f, 1f)
-                    Log.d(TAG, "Stage1: source=mlp")
-                    AffectiveMapResult(
-                        valence = vc,
-                        arousal = ac,
-                        label = CircumplexMapper.getLabel(vc, ac),
-                        source = AffectiveSource.MLP,
-                    )
-                } else {
+                val mlpResult: AffectiveMapResult? = if (mlp != null && embedder != null) {
+                    runCatching {
+                        val embedding = embedder.generateEmbedding(maskedText)
+                        val (v, a) = mlp.forward(embedding)
+                        val vc = v.coerceIn(-1f, 1f)
+                        val ac = a.coerceIn(-1f, 1f)
+                        Log.d(TAG, "Stage1: source=mlp")
+                        AffectiveMapResult(
+                            valence = vc,
+                            arousal = ac,
+                            label = CircumplexMapper.getLabel(vc, ac),
+                            source = AffectiveSource.MLP,
+                        )
+                    }.onFailure { e ->
+                        Log.w(TAG, "Stage1: MLP path threw, falling back to regex", e)
+                    }.getOrNull()
+                } else null
+
+                mlpResult ?: run {
                     val raw = collectTokens(
                         orchestrator.process(buildAffectivePrompt(maskedText), "affective_map")
                     )
