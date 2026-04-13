@@ -107,10 +107,10 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Runs on `Dispatchers.Default`, non-blocking — MLP uses random weights until initialization completes
 
 ### 2.5 Wire MLP into Stage 1
-- [ ] In `ReframingLoop.runStage1()`: after `EmbeddingProvider.generateEmbedding(maskedText)`, pass the resulting `FloatArray` to `AffectiveMlp.forward()` → get `(mlpValence, mlpArousal)`
-- [ ] Keep the existing LLM `v=<n> a=<n>` parse as a **fallback**: if MLP head is not yet initialized (weights file absent), fall through to the existing regex path
-- [ ] Log which path was taken: `Log.d("Stage1", "source=mlp|regex")`
-- [ ] Update `AffectiveMapResult` to include `source: AffectiveSource` enum (`MLP`, `REGEX`) for debugging
+- [x] In `ReframingLoop.runStage1()`: after `EmbeddingProvider.generateEmbedding(maskedText)`, pass the resulting `FloatArray` to `AffectiveMlp.forward()` → get `(mlpValence, mlpArousal)`
+- [x] Keep the existing LLM `v=<n> a=<n>` parse as a **fallback**: if MLP head is not yet initialized (weights file absent), fall through to the existing regex path
+- [x] Log which path was taken: `Log.d("Stage1", "source=mlp|regex")`
+- [x] Update `AffectiveMapResult` to include `source: AffectiveSource` enum (`MLP`, `REGEX`) for debugging
 
 ### 2.6 Checkpoint manifest (MLP)
 - [ ] `SharedPreferences` key `lattice_affective_manifest`, JSON:

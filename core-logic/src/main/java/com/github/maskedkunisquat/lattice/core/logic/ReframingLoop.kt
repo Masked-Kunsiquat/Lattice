@@ -32,7 +32,9 @@ class ReframingLoop(
     private val orchestrator: LlmOrchestrator,
     private val activityHierarchyDao: ActivityHierarchyDao? = null,
     private val searchRepository: SearchRepository? = null,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val embeddingProvider: EmbeddingProvider? = null,
+    private val affectiveMlp: AffectiveMlp? = null,
 ) {
 
     // ── Stage 1 ──────────────────────────────────────────────────────────────
@@ -48,10 +50,27 @@ class ReframingLoop(
     suspend fun runStage1AffectiveMap(maskedText: String): Result<AffectiveMapResult> =
         withContext(dispatcher) {
             runCatching {
-                val raw = collectTokens(
-                    orchestrator.process(buildAffectivePrompt(maskedText), "affective_map")
-                )
-                parseAffectiveCoords(raw)
+                val mlp = affectiveMlp
+                val embedder = embeddingProvider
+                if (mlp != null && embedder != null) {
+                    val embedding = embedder.generateEmbedding(maskedText)
+                    val (v, a) = mlp.forward(embedding)
+                    val vc = v.coerceIn(-1f, 1f)
+                    val ac = a.coerceIn(-1f, 1f)
+                    Log.d(TAG, "Stage1: source=mlp")
+                    AffectiveMapResult(
+                        valence = vc,
+                        arousal = ac,
+                        label = CircumplexMapper.getLabel(vc, ac),
+                        source = AffectiveSource.MLP,
+                    )
+                } else {
+                    val raw = collectTokens(
+                        orchestrator.process(buildAffectivePrompt(maskedText), "affective_map")
+                    )
+                    Log.d(TAG, "Stage1: source=regex")
+                    parseAffectiveCoords(raw)
+                }
             }
         }
 
@@ -275,7 +294,8 @@ class ReframingLoop(
         return AffectiveMapResult(
             valence = vc,
             arousal = ac,
-            label = CircumplexMapper.getLabel(vc, ac)
+            label = CircumplexMapper.getLabel(vc, ac),
+            source = AffectiveSource.REGEX,
         )
     }
 
@@ -363,13 +383,25 @@ class ReframingLoop(
 
     // ── Result types ─────────────────────────────────────────────────────────
 
+    /** Source of the affective coordinates in Stage 1. */
+    enum class AffectiveSource {
+        /** Coordinates produced by the on-device [AffectiveMlp] head. */
+        MLP,
+        /** Coordinates parsed from the LLM's `v=<n> a=<n>` output via regex. */
+        REGEX,
+    }
+
     /**
      * Output of Stage 1. [valence] and [arousal] are clamped to [-1, 1].
+     *
+     * @param source Which path produced the coordinates — [AffectiveSource.MLP] when the
+     *   trained head is available, [AffectiveSource.REGEX] when falling back to LLM output.
      */
     data class AffectiveMapResult(
         val valence: Float,
         val arousal: Float,
-        val label: MoodLabel
+        val label: MoodLabel,
+        val source: AffectiveSource = AffectiveSource.REGEX,
     )
 
     /**
