@@ -129,6 +129,8 @@ class EntryDetailViewModel(
                     )
                 )
                 _reframeState.value = ReframeState.Idle
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _reframeState.value = ReframeState.Error("Failed to save reframe: ${e.message}")
             }
@@ -146,6 +148,8 @@ class EntryDetailViewModel(
                 val maskedReframe = journalRepository.maskText(reframe)
                 journalRepository.updateReframedContent(entryId.toString(), maskedReframe)
                 _reframeState.value = ReframeState.Idle
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _reframeState.value = ReframeState.Error("Failed to save reframe: ${e.message}")
             }
@@ -163,6 +167,8 @@ class EntryDetailViewModel(
                 val clampedValence = v.coerceIn(-1f, 1f)
                 val clampedArousal = a.coerceIn(-1f, 1f)
                 journalRepository.updateEntry(entry.copy(userValence = clampedValence, userArousal = clampedArousal))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to save mood coordinates", e)
             }

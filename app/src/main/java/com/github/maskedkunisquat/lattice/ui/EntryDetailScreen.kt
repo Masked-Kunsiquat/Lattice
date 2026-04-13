@@ -73,7 +73,7 @@ fun EntryDetailScreen(
         onBack = onBack,
         onDelete = viewModel::deleteEntry,
         onReframe = viewModel::requestReframe,
-        onApplyReframe = viewModel::applyReframe,
+        onApplyReframe = viewModel::acceptReframe,
         onDismissReframe = viewModel::dismissReframe,
         onConfirmMood = viewModel::confirmMoodCoordinates,
     )
@@ -90,7 +90,7 @@ private fun EntryDetailContent(
     onBack: () -> Unit,
     onDelete: () -> Unit,
     onReframe: () -> Unit,
-    onApplyReframe: () -> Unit,
+    onApplyReframe: (String) -> Unit,
     onDismissReframe: () -> Unit,
     onConfirmMood: (valence: Float, arousal: Float) -> Unit,
 ) {
@@ -296,7 +296,7 @@ private fun PreviewOriginalOnly() {
             onBack = {},
             onDelete = {},
             onReframe = {},
-            onApplyReframe = {},
+            onApplyReframe = { _ -> },
             onDismissReframe = {},
             onConfirmMood = { _, _ -> },
         )
@@ -316,7 +316,7 @@ private fun PreviewWithReframe() {
             onBack = {},
             onDelete = {},
             onReframe = {},
-            onApplyReframe = {},
+            onApplyReframe = { _ -> },
             onDismissReframe = {},
             onConfirmMood = { _, _ -> },
         )
@@ -334,7 +334,7 @@ private fun PreviewModelLoading() {
             onBack = {},
             onDelete = {},
             onReframe = {},
-            onApplyReframe = {},
+            onApplyReframe = { _ -> },
             onDismissReframe = {},
             onConfirmMood = { _, _ -> },
         )
@@ -352,7 +352,7 @@ private fun PreviewMoodLog() {
             onBack = {},
             onDelete = {},
             onReframe = {},
-            onApplyReframe = {},
+            onApplyReframe = { _ -> },
             onDismissReframe = {},
             onConfirmMood = { _, _ -> },
         )

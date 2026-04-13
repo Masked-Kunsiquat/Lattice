@@ -264,7 +264,7 @@ class CognitiveLoopBenchmark {
             InstrumentationRegistry.getArguments().getString("enableSlowBenchmarks") != null,
         )
         val l = loop!!
-        var deltaPssKb = 0L
+        val deltas = mutableListOf<Long>()
         benchmarkRule.measureRepeated {
             val before = runWithTimingDisabled {
                 Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }
@@ -277,9 +277,12 @@ class CognitiveLoopBenchmark {
             val after = runWithTimingDisabled {
                 Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }
             }
-            deltaPssKb = (after.totalPss - before.totalPss).toLong()
+            deltas += (after.totalPss - before.totalPss).toLong()
         }
-        Log.i(TAG, "memoryDelta_fullLoop_holmes  totalPSS Δ = $deltaPssKb KB")
+        val sorted = deltas.sorted()
+        val median = if (sorted.size % 2 == 0) (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2 else sorted[sorted.size / 2]
+        val mean = deltas.average().toLong()
+        Log.i(TAG, "memoryDelta_fullLoop_holmes  totalPSS Δ — median=${median}KB mean=${mean}KB min=${sorted.first()}KB max=${sorted.last()}KB (n=${deltas.size})")
     }
 
     @Test
@@ -289,7 +292,7 @@ class CognitiveLoopBenchmark {
             InstrumentationRegistry.getArguments().getString("enableSlowBenchmarks") != null,
         )
         val l = loop!!
-        var deltaPssKb = 0L
+        val deltas = mutableListOf<Long>()
         benchmarkRule.measureRepeated {
             val before = runWithTimingDisabled {
                 Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }
@@ -302,8 +305,11 @@ class CognitiveLoopBenchmark {
             val after = runWithTimingDisabled {
                 Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }
             }
-            deltaPssKb = (after.totalPss - before.totalPss).toLong()
+            deltas += (after.totalPss - before.totalPss).toLong()
         }
-        Log.i(TAG, "memoryDelta_fullLoop_watson  totalPSS Δ = $deltaPssKb KB")
+        val sorted = deltas.sorted()
+        val median = if (sorted.size % 2 == 0) (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2 else sorted[sorted.size / 2]
+        val mean = deltas.average().toLong()
+        Log.i(TAG, "memoryDelta_fullLoop_watson  totalPSS Δ — median=${median}KB mean=${mean}KB min=${sorted.first()}KB max=${sorted.last()}KB (n=${deltas.size})")
     }
 }
