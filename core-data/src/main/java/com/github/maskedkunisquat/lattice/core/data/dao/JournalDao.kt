@@ -39,9 +39,9 @@ interface JournalDao {
     @Query("DELETE FROM journal_entries WHERE id = :id")
     suspend fun deleteEntryById(id: UUID)
 
-    @Query("SELECT * FROM journal_entries WHERE user_valence IS NOT NULL AND user_arousal IS NOT NULL AND timestamp > :timestamp ORDER BY timestamp ASC")
-    suspend fun getLabeledEntriesSince(timestamp: Long): List<JournalEntry>
+    @Query("SELECT * FROM journal_entries WHERE user_valence IS NOT NULL AND user_arousal IS NOT NULL AND timestamp > :fromTimestamp AND timestamp <= :toTimestamp ORDER BY timestamp ASC")
+    suspend fun getLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): List<JournalEntry>
 
-    @Query("SELECT COUNT(*) FROM journal_entries WHERE user_valence IS NOT NULL AND user_arousal IS NOT NULL AND timestamp > :timestamp")
-    suspend fun countLabeledEntriesSince(timestamp: Long): Int
+    @Query("SELECT COUNT(*) FROM journal_entries WHERE user_valence IS NOT NULL AND user_arousal IS NOT NULL AND timestamp > :fromTimestamp AND timestamp <= :toTimestamp")
+    suspend fun countLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): Int
 }

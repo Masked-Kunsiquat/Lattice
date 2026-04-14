@@ -20,7 +20,8 @@ import kotlinx.coroutines.CancellationException
  * implement that interface so the default WorkerFactory can instantiate this class.
  *
  * ## doWork() steps
- * 1. Read [AffectiveManifest.lastTrainingTimestamp] from the persisted manifest.
+ * 1. Capture `batchUpperBound = System.currentTimeMillis()` as the closed-window upper bound,
+ *    then read [AffectiveManifest.lastTrainingTimestamp] as the lower bound.
  * 2. Count labeled entries since that timestamp; return immediately if < [MIN_LABELED_ENTRIES].
  * 3. Post a silent foreground notification (API 31+ requires the foreground service type
  *    to be declared in AndroidManifest.xml; see app manifest for `SystemForegroundService`).
@@ -44,24 +45,28 @@ class EmbeddingTrainingWorker(
     private val journalDao get() = (applicationContext as TrainingDependencies).journalDao
 
     override suspend fun doWork(): Result {
+        // Step 1 — watermark: capture the upper bound before any I/O so entries written
+        // during this run are deferred to the next cycle rather than silently lost.
+        val batchUpperBound = System.currentTimeMillis()
+
         val prefs = applicationContext.getSharedPreferences(
             AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE
         )
         val manifest = AffectiveManifestStore.read(prefs)
         val lastTimestamp = manifest?.lastTrainingTimestamp ?: 0L
 
-        // Step 2 — gate: skip if insufficient labeled entries
-        val count = journalDao.countLabeledEntriesSince(lastTimestamp)
+        // Step 2 — gate: skip if insufficient labeled entries in the closed window
+        val count = journalDao.countLabeledEntriesBetween(lastTimestamp, batchUpperBound)
         if (count < MIN_LABELED_ENTRIES) {
-            Log.d(TAG, "Only $count labeled entries since $lastTimestamp — below $MIN_LABELED_ENTRIES threshold, skipping")
+            Log.d(TAG, "Only $count labeled entries in [$lastTimestamp, $batchUpperBound] — below $MIN_LABELED_ENTRIES threshold, skipping")
             return Result.success()
         }
 
         // Step 3 — foreground notification
         setForeground(buildForegroundInfo())
 
-        // Step 4 — fetch and construct samples
-        val entries = journalDao.getLabeledEntriesSince(lastTimestamp)
+        // Step 4 — fetch and construct samples (same closed window)
+        val entries = journalDao.getLabeledEntriesBetween(lastTimestamp, batchUpperBound)
         val samples = entries.mapNotNull { entry ->
             val v = entry.userValence ?: return@mapNotNull null
             val a = entry.userArousal ?: return@mapNotNull null
@@ -91,7 +96,7 @@ class EmbeddingTrainingWorker(
                 return Result.success()
             }
 
-            return persistCheckpoint(mlp, manifest, prefs, samples.size)
+            return persistCheckpoint(mlp, manifest, prefs, samples.size, batchUpperBound)
         } catch (e: CancellationException) {
             savePartialWeights(mlp, manifest, prefs)
             throw e
@@ -105,6 +110,7 @@ class EmbeddingTrainingWorker(
         oldManifest: AffectiveManifest?,
         prefs: SharedPreferences,
         newSampleCount: Int,
+        batchUpperBound: Long,
     ): Result {
         val newTotalCount = (oldManifest?.trainedOnCount ?: 0) + newSampleCount
         val newPath = "affective_head_v1_c${newTotalCount}.bin"
@@ -122,7 +128,7 @@ class EmbeddingTrainingWorker(
             baseModelHash         = modelHash,
             headPath              = newPath,
             trainedOnCount        = newTotalCount,
-            lastTrainingTimestamp = System.currentTimeMillis(),
+            lastTrainingTimestamp = batchUpperBound,
             baseLayerVersion      = oldManifest?.baseLayerVersion ?: AffectiveMlpInitializer.BASE_LAYER_VERSION,
         )
         val wrote = AffectiveManifestStore.write(prefs, newManifest)

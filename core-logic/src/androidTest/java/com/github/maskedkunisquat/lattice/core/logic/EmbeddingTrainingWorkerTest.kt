@@ -267,7 +267,7 @@ class EmbeddingTrainingWorkerTest {
                     JournalEntry(
                         id = UUID.randomUUID(),
                         timestamp = baseTime - i * 1_000L,
-                        content = "[PERSON_test] entry $i",
+                        content = "[PERSON_${UUID.randomUUID()}] entry $i",
                         valence = (i % 5 - 2) * 0.2f,
                         arousal = (i % 3 - 1) * 0.3f,
                         moodLabel = "TENSE",

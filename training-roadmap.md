@@ -181,12 +181,12 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] `scheduleIfNeeded(context: Context)`: enqueues `PeriodicWorkRequest` with `ExistingPeriodicWorkPolicy.KEEP` (no-op if already enqueued)
 - [x] `cancelAll(context: Context)`: for settings "disable personalization" toggle
 - [x] Constraints: `requiresCharging + requiresDeviceIdle + requiresStorageNotLow`
-- [x] Period: 24 hours, backoff: `EXPONENTIAL` starting at 1 hour
+- [x] Period: 24 hours. Note: `setBackoffCriteria` is incompatible with `requiresDeviceIdle` on JobScheduler — failures are silently retried on the next 24-hour window instead.
 
 ### 3.3 Wire into `LatticeApplication`
 - [x] Call `trainingCoordinator.scheduleIfNeeded(this)` in `LatticeApplication.onCreate()` — after DB and DAOs are initialized
 - [x] Add `SettingsRepository` key `personalizationEnabled: Boolean` (default `true`)
-- [x] In `SettingsRepository` observer: when toggled off → `trainingCoordinator.cancelAll()`; when toggled on → `trainingCoordinator.scheduleIfNeeded()`
+- [x] In `LatticeApplication.onCreate()`: collect `settingsRepository.settings.map { it.personalizationEnabled }.distinctUntilChanged()` on `applicationScope`; when toggled off → `trainingCoordinator.cancelAll()`; when toggled on → `trainingCoordinator.scheduleIfNeeded()`
 
 ### 3.4 Settings UI
 - [x] Add "Personalization" toggle to the existing settings screen
