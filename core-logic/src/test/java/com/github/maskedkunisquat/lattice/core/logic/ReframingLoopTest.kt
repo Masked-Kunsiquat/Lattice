@@ -16,6 +16,11 @@ import org.junit.Test
 
 class ReframingLoopTest {
 
+    companion object {
+        /** Minimal valid masked string — a single [PERSON_<uuid>] placeholder. */
+        private const val MASKED = "[PERSON_00000000-0000-0000-0000-000000000001]"
+    }
+
     // ── Fakes ─────────────────────────────────────────────────────────────────
 
     private class FakeProvider(
@@ -70,6 +75,7 @@ class ReframingLoopTest {
         assertEquals(0.6f, result.valence, 0.001f)
         assertEquals(-0.3f, result.arousal, 0.001f)
         assertEquals(MoodLabel.SERENE, result.label)
+        assertEquals(ReframingLoop.AffectiveSource.REGEX, result.source)
     }
 
     @Test
@@ -134,7 +140,7 @@ class ReframingLoopTest {
     fun `runStage1AffectiveMap - parses token stream and returns label`() = runTest {
         // Model streams "v=", "-0.7", " a=", "0.8" as separate tokens
         val reframingLoop = loopWithResponse("v=", "-0.7", " a=", "0.8")
-        val result = reframingLoop.runStage1AffectiveMap("I feel terrible and anxious.")
+        val result = reframingLoop.runStage1AffectiveMap("$MASKED feels terrible and anxious.")
         assertTrue(result.isSuccess)
         val mapped = result.getOrThrow()
         assertEquals(-0.7f, mapped.valence, 0.001f)
@@ -156,8 +162,142 @@ class ReframingLoopTest {
             transitEventDao = FakeTransitEventDao(),
             cloudEnabled = { false },
         )
-        val result = ReframingLoop(orchestrator).runStage1AffectiveMap("test")
+        val result = ReframingLoop(orchestrator).runStage1AffectiveMap("")
         assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `runStage1AffectiveMap - source is REGEX when MLP not provided`() = runTest {
+        val reframingLoop = loopWithResponse("v=", "-0.5", " a=", "0.3")
+        val result = reframingLoop.runStage1AffectiveMap("$MASKED makes me feel anxious.")
+        assertTrue(result.isSuccess)
+        assertEquals(ReframingLoop.AffectiveSource.REGEX, result.getOrThrow().source)
+    }
+
+    // 2.7-e: unmasked text with raw names must be rejected before reaching EmbeddingProvider or LLM
+    @Test(expected = IllegalArgumentException::class)
+    fun `runStage1AffectiveMap - rejects non-blank text without PERSON placeholders`() = runTest {
+        loopWithResponse("v=0.5 a=0.1").runStage1AffectiveMap("John Smith made me feel terrible.")
+    }
+
+    @Test
+    fun `runStage1AffectiveMap - accepts blank text`() = runTest {
+        val reframingLoop = loopWithResponse("v=", "0.0", " a=", "0.0")
+        assertTrue(reframingLoop.runStage1AffectiveMap("").isSuccess)
+    }
+
+    // ── Stage 1: MLP path ─────────────────────────────────────────────────────
+
+    private class FakeEmbeddingProvider(
+        private val returnEmbedding: FloatArray
+    ) : EmbeddingProvider() {
+        override suspend fun generateEmbedding(text: String): FloatArray = returnEmbedding
+    }
+
+    private fun loopWithMlp(mlp: AffectiveMlp, embedding: FloatArray): ReframingLoop {
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = FakeProvider("local", listOf(LlmResult.Complete)),
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = { false },
+        )
+        return ReframingLoop(
+            orchestrator = orchestrator,
+            embeddingProvider = FakeEmbeddingProvider(embedding),
+            affectiveMlp = mlp,
+        )
+    }
+
+    @Test
+    fun `runStage1AffectiveMap - uses MLP path when embeddingProvider and mlp are provided`() = runTest {
+        val mlp = AffectiveMlp()
+        val embedding = FloatArray(384) { 0.1f }
+        val (expectedV, expectedA) = mlp.forward(embedding)
+
+        val result = loopWithMlp(mlp, embedding).runStage1AffectiveMap("$MASKED I feel okay.")
+        assertTrue(result.isSuccess)
+        val mapped = result.getOrThrow()
+        assertEquals(expectedV.coerceIn(-1f, 1f), mapped.valence, 0.001f)
+        assertEquals(expectedA.coerceIn(-1f, 1f), mapped.arousal, 0.001f)
+        assertEquals(ReframingLoop.AffectiveSource.MLP, mapped.source)
+    }
+
+    @Test
+    fun `runStage1AffectiveMap - MLP source skips LLM entirely`() = runTest {
+        // Orchestrator's local provider would emit an error if called;
+        // MLP path must not call it.
+        val errorResults = listOf(LlmResult.Error(RuntimeException("should not be called")))
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = FakeProvider("local", errorResults),
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = { false },
+        )
+        val mlp = AffectiveMlp()
+        val reframingLoop = ReframingLoop(
+            orchestrator = orchestrator,
+            embeddingProvider = FakeEmbeddingProvider(FloatArray(384) { 0.0f }),
+            affectiveMlp = mlp,
+        )
+        val result = reframingLoop.runStage1AffectiveMap("")
+        assertTrue("MLP path must succeed without touching LLM", result.isSuccess)
+        assertEquals(ReframingLoop.AffectiveSource.MLP, result.getOrThrow().source)
+    }
+
+    @Test
+    fun `runStage1AffectiveMap - MLP output is clamped to minus1 to 1`() = runTest {
+        // Force a weight configuration that pushes output outside [-1, 1] before tanh;
+        // the Tanh activation in AffectiveMlp already bounds output, but coerceIn is
+        // applied defensively in the caller — verify the final result is always in range.
+        val mlp = AffectiveMlp()
+        val embedding = FloatArray(384) { 1.0f }
+        val result = loopWithMlp(mlp, embedding).runStage1AffectiveMap("")
+        assertTrue(result.isSuccess)
+        val mapped = result.getOrThrow()
+        assertTrue("valence must be in [-1, 1]", mapped.valence in -1f..1f)
+        assertTrue("arousal must be in [-1, 1]", mapped.arousal in -1f..1f)
+    }
+
+    // 2.7-l: embedder present but throws → source must be REGEX, not a crash
+    private class ThrowingEmbeddingProvider : EmbeddingProvider() {
+        override suspend fun generateEmbedding(text: String): FloatArray =
+            throw RuntimeException("inference failed")
+    }
+
+    private fun loopWithThrowingEmbedder(): ReframingLoop {
+        val results: List<LlmResult> =
+            listOf("v=", "0.5", " a=", "-0.3").map { LlmResult.Token(it) } + LlmResult.Complete
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = FakeProvider("local", results),
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = { false },
+        )
+        return ReframingLoop(
+            orchestrator = orchestrator,
+            embeddingProvider = ThrowingEmbeddingProvider(),
+            affectiveMlp = AffectiveMlp(),
+        )
+    }
+
+    @Test
+    fun `runStage1AffectiveMap - fallback to REGEX when embedder throws`() = runTest {
+        val result = loopWithThrowingEmbedder()
+            .runStage1AffectiveMap("$MASKED feels uncertain.")
+        assertTrue("must succeed (not crash)", result.isSuccess)
+        assertEquals(ReframingLoop.AffectiveSource.REGEX, result.getOrThrow().source)
     }
 
     // ── Stage 2: parseDotOutput ───────────────────────────────────────────────

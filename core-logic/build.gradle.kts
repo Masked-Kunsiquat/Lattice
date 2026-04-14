@@ -61,6 +61,10 @@ dependencies {
     implementation(libs.onnxruntime.android)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // org.json is bundled in the Android SDK but not on the desktop JVM.
+    // The standalone artifact mirrors the Android API exactly, enabling unit tests
+    // that exercise JSONObject-based serialisation without an emulator.
+    testImplementation("org.json:json:20231013")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.kotlinx.coroutines.test)

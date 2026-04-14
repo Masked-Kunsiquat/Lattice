@@ -75,44 +75,45 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 **Blocking on:** Milestone 1 (schema v11 + GoEmotions base layer asset).
 
 ### 2.1 GoEmotions base layer asset (offline, Python)
-- [ ] Write `scripts/prepare_goEmotions_base.py`:
+- [x] Write `scripts/prepare_goEmotions_base.py`:
   - Load GoEmotions via HuggingFace: `load_dataset("google-research-datasets/go_emotions", "simplified")` — use the `train` split (43,410 examples, ≥2/3 rater agreement required for inclusion)
   - The dataset has **28 classes** (emotions 0–26 + neutral=27); each comment carries 1–5 labels (multi-label). Strategy: keep only single-label examples to avoid ambiguous v/a targets; this leaves ~30–40% of train (~13–17k examples)
   - Map all 28 class IDs → (valence, arousal) using the Russell & Barrett 1999 circumplex coordinates lookup table — document the full 28-entry table in a comment block at the top of the script; neutral maps to (0.0, 0.0)
   - Run each text through Arctic Embed XS → 384-dim embedding (use the same ONNX model as production)
   - Output `assets/training/goEmotions_base_v1.bin`: header (count, dim) + packed `float32` rows of (384 embedding + 2 labels)
   - Subsample to ~1k balanced examples (equal quadrant representation) to keep asset <6MB
-- [ ] Commit the generated asset; add path to `.gitattributes` as `binary`
-- [ ] Document the label mapping in a comment block at the top of the script
+- [x] Commit the generated asset (run `python scripts/prepare_goEmotions_base.py` with model present, then `git add core-logic/src/main/assets/training/goEmotions_base_v1.bin`)
+- [x] Add path to `.gitattributes` as `binary`
+- [x] Document the label mapping in a comment block at the top of the script
 
 ### 2.2 `AffectiveMlp` class (`:core-logic`)
-- [ ] Create `core-logic/src/main/java/.../AffectiveMlp.kt`
-- [ ] Architecture: `Linear(384→128) → ReLU → Linear(128→2) → Tanh`
-- [ ] `forward(embedding: FloatArray): Pair<Float, Float>` — returns (valence, arousal) in [-1, 1]
-- [ ] Weight storage: two `FloatArray` weight matrices + bias vectors, total ~50K floats (~200KB)
-- [ ] Serialization: `saveWeights(path: File)` / `loadWeights(path: File)` — raw IEEE 754 LE binary, same convention as existing embedding BLOB
+- [x] Create `core-logic/src/main/java/.../AffectiveMlp.kt`
+- [x] Architecture: `Linear(384→128) → ReLU → Linear(128→2) → Tanh`
+- [x] `forward(embedding: FloatArray): Pair<Float, Float>` — returns (valence, arousal) in [-1, 1]
+- [x] Weight storage: two `FloatArray` weight matrices + bias vectors, total ~50K floats (~200KB)
+- [x] Serialization: `saveWeights(path: File)` / `loadWeights(path: File)` — raw IEEE 754 LE binary, same convention as existing embedding BLOB
 
 ### 2.3 `AffectiveMlpTrainer` class (`:core-logic`)
-- [ ] Create `core-logic/src/main/java/.../AffectiveMlpTrainer.kt`
-- [ ] Implements AdamW in Kotlin: maintain `m`/`v` moment buffers alongside weights
-- [ ] `trainStep(embedding: FloatArray, targetValence: Float, targetArousal: Float)`: forward pass → MSE loss → backward pass → AdamW update
-- [ ] `trainBatch(samples: List<TrainingSample>)`: shuffle, iterate, call `trainStep` per sample
-- [ ] Hyperparameters: `lr = 1e-3`, `weightDecay = 1e-4`, `epochs = 10` (all configurable, not hardcoded)
-- [ ] Unit test: loss decreases over 100 steps on a trivial synthetic dataset
+- [x] Create `core-logic/src/main/java/.../AffectiveMlpTrainer.kt`
+- [x] Implements AdamW in Kotlin: maintain `m`/`v` moment buffers alongside weights
+- [x] `trainStep(embedding: FloatArray, targetValence: Float, targetArousal: Float)`: forward pass → MSE loss → backward pass → AdamW update
+- [x] `trainBatch(samples: List<TrainingSample>)`: shuffle, iterate, call `trainStep` per sample
+- [x] Hyperparameters: `lr = 1e-3`, `weightDecay = 1e-4`, `epochs = 10` (all configurable, not hardcoded)
+- [x] Unit test: loss decreases over 100 steps on a trivial synthetic dataset
 
 ### 2.4 Base layer warm-start
-- [ ] Create `AffectiveMlpInitializer.kt`: reads `goEmotions_base_v1.bin` from assets, deserializes (embedding, v, a) pairs, runs `AffectiveMlpTrainer.trainBatch()` for `epochs=5`, saves weights to `filesDir/affective_head_v1.bin`
-- [ ] This runs once on first launch (guarded by `SharedPreferences` flag `affective_head_initialized`)
-- [ ] Runs on `Dispatchers.Default`, non-blocking — `EmbeddingProvider` uses the zero-initialized head (random weights) until initialization completes, then reloads
+- [x] Create `AffectiveMlpInitializer.kt`: reads `goEmotions_base_v1.bin` from assets, deserializes (embedding, v, a) pairs, runs `AffectiveMlpTrainer.trainBatch()` for `epochs=5`, saves weights to `filesDir/affective_head_v1.bin`
+- [x] This runs once on first launch (guarded by `SharedPreferences` flag `affective_head_initialized`)
+- [x] Runs on `Dispatchers.Default`, non-blocking — MLP uses random weights until initialization completes
 
 ### 2.5 Wire MLP into Stage 1
-- [ ] In `ReframingLoop.runStage1()`: after `EmbeddingProvider.generateEmbedding(maskedText)`, pass the resulting `FloatArray` to `AffectiveMlp.forward()` → get `(mlpValence, mlpArousal)`
-- [ ] Keep the existing LLM `v=<n> a=<n>` parse as a **fallback**: if MLP head is not yet initialized (weights file absent), fall through to the existing regex path
-- [ ] Log which path was taken: `Log.d("Stage1", "source=mlp|regex")`
-- [ ] Update `AffectiveMapResult` to include `source: AffectiveSource` enum (`MLP`, `REGEX`) for debugging
+- [x] In `ReframingLoop.runStage1()`: after `EmbeddingProvider.generateEmbedding(maskedText)`, pass the resulting `FloatArray` to `AffectiveMlp.forward()` → get `(mlpValence, mlpArousal)`
+- [x] Keep the existing LLM `v=<n> a=<n>` parse as a **fallback**: if MLP head is not yet initialized (weights file absent), fall through to the existing regex path
+- [x] Log which path was taken: `Log.d("Stage1", "source=mlp|regex")`
+- [x] Update `AffectiveMapResult` to include `source: AffectiveSource` enum (`MLP`, `REGEX`) for debugging
 
 ### 2.6 Checkpoint manifest (MLP)
-- [ ] `SharedPreferences` key `lattice_affective_manifest`, JSON:
+- [x] `SharedPreferences` key `lattice_affective_manifest`, JSON:
   ```json
   {
     "schemaVersion": 1,
@@ -123,7 +124,30 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
     "baseLayerVersion": "goEmotions-1.0"
   }
   ```
-- [ ] `AffectiveMlp.load()` checks `baseModelHash` against current asset SHA-256 — mismatch deletes stale weights, re-runs base warm-start on next WorkManager trigger
+- [x] `AffectiveMlp.load()` checks `baseModelHash` against current asset SHA-256 — mismatch deletes stale weights, re-runs base warm-start on next WorkManager trigger
+
+### 2.7 Audit follow-ups (post-implementation findings)
+
+#### Correctness
+- [x] **2.7-a** `AffectiveMlpInitializer.kt` — set `PREF_KEY` guard flag **before** writing weights + manifest, not after; if the process dies between `AffectiveManifestStore.write()` and the `putBoolean()` call, the guard never gets set and warm-start retries forever
+- [x] **2.7-b** `AffectiveMlpInitializer.kt` — the `samples.isEmpty()` early-return path (`"No samples in $ASSET_PATH — skipping"`) exits without setting the guard flag; add `prefs.edit().putBoolean(PREF_KEY, true).apply()` before `return@launch`
+- [x] **2.7-c** `AffectiveMlpInitializer.kt:loadSamples` — add a pre-read bounds check: `require(bytes.size >= 8 + count * (dim + 2) * 4)` before the deserialization loop; a truncated asset currently throws `BufferUnderflowException` with no diagnostic
+- [x] **2.7-d** `AffectiveMlpTrainer.kt` — `data class TrainingSample(val embedding: FloatArray, ...)` — Kotlin generates reference-based `equals`/`hashCode` for `FloatArray`; override both using `embedding.contentEquals()` / `embedding.contentHashCode()`
+
+#### Security
+- [x] **2.7-e** `ReframingLoop.kt:runStage1AffectiveMap` — add a `require()` assertion that `maskedText` contains at least one `[PERSON_<uuid>]` placeholder or is blank; CLAUDE.md mandates enforcement at every system boundary, not caller trust
+
+#### Robustness
+- [x] **2.7-f** `AffectiveMlp.kt:loadWeights` — the file-size `require()` check races with a possible mid-read modification; add `require(buf.hasRemaining())` inside the `next(n)` lambda with a position-aware error message so `BufferUnderflowException` is never the user-visible failure
+- [x] **2.7-g** `AffectiveMlp.kt:saveWeights` — `file.parentFile?.mkdirs()` silently discards a `false` return; replace with `require(parentDir.mkdirs() || parentDir.exists()) { "Failed to create $parentDir" }`
+- [x] **2.7-h** `AffectiveMlp.kt:load` — reaching into `AffectiveMlpInitializer.PREF_KEY` to perform eviction is tight coupling; introduce `AffectiveManifestStore.resetAll(prefs)` that owns both key removals so a rename doesn't silently break eviction
+
+#### Test coverage
+- [x] **2.7-i** Add end-to-end warm-start integration test in `AffectiveMlpInitializerTest`: load asset → `trainBatch` → save weights → write manifest → assert guard flag set → second call is a no-op
+- [x] **2.7-j** Add convergence assertion to `AffectiveMlpTest`: after `AffectiveMlpTrainer.trainBatch()` on a small synthetic dataset, `forward(sample.embedding)` output must be closer to the target than before training
+- [x] **2.7-k** Add edge-case tests to `AffectiveMlpTrainerTest`: (1) `lr=1.0` → loss stays finite; (2) zero-gradient step with `weightDecay > 0` → weight magnitudes still decrease
+- [x] **2.7-l** Add fallback scenario to `ReframingLoopTest`: embedder present but `generateEmbedding()` throws → source must be `REGEX`, not a crash
+- [x] **2.7-m** Add `scripts/test_prepare_goEmotions_base.py` covering: quadrant boundary conditions, binary output byte order (read back as `<f4` and verify first embedding matches input), and single-label filter count
 
 **Milestone 2 exit criteria:**
 - `AffectiveMlp.forward()` produces valid (v, a) coordinates for all 3 seed persona entries
