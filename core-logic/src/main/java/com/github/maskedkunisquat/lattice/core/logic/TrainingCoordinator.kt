@@ -1,7 +1,6 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
 import android.content.Context
-import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -24,7 +23,8 @@ class TrainingCoordinator {
      * or running.
      *
      * Constraints: device must be charging, idle, and have adequate storage.
-     * Backoff: exponential starting at 1 hour.
+     * Note: [androidx.work.BackoffPolicy] is not compatible with [Constraints.requiresDeviceIdle]
+     * on JobScheduler — failures are silently retried on the next 24-hour period instead.
      */
     fun scheduleIfNeeded(context: Context) {
         val constraints = Constraints.Builder()
@@ -38,7 +38,6 @@ class TrainingCoordinator {
             repeatIntervalTimeUnit = TimeUnit.HOURS,
         )
             .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.HOURS)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
