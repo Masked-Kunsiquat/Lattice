@@ -161,8 +161,8 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 **Blocking on:** Milestone 2 (`AffectiveMlpTrainer` complete) + Milestone 1 (schema v11 populated with real user labels).
 
 ### 3.1 `EmbeddingTrainingWorker`
-- [ ] Create `core-logic/src/main/java/.../EmbeddingTrainingWorker.kt` (extends `CoroutineWorker`)
-- [ ] `doWork()` steps:
+- [x] Create `core-logic/src/main/java/.../EmbeddingTrainingWorker.kt` (extends `CoroutineWorker`)
+- [x] `doWork()` steps:
   1. Read `lastTrainingTimestamp` from manifest
   2. Call `journalDao.countLabeledEntriesSince(lastTrainingTimestamp)` — if `< 30`, return `Result.success()` immediately
   3. Fetch full sample batch: `journalDao.getLabeledEntriesSince(lastTrainingTimestamp)` — returns `List<JournalEntry>` with non-null `userValence`/`userArousal`
@@ -173,8 +173,8 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
   8. Write updated manifest (bump `trainedOnCount`, update `lastTrainingTimestamp`, update `headPath`)
   9. Delete orphaned `affective_head_*.bin` files not matching new `headPath`
   10. Return `Result.success()`
-- [ ] Set `ForegroundInfo` with a silent (no sound) notification: "Personalizing Lattice…" — required API 31+
-- [ ] Handle `CancellationException` from `isStopped` check: save partial weights before exiting
+- [x] Set `ForegroundInfo` with a silent (no sound) notification: "Personalizing Lattice…" — required API 31+
+- [x] Handle `CancellationException` from `isStopped` check: save partial weights before exiting
 
 ### 3.2 `TrainingCoordinator` (`:core-logic`)
 - [ ] Create `TrainingCoordinator.kt` — thin wrapper that registers/cancels the WorkManager request

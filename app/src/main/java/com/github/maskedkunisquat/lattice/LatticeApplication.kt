@@ -21,6 +21,7 @@ import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import com.github.maskedkunisquat.lattice.core.logic.SearchRepository
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedManager
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
+import com.github.maskedkunisquat.lattice.core.logic.TrainingDependencies
 import kotlinx.coroutines.flow.first
 import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
@@ -31,7 +32,10 @@ private val Application.settingsDataStore by preferencesDataStore(name = "lattic
 private const val TAG = "LatticeApplication"
 private const val PREF_ENCRYPTION_DONE = "encryption_migration_done"
 
-class LatticeApplication : Application() {
+class LatticeApplication : Application(), TrainingDependencies {
+
+    // TrainingDependencies — exposes the DAO to EmbeddingTrainingWorker via applicationContext cast
+    override val journalDao get() = database.journalDao()
 
     val database by lazy {
         val passphrase = KeyProvider.getOrCreateKey(this)
