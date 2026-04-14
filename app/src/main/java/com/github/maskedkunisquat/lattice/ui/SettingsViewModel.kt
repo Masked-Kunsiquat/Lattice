@@ -6,20 +6,17 @@ import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifestStore
-import com.github.maskedkunisquat.lattice.core.logic.EmbeddingTrainingWorker
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
+import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +28,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class SettingsViewModel(
@@ -130,37 +126,13 @@ class SettingsViewModel(
     }
 
     /**
-     * Cancels any in-flight training run, then deletes all `affective_head_*.bin` weight files
-     * from `filesDir` and clears the manifest and warm-start guard so the base GoEmotions layer
-     * re-runs on next launch.
-     *
-     * Cancellation is awaited (up to 5 s) before file deletion so the worker cannot write a
-     * fresh checkpoint after the files are gone.
+     * Delegates to [TrainingCoordinator.resetPersonalization] — the single authoritative
+     * path shared with the `resetPersonalization` instrumented test.
      */
     fun resetPersonalization() {
         viewModelScope.launch {
-            val wm = WorkManager.getInstance(context)
-            wm.cancelUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
-
-            withContext(Dispatchers.IO) {
-                // Wait until the worker is no longer RUNNING (or 5 s elapses)
-                val deadline = System.currentTimeMillis() + 5_000L
-                while (System.currentTimeMillis() < deadline) {
-                    val infos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
-                    if (infos.none { it.state == WorkInfo.State.RUNNING }) break
-                    Thread.sleep(100)
-                }
-
-                context.filesDir.listFiles { f ->
-                    f.name.startsWith("affective_head_") && f.name.endsWith(".bin")
-                }?.forEach { it.delete() }
-
-                val prefs = context.getSharedPreferences(
-                    AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE
-                )
-                AffectiveManifestStore.resetAll(prefs)
-                // manifest StateFlow updates reactively via the SharedPreferences listener
-            }
+            TrainingCoordinator().resetPersonalization(context)
+            // manifest StateFlow updates reactively via the SharedPreferences listener
         }
     }
 

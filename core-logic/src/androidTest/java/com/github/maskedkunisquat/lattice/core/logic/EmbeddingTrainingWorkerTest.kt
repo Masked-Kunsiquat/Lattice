@@ -171,9 +171,12 @@ class EmbeddingTrainingWorkerTest {
     // ── Reset personalization ─────────────────────────────────────────────────
 
     /**
-     * Simulates the reset action from [com.github.maskedkunisquat.lattice.ui.SettingsViewModel]:
-     * deletes all weight files and calls [AffectiveManifestStore.resetAll]. Verifies that
-     * no artifacts remain and the warm-start guard is cleared so it re-runs on next launch.
+     * Exercises [TrainingCoordinator.resetPersonalization] — the shared reset helper used by
+     * [com.github.maskedkunisquat.lattice.ui.SettingsViewModel] — so this test covers the
+     * actual WorkManager cancellation/waiting behaviour rather than a hand-rolled approximation.
+     *
+     * No work is enqueued here, so the cancellation phase is a no-op; the test focuses on
+     * the artifact-deletion and manifest-clearing postconditions.
      */
     @Test
     fun resetPersonalization_deletesAllArtifactsAndClearsManifest() {
@@ -186,9 +189,8 @@ class EmbeddingTrainingWorkerTest {
         )
         prefs.edit().putBoolean(AffectiveMlpInitializer.PREF_KEY, true).apply()
 
-        // Reset (mirrors SettingsViewModel.resetPersonalization)
-        deleteWeightFiles()
-        AffectiveManifestStore.resetAll(prefs)
+        // Reset via the production helper — same code path as SettingsViewModel
+        runBlocking { TrainingCoordinator().resetPersonalization(context) }
 
         assertEquals("All weight files must be deleted after reset", 0, weightFiles().size)
         assertNull("Manifest must be absent after reset", AffectiveManifestStore.read(prefs))
