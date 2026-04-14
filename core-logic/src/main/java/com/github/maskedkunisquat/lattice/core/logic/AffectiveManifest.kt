@@ -58,10 +58,18 @@ object AffectiveManifestStore {
         return runCatching { fromJson(raw) }.getOrNull()
     }
 
-    /** Serialises [manifest] and stores it under [PREF_KEY]. */
-    fun write(prefs: SharedPreferences, manifest: AffectiveManifest) {
-        prefs.edit().putString(PREF_KEY, manifest.toJson()).apply()
-    }
+    /**
+     * Serialises [manifest] and durably stores it under [PREF_KEY].
+     *
+     * Uses [SharedPreferences.Editor.commit] (synchronous, returns success/failure)
+     * rather than [SharedPreferences.Editor.apply] (fire-and-forget) so callers can
+     * detect a failed write and react — e.g., by clearing the warm-start guard so the
+     * next launch retries rather than silently skipping initialisation.
+     *
+     * @return `true` if the value was written successfully, `false` otherwise.
+     */
+    fun write(prefs: SharedPreferences, manifest: AffectiveManifest): Boolean =
+        prefs.edit().putString(PREF_KEY, manifest.toJson()).commit()
 
     /**
      * Clears both the manifest ([PREF_KEY]) and the [AffectiveMlpInitializer] guard flag

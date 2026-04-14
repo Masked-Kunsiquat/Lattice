@@ -39,17 +39,29 @@ class AffectiveMlpInitializer(
     /**
      * Launches warm-start training in the background if not already completed.
      *
+     * Training runs on a **copy** of [mlp]'s weights so that the original instance
+     * (which may be serving [AffectiveMlp.forward] calls concurrently) is never
+     * partially mutated.  Once training finishes and the checkpoint is persisted,
+     * [onTrained] is invoked with the fully-trained copy so callers can atomically
+     * swap their active reference.
+     *
      * Safe to call multiple times — subsequent calls are no-ops once the
      * SharedPreferences guard is set.
      *
-     * @param context Android context — used for asset access and SharedPreferences.
-     * @param mlp     The [AffectiveMlp] to warm-start; weights are updated in-place.
-     * @param scope   CoroutineScope to run the background work in (e.g. applicationScope).
+     * @param context   Android context — used for asset access and SharedPreferences.
+     * @param mlp       The [AffectiveMlp] whose initial weights seed the warm-start copy.
+     *                  It is **never** mutated by this method.
+     * @param scope     CoroutineScope to run the background work in (e.g. applicationScope).
+     * @param onTrained Invoked on the background dispatcher with the fully-trained
+     *                  [AffectiveMlp] after the checkpoint has been persisted successfully.
+     *                  Defaults to a no-op; callers that want to hot-swap the active model
+     *                  should update their reference here.
      */
     fun maybeInitialize(
         context: Context,
         mlp: AffectiveMlp,
         scope: CoroutineScope,
+        onTrained: (AffectiveMlp) -> Unit = {},
     ) {
         val prefs = context.getSharedPreferences(AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE)
         if (prefs.getBoolean(PREF_KEY, false)) return
@@ -65,7 +77,15 @@ class AffectiveMlpInitializer(
                     return@launch
                 }
 
-                val trainer = AffectiveMlpTrainer(mlp, epochs = EPOCHS)
+                // Train on a fresh copy so forward() on the live mlp is never called
+                // against partially-updated weights during the training loop.
+                val trainableCopy = AffectiveMlp(
+                    w1 = mlp.w1.copyOf(),
+                    b1 = mlp.b1.copyOf(),
+                    w2 = mlp.w2.copyOf(),
+                    b2 = mlp.b2.copyOf(),
+                )
+                val trainer = AffectiveMlpTrainer(trainableCopy, epochs = EPOCHS)
                 val finalLoss = trainer.trainBatch(samples)
                 Log.i(TAG, "Warm-start complete: ${samples.size} samples, final loss=${"%.6f".format(finalLoss)}")
 
@@ -76,7 +96,7 @@ class AffectiveMlpInitializer(
                 // Persist weights + manifest; clear guard on I/O failure so next launch retries
                 try {
                     val weightFile = context.filesDir.resolve(WEIGHT_FILE)
-                    mlp.saveWeights(weightFile)
+                    trainableCopy.saveWeights(weightFile)
                     Log.i(TAG, "Weights saved to ${weightFile.absolutePath}")
 
                     val modelHash = "sha256:${context.assets.open(AffectiveMlp.EMBEDDING_ASSET).use { sha256Hex(it) }}"
@@ -88,8 +108,16 @@ class AffectiveMlpInitializer(
                         lastTrainingTimestamp = System.currentTimeMillis(),
                         baseLayerVersion      = BASE_LAYER_VERSION,
                     )
-                    AffectiveManifestStore.write(prefs, manifest)
-                    Log.i(TAG, "Manifest written: trainedOnCount=${samples.size}, hash=$modelHash")
+                    val wrote = AffectiveManifestStore.write(prefs, manifest)
+                    if (!wrote) {
+                        // Manifest could not be durably committed — clear the guard so the
+                        // next launch retries rather than silently skipping initialisation.
+                        Log.w(TAG, "Manifest commit failed — clearing guard so next launch retries")
+                        prefs.edit().putBoolean(PREF_KEY, false).apply()
+                    } else {
+                        Log.i(TAG, "Manifest written: trainedOnCount=${samples.size}, hash=$modelHash")
+                        onTrained(trainableCopy)
+                    }
                 } catch (e: Exception) {
                     prefs.edit().putBoolean(PREF_KEY, false).apply()
                     throw e

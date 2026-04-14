@@ -280,7 +280,12 @@ def write_bin(
     count = len(rows)
     with path.open("wb") as f:
         f.write(struct.pack("<ii", count, EMBEDDING_DIM))
-        for emb, v, a in rows:
+        for i, (emb, v, a) in enumerate(rows):
+            if emb.size != EMBEDDING_DIM:
+                raise ValueError(
+                    f"Row {i}: embedding has {emb.size} elements, expected {EMBEDDING_DIM}. "
+                    f"Aborting to prevent a malformed asset."
+                )
             f.write(emb.astype("<f4").tobytes())  # 384 × float32 LE
             f.write(struct.pack("<ff", v, a))
     size_mb = path.stat().st_size / 1_048_576

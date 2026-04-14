@@ -6,6 +6,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlin.math.sqrt
 import kotlin.math.tanh
 import kotlin.random.Random
@@ -44,6 +47,10 @@ class AffectiveMlp(
         require(b1.size == OUT1)         { "b1 must be $OUT1 floats, got ${b1.size}" }
         require(w2.size == OUT2 * OUT1)  { "w2 must be ${OUT2 * OUT1} floats, got ${w2.size}" }
         require(b2.size == OUT2)         { "b2 must be $OUT2 floats, got ${b2.size}" }
+        require(w1.all { it.isFinite() }) { "w1 contains non-finite values" }
+        require(b1.all { it.isFinite() }) { "b1 contains non-finite values" }
+        require(w2.all { it.isFinite() }) { "w2 contains non-finite values" }
+        require(b2.all { it.isFinite() }) { "b2 contains non-finite values" }
     }
 
     /**
@@ -82,7 +89,23 @@ class AffectiveMlp(
         for (arr in listOf(w1, b1, w2, b2)) {
             arr.forEach { buf.putFloat(it) }
         }
-        FileOutputStream(file).use { it.write(buf.array()) }
+        // Write to a sibling temp file, sync to disk, then atomically rename over the
+        // destination so a crash mid-write never truncates a previously good checkpoint.
+        val tmpFile = File.createTempFile(file.name, ".tmp", parentDir)
+        try {
+            FileOutputStream(tmpFile).use { fos ->
+                fos.write(buf.array())
+                fos.fd.sync()
+            }
+            try {
+                Files.move(tmpFile.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE)
+            } catch (e: AtomicMoveNotSupportedException) {
+                Files.move(tmpFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        } catch (e: Exception) {
+            tmpFile.delete()
+            throw e
+        }
     }
 
     companion object {
@@ -130,7 +153,14 @@ class AffectiveMlp(
                 return null
             }
 
-            val currentHash = "sha256:${context.assets.open(EMBEDDING_ASSET).use { sha256Hex(it) }}"
+            val currentHash = try {
+                "sha256:${context.assets.open(EMBEDDING_ASSET).use { sha256Hex(it) }}"
+            } catch (e: Exception) {
+                Log.e(TAG_LOAD, "Failed to hash $EMBEDDING_ASSET — deleting stale head and resetting", e)
+                context.filesDir.resolve(manifest.headPath).delete()
+                AffectiveManifestStore.resetAll(prefs)
+                return null
+            }
             if (manifest.baseModelHash != currentHash) {
                 Log.w(TAG_LOAD, "Embedding model hash mismatch — deleting stale head and resetting warm-start")
                 context.filesDir.resolve(manifest.headPath).delete()
@@ -140,7 +170,12 @@ class AffectiveMlp(
 
             val weightFile = context.filesDir.resolve(manifest.headPath)
             if (!weightFile.exists() || weightFile.length() != WEIGHT_BYTES.toLong()) return null
-            return runCatching { loadWeights(weightFile) }.getOrNull()
+            return runCatching { loadWeights(weightFile) }.getOrElse { e ->
+                Log.e(TAG_LOAD, "Failed to load weights from ${weightFile.name} — deleting stale head and resetting", e)
+                weightFile.delete()
+                AffectiveManifestStore.resetAll(prefs)
+                null
+            }
         }
 
         /**
@@ -191,6 +226,25 @@ class AffectiveMlp(
         internal fun xavierUniform(fanIn: Int, fanOut: Int): Float {
             val limit = sqrt(6f / (fanIn + fanOut))
             return Random.nextFloat() * 2f * limit - limit
+        }
+
+        /**
+         * Creates an [AffectiveMlp] with Xavier-uniform weights initialised from a fixed
+         * [seed], producing reproducible outputs across runs.  Intended for tests that
+         * need deterministic initial weights (e.g. convergence assertions).
+         */
+        fun seeded(seed: Long): AffectiveMlp {
+            val rng = Random(seed)
+            fun xavier(fanIn: Int, fanOut: Int): Float {
+                val limit = sqrt(6f / (fanIn + fanOut))
+                return rng.nextFloat() * 2f * limit - limit
+            }
+            return AffectiveMlp(
+                w1 = FloatArray(OUT1 * IN)   { xavier(IN, OUT1) },
+                b1 = FloatArray(OUT1),
+                w2 = FloatArray(OUT2 * OUT1) { xavier(OUT1, OUT2) },
+                b2 = FloatArray(OUT2),
+            )
         }
     }
 }

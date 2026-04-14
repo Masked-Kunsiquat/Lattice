@@ -1,5 +1,7 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -16,7 +18,7 @@ class AffectiveMlpTest {
     // ── forward() ─────────────────────────────────────────────────────────────
 
     @Test
-    fun `forward output is within tanh range`() {
+    fun `forward output is within tanh range`() = runTest {
         val mlp = AffectiveMlp()
         val embedding = FloatArray(AffectiveMlp.IN) { 0.1f }
 
@@ -27,7 +29,7 @@ class AffectiveMlpTest {
     }
 
     @Test
-    fun `forward is deterministic for the same weights and input`() {
+    fun `forward is deterministic for the same weights and input`() = runTest {
         val mlp = AffectiveMlp()
         val embedding = FloatArray(AffectiveMlp.IN) { it * 0.001f }
 
@@ -39,7 +41,7 @@ class AffectiveMlpTest {
     }
 
     @Test
-    fun `forward with all-zero weights and biases returns (0, 0)`() {
+    fun `forward with all-zero weights and biases returns (0, 0)`() = runTest {
         val mlp = AffectiveMlp(
             w1 = FloatArray(AffectiveMlp.OUT1 * AffectiveMlp.IN),
             b1 = FloatArray(AffectiveMlp.OUT1),
@@ -53,7 +55,7 @@ class AffectiveMlpTest {
     }
 
     @Test
-    fun `forward with known weights produces expected output`() {
+    fun `forward with known weights produces expected output`() = runTest {
         // Minimal 1-neuron-per-layer sanity check using hand-computable values.
         // w1 row 0 = [1, 0, 0, ...], b1[0] = 0 → hidden[0] = relu(1*1 + 0) = 1
         // w2 row 0 = [1, 0, ...], b2[0] = 0 → out[0] = tanh(1*1) ≈ 0.7616
@@ -72,15 +74,17 @@ class AffectiveMlpTest {
         assertEquals("valence for unit-weight path must be tanh(1)", expected, v, 1e-5f)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun `forward rejects wrong embedding size`() {
-        AffectiveMlp().forward(FloatArray(128))
+    @Test
+    fun `forward rejects wrong embedding size`() = runTest {
+        assertThrows(IllegalArgumentException::class.java) {
+            AffectiveMlp().forward(FloatArray(128))
+        }
     }
 
     // ── linear helper ─────────────────────────────────────────────────────────
 
     @Test
-    fun `linear computes correct dot product`() {
+    fun `linear computes correct dot product`() = runTest {
         // W = [[1, 2], [3, 4]], b = [0, 0], x = [1, 1] → [3, 7]
         val w = floatArrayOf(1f, 2f, 3f, 4f)
         val b = floatArrayOf(0f, 0f)
@@ -94,7 +98,7 @@ class AffectiveMlpTest {
     // ── save / load round-trip ────────────────────────────────────────────────
 
     @Test
-    fun `saveWeights and loadWeights round-trip preserves all weights exactly`() {
+    fun `saveWeights and loadWeights round-trip preserves all weights exactly`() = runTest {
         val original = AffectiveMlp()
         val file = tmp.newFile("head.bin")
 
@@ -112,7 +116,7 @@ class AffectiveMlpTest {
     }
 
     @Test
-    fun `loadWeights produces identical forward output to original`() {
+    fun `loadWeights produces identical forward output to original`() = runTest {
         val original = AffectiveMlp()
         val file = tmp.newFile("head.bin")
         original.saveWeights(file)
@@ -127,25 +131,31 @@ class AffectiveMlpTest {
         assertEquals("arousal must match after load", a1, a2, 1e-6f)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun `loadWeights rejects file with wrong size`() {
+    @Test
+    fun `loadWeights rejects file with wrong size`() = runTest {
         val file = tmp.newFile("bad.bin")
         file.writeBytes(ByteArray(42))
-        AffectiveMlp.loadWeights(file)
+        assertThrows(IllegalArgumentException::class.java) {
+            AffectiveMlp.loadWeights(file)
+        }
     }
 
     // ── weight shape validation ───────────────────────────────────────────────
 
-    @Test(expected = IllegalArgumentException::class)
-    fun `constructor rejects wrong w1 size`() {
-        AffectiveMlp(w1 = FloatArray(10))
+    @Test
+    fun `constructor rejects wrong w1 size`() = runTest {
+        assertThrows(IllegalArgumentException::class.java) {
+            AffectiveMlp(w1 = FloatArray(10))
+        }
     }
 
     // ── convergence (2.7-j) ──────────────────────────────────────────────────
 
     @Test
-    fun `forward output converges toward target after trainBatch`() {
-        val mlp = AffectiveMlp()
+    fun `forward output converges toward target after trainBatch`() = runTest {
+        // Use a fixed seed so initial weights — and therefore distBefore — are
+        // deterministic and the distance comparison is not flaky.
+        val mlp = AffectiveMlp.seeded(42L)
         val targetV = 0.7f
         val targetA = -0.3f
         val samples = List(5) {

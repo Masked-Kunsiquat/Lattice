@@ -47,6 +47,42 @@ object PiiShield {
     }
 
     /**
+     * Returns `true` when [text] contains no raw occurrences of any name or place in the
+     * provided lists — i.e. [mask] has been applied and no PII leaked through.
+     *
+     * Use this at system boundaries (repository save, export) before handing text to
+     * [EmbeddingProvider] or the LLM pipeline.  Text that is blank (no names to mask)
+     * always returns `true`.
+     */
+    fun isFullyMasked(
+        text: String,
+        people: List<Person>,
+        places: List<Place> = emptyList(),
+    ): Boolean {
+        val namesToCheck = people.flatMap { person ->
+            val fullName = if (!person.lastName.isNullOrBlank()) "${person.firstName} ${person.lastName}" else null
+            listOfNotNull(
+                fullName,
+                person.firstName.takeIf { it.isNotBlank() },
+                person.lastName?.takeIf { it.isNotBlank() },
+                person.nickname?.takeIf { it.isNotBlank() },
+            )
+        }.distinct()
+
+        for (name in namesToCheck) {
+            if (Pattern.compile("\\b${Pattern.quote(name)}\\b", Pattern.CASE_INSENSITIVE)
+                    .matcher(text).find()) return false
+        }
+
+        for (place in places.filter { it.name.isNotBlank() }) {
+            if (Pattern.compile("\\b${Pattern.quote(place.name)}\\b", Pattern.CASE_INSENSITIVE)
+                    .matcher(text).find()) return false
+        }
+
+        return true
+    }
+
+    /**
      * Reverses masking, replacing `[PERSON_uuid]` and `[PLACE_uuid]` placeholders with
      * their display names. Used for UI display only — never before inference.
      */
