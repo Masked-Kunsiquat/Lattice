@@ -196,10 +196,10 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] "Reset personalization" destructive action: deletes all `affective_head_*.bin` from `filesDir`, clears manifest, re-runs base warm-start on next launch
 
 ### 3.5 Instrumented integration test
-- [ ] Create `EmbeddingTrainingWorkerTest` using `WorkManagerTestInitHelper`
-- [ ] Seed Room with 35 entries all having `userValence`/`userArousal` set
-- [ ] Enqueue worker, call `testDriver.setAllConstraintsMet(workRequest)`, await completion
-- [ ] Assert: checkpoint file exists in `filesDir`, manifest `trainedOnCount == 35`, no orphan weight files
+- [x] Create `EmbeddingTrainingWorkerTest` using `WorkManagerTestInitHelper`
+- [x] Seed Room with 35 entries all having `userValence`/`userArousal` set
+- [x] Enqueue worker, call `testDriver.setAllConstraintsMet(workRequest)`, await completion
+- [x] Assert: checkpoint file exists in `filesDir`, manifest `trainedOnCount == 35`, no orphan weight files
 
 **Milestone 3 exit criteria:**
 - Worker runs end-to-end in instrumented test without error

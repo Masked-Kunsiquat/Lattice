@@ -74,4 +74,5 @@ dependencies {
     androidTestImplementation(libs.androidx.runner)
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.benchmark.junit4)
+    androidTestImplementation(libs.androidx.work.testing)
 }
