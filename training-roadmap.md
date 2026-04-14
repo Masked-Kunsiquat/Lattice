@@ -177,16 +177,16 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] Handle `CancellationException` from `isStopped` check: save partial weights before exiting
 
 ### 3.2 `TrainingCoordinator` (`:core-logic`)
-- [ ] Create `TrainingCoordinator.kt` — thin wrapper that registers/cancels the WorkManager request
-- [ ] `scheduleIfNeeded(context: Context)`: enqueues `PeriodicWorkRequest` with `ExistingPeriodicWorkPolicy.KEEP` (no-op if already enqueued)
-- [ ] `cancelAll(context: Context)`: for settings "disable personalization" toggle
-- [ ] Constraints: `requiresCharging + requiresDeviceIdle + requiresStorageNotLow`
-- [ ] Period: 24 hours, backoff: `EXPONENTIAL` starting at 1 hour
+- [x] Create `TrainingCoordinator.kt` — thin wrapper that registers/cancels the WorkManager request
+- [x] `scheduleIfNeeded(context: Context)`: enqueues `PeriodicWorkRequest` with `ExistingPeriodicWorkPolicy.KEEP` (no-op if already enqueued)
+- [x] `cancelAll(context: Context)`: for settings "disable personalization" toggle
+- [x] Constraints: `requiresCharging + requiresDeviceIdle + requiresStorageNotLow`
+- [x] Period: 24 hours, backoff: `EXPONENTIAL` starting at 1 hour
 
 ### 3.3 Wire into `LatticeApplication`
-- [ ] Call `trainingCoordinator.scheduleIfNeeded(this)` in `LatticeApplication.onCreate()` — after DB and DAOs are initialized
-- [ ] Add `SettingsRepository` key `personalizationEnabled: Boolean` (default `true`)
-- [ ] In `SettingsRepository` observer: when toggled off → `trainingCoordinator.cancelAll()`; when toggled on → `trainingCoordinator.scheduleIfNeeded()`
+- [x] Call `trainingCoordinator.scheduleIfNeeded(this)` in `LatticeApplication.onCreate()` — after DB and DAOs are initialized
+- [x] Add `SettingsRepository` key `personalizationEnabled: Boolean` (default `true`)
+- [x] In `SettingsRepository` observer: when toggled off → `trainingCoordinator.cancelAll()`; when toggled on → `trainingCoordinator.scheduleIfNeeded()`
 
 ### 3.4 Settings UI
 - [ ] Add "Personalization" toggle to the existing settings screen

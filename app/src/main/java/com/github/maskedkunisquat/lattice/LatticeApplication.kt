@@ -21,8 +21,15 @@ import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import com.github.maskedkunisquat.lattice.core.logic.SearchRepository
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedManager
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
+import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
 import com.github.maskedkunisquat.lattice.core.logic.TrainingDependencies
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 import java.io.File
@@ -71,6 +78,11 @@ class LatticeApplication : Application(), TrainingDependencies {
     val placeRepository by lazy { PlaceRepository(database.placeDao()) }
 
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
+
+    val trainingCoordinator by lazy { TrainingCoordinator() }
+
+    /** Application-scoped coroutine scope for long-lived observers (e.g. settings → WorkManager). */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val cloudCredentialStore by lazy { CloudCredentialStore(this) }
 
@@ -136,6 +148,18 @@ class LatticeApplication : Application(), TrainingDependencies {
 
         embeddingProvider.initialize(this)
         Thread { localFallbackProvider.initialize() }.start()
+
+        // Schedule periodic MLP refinement (no-op if already enqueued) and observe
+        // the personalization toggle so the job is cancelled/re-enqueued reactively.
+        applicationScope.launch {
+            settingsRepository.settings
+                .map { it.personalizationEnabled }
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    if (enabled) trainingCoordinator.scheduleIfNeeded(this@LatticeApplication)
+                    else trainingCoordinator.cancelAll(this@LatticeApplication)
+                }
+        }
     }
 
     /**
