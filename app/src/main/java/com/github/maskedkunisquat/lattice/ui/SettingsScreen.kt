@@ -49,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -93,6 +94,7 @@ fun SettingsScreen(
     val apiKeySaved by viewModel.apiKeySaved.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val copyProgress by viewModel.copyProgress.collectAsStateWithLifecycle()
+    val manifest by viewModel.manifest.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -172,6 +174,17 @@ fun SettingsScreen(
                     modelLoadState = modelLoadState,
                     copyProgress = copyProgress,
                     modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+
+            // ── Personalization ──────────────────────────────────────────────
+            item { SectionHeader("Personalization") }
+            item {
+                PersonalizationSection(
+                    personalizationEnabled = settings.personalizationEnabled,
+                    manifest = manifest,
+                    onToggle = viewModel::setPersonalizationEnabled,
+                    onReset = viewModel::resetPersonalization,
                 )
             }
 
@@ -320,6 +333,92 @@ private fun LocalModelSection(
             }
             else -> Unit
         }
+    }
+}
+
+// ── Personalization section ───────────────────────────────────────────────────
+
+@Composable
+private fun PersonalizationSection(
+    personalizationEnabled: Boolean,
+    manifest: AffectiveManifest?,
+    onToggle: (Boolean) -> Unit,
+    onReset: () -> Unit,
+) {
+    var showResetDialog by remember { mutableStateOf(false) }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Reset personalization?") },
+            text = {
+                Text(
+                    "All learned preferences will be deleted and the model will restart " +
+                    "from its default state on next launch. This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { onReset(); showResetDialog = false },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Personalization", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Improves mood detection over time using your corrections. " +
+                    "All learning happens on this device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = personalizationEnabled, onCheckedChange = onToggle)
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        val trainedCount = manifest?.trainedOnCount ?: 0
+        val lastTimestamp = manifest?.lastTrainingTimestamp ?: 0L
+        AboutRow("Trained on", "$trainedCount corrections")
+        AboutRow("Last updated", formatRelativeTimestamp(lastTimestamp))
+
+        Spacer(Modifier.height(8.dp))
+
+        TextButton(
+            onClick = { showResetDialog = true },
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = MaterialTheme.colorScheme.error,
+            ),
+            modifier = Modifier.align(Alignment.End),
+        ) {
+            Text("Reset personalization")
+        }
+    }
+}
+
+private fun formatRelativeTimestamp(timestamp: Long): String {
+    if (timestamp == 0L) return "Never"
+    val diff = System.currentTimeMillis() - timestamp
+    return when {
+        diff < 60_000L              -> "Just now"
+        diff < 3_600_000L           -> "${diff / 60_000} min ago"
+        diff < 86_400_000L          -> "${diff / 3_600_000} hr ago"
+        diff < 2 * 86_400_000L      -> "Yesterday"
+        else                        -> "${diff / 86_400_000} days ago"
     }
 }
 

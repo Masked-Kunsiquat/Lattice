@@ -189,11 +189,11 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 - [x] In `SettingsRepository` observer: when toggled off → `trainingCoordinator.cancelAll()`; when toggled on → `trainingCoordinator.scheduleIfNeeded()`
 
 ### 3.4 Settings UI
-- [ ] Add "Personalization" toggle to the existing settings screen
-- [ ] Subtitle: "Improves mood detection over time using your corrections. All learning happens on this device."
-- [ ] Show `trainedOnCount` from manifest as a read-only stat: "Trained on N corrections"
-- [ ] Show `lastTrainingTimestamp` formatted as "Last updated: <relative date>"
-- [ ] "Reset personalization" destructive action: deletes all `affective_head_*.bin` from `filesDir`, clears manifest, re-runs base warm-start on next launch
+- [x] Add "Personalization" toggle to the existing settings screen
+- [x] Subtitle: "Improves mood detection over time using your corrections. All learning happens on this device."
+- [x] Show `trainedOnCount` from manifest as a read-only stat: "Trained on N corrections"
+- [x] Show `lastTrainingTimestamp` formatted as "Last updated: <relative date>"
+- [x] "Reset personalization" destructive action: deletes all `affective_head_*.bin` from `filesDir`, clears manifest, re-runs base warm-start on next launch
 
 ### 3.5 Instrumented integration test
 - [ ] Create `EmbeddingTrainingWorkerTest` using `WorkManagerTestInitHelper`

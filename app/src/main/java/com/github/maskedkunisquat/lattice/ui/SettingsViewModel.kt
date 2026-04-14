@@ -1,17 +1,21 @@
 package com.github.maskedkunisquat.lattice.ui
 
+import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import android.content.Intent
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifestStore
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class SettingsViewModel(
@@ -30,6 +35,7 @@ class SettingsViewModel(
     private val cloudCredentialStore: CloudCredentialStore,
     val modelLoadState: StateFlow<ModelLoadState>,
     val copyProgress: StateFlow<Float>,
+    private val context: Context,
 ) : ViewModel() {
 
     val settings: StateFlow<LatticeSettings> = settingsRepository.settings.stateIn(
@@ -52,6 +58,15 @@ class SettingsViewModel(
     // API key state: true when a key is stored for the cloud_claude provider
     private val _apiKeySaved = MutableStateFlow(cloudCredentialStore.hasApiKey(CLOUD_CLAUDE_PROVIDER))
     val apiKeySaved: StateFlow<Boolean> = _apiKeySaved.asStateFlow()
+
+    // Affective MLP manifest — read once from SharedPreferences; refreshed after reset
+    private val _manifest = MutableStateFlow<AffectiveManifest?>(readManifest())
+    val manifest: StateFlow<AffectiveManifest?> = _manifest.asStateFlow()
+
+    private fun readManifest(): AffectiveManifest? {
+        val prefs = context.getSharedPreferences(AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE)
+        return AffectiveManifestStore.read(prefs)
+    }
 
     fun setApiKey(key: String) {
         val trimmed = key.trim()
@@ -102,6 +117,30 @@ class SettingsViewModel(
         viewModelScope.launch { activityDao.deleteActivity(activity) }
     }
 
+    fun setPersonalizationEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPersonalizationEnabled(enabled) }
+    }
+
+    /**
+     * Deletes all `affective_head_*.bin` weight files from `filesDir`, clears the manifest
+     * and the warm-start guard flag so the base GoEmotions layer re-runs on next launch.
+     */
+    fun resetPersonalization() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                context.filesDir.listFiles { f ->
+                    f.name.startsWith("affective_head_") && f.name.endsWith(".bin")
+                }?.forEach { it.delete() }
+
+                val prefs = context.getSharedPreferences(
+                    AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE
+                )
+                AffectiveManifestStore.resetAll(prefs)
+            }
+            _manifest.value = null
+        }
+    }
+
     fun exportJournal() {
         viewModelScope.launch {
             try {
@@ -127,6 +166,7 @@ class SettingsViewModel(
                     cloudCredentialStore = app.cloudCredentialStore,
                     modelLoadState = app.localFallbackProvider.modelLoadState,
                     copyProgress = app.localFallbackProvider.copyProgress,
+                    context = app.applicationContext,
                 ) as T
         }
     }
