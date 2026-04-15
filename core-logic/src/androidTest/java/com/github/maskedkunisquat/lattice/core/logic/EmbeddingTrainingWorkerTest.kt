@@ -16,6 +16,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
+import androidx.work.await
 import androidx.work.testing.WorkManagerTestInitHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -510,11 +511,11 @@ private class WorkManagerTestScheduler(private val wm: WorkManager) : TrainingSc
         wm.cancelUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
         val deadline = System.currentTimeMillis() + 5_000L
         while (System.currentTimeMillis() < deadline) {
-            val infos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
+            val infos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).await()
             if (infos.none { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) break
             delay(100)
         }
-        val finalInfos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
+        val finalInfos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).await()
         check(finalInfos.none { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) {
             "EmbeddingTrainingWorker did not quiesce within 5 s timeout"
         }

@@ -156,10 +156,9 @@ class EmbeddingTrainingWorker(
         val orphans = applicationContext.filesDir.listFiles { f ->
             f.name.startsWith("affective_head_") && f.name.endsWith(".bin") && f.name != newPath
         }
+        val deleted = orphans?.size ?: 0
         orphans?.forEach { it.delete() }
-        if ((orphans?.size ?: 0) > 0) {
-            Log.d(TAG, "Deleted ${orphans!!.size} orphan weight file(s)")
-        }
+        if (deleted > 0) Log.d(TAG, "Deleted $deleted orphan weight file(s)")
 
         return Result.success()
     }
