@@ -1,19 +1,29 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto-backup and device-transfer rules (API 31+).
+  See https://developer.android.com/about/versions/12/backup-restore#xml-changes
+
+  Exclusion rationale:
+    - cloud_credentials   : API keys encrypted with a Keystore-backed key. The key is
+                            hardware-bound to the originating device; restoring these
+                            preferences to a different device leaves them undecryptable.
+    - lattice_db_prefs    : The 256-bit SQLCipher database key, also Keystore-backed.
+                            Restoring without the matching Keystore entry corrupts the DB.
+    - lattice.db          : Encrypted with the key from lattice_db_prefs.  Backing it up
+                            without the key is pointless; including both would undermine
+                            the per-device isolation guarantee.
+
+  Everything else (DataStore app settings, training metadata, etc.) is safe to back up.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="cloud_credentials.xml"/>
+        <exclude domain="sharedpref" path="lattice_db_prefs.xml"/>
+        <exclude domain="database"   path="lattice.db"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="cloud_credentials.xml"/>
+        <exclude domain="sharedpref" path="lattice_db_prefs.xml"/>
+        <exclude domain="database"   path="lattice.db"/>
     </device-transfer>
-    -->
 </data-extraction-rules>
