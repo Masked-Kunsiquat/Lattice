@@ -178,22 +178,29 @@ class AffectiveMlpTrainer(
      * Trains [mlp] on [samples] for [epochs] full passes, shuffling the sample
      * order before each epoch.
      *
-     * @param samples Non-empty list of labeled training samples.
-     * @return Average MSE loss over the final epoch (useful for convergence logging).
+     * @param samples         Non-empty list of labeled training samples.
+     * @param shouldContinue  Called before each epoch; return `false` to stop early
+     *                        (e.g., pass `{ !isStopped }` from a WorkManager worker so
+     *                        cancellation is cooperative between epochs).
+     * @return Average MSE loss over the last completed epoch, or 0f if no epoch ran.
      */
-    fun trainBatch(samples: List<TrainingSample>): Float {
+    fun trainBatch(
+        samples: List<TrainingSample>,
+        shouldContinue: () -> Boolean = { true },
+    ): Float {
         require(samples.isNotEmpty()) { "trainBatch requires at least one sample" }
-        var finalEpochLoss = 0f
-        repeat(epochs) { epoch ->
+        var lastEpochLoss = 0f
+        repeat(epochs) { _ ->
+            if (!shouldContinue()) return lastEpochLoss
             var epochLoss = 0f
             val order = samples.indices.shuffled()
             for (i in order) {
                 val s = samples[i]
                 epochLoss += trainStep(s.embedding, s.targetValence, s.targetArousal)
             }
-            if (epoch == epochs - 1) finalEpochLoss = epochLoss / samples.size
+            lastEpochLoss = epochLoss / samples.size
         }
-        return finalEpochLoss
+        return lastEpochLoss
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

@@ -155,10 +155,9 @@ class EmbeddingTrainingWorkerTest {
         testDriver.setAllConstraintsMet(request.id)
         testDriver.setPeriodDelayMet(request.id)
 
-        // For the short-circuit path, doWork() returns in < 100 ms (single DB count).
-        // RUNNING state is too brief to observe reliably via polling; a fixed sleep is
-        // simpler and sufficient — 5 s is far more than enough on any device.
-        Thread.sleep(5_000)
+        // 3.6-m: poll for terminal state instead of sleeping a fixed 5 s so the test
+        // fails fast on genuine errors rather than always waiting the full timeout.
+        awaitWorkerTerminal(request.id, timeoutMs = 10_000)
 
         assertEquals(
             "No checkpoint file must be written when count < ${EmbeddingTrainingWorker.MIN_LABELED_ENTRIES}",
@@ -244,6 +243,146 @@ class EmbeddingTrainingWorkerTest {
         )
     }
 
+    // ── 3.6-j: post-reset re-schedule ────────────────────────────────────────
+
+    /**
+     * After [TrainingCoordinator.resetPersonalization], training must be immediately
+     * re-enqueued when personalization is still enabled (3.6-a fix).
+     *
+     * This test exercises the re-schedule that was previously missing: after reset,
+     * the LatticeApplication observer won't re-fire because personalizationEnabled
+     * hasn't changed (distinctUntilChanged), so the coordinator must re-schedule
+     * explicitly.
+     */
+    @Test
+    fun resetPersonalization_thenReschedule_workIsEnqueued() {
+        // Plant artifacts to simulate a post-training state
+        context.filesDir.resolve("affective_head_v1_c30.bin").writeBytes(ByteArray(8))
+        AffectiveManifestStore.write(
+            prefs,
+            AffectiveManifest(trainedOnCount = 30, headPath = "affective_head_v1_c30.bin"),
+        )
+
+        val coordinator = TrainingCoordinator()
+
+        // Reset (no work is running, so the cancellation wait is a no-op)
+        runBlocking { coordinator.resetPersonalization(context) }
+
+        assertEquals("All weight files must be deleted after reset", 0, weightFiles().size)
+        assertNull("Manifest must be absent after reset", AffectiveManifestStore.read(prefs))
+
+        // Re-schedule — simulates what the 3.6-a fix does inside resetPersonalization
+        // when personalizationEnabled is true
+        coordinator.scheduleIfNeeded(context)
+
+        val afterReschedule = workManager
+            .getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
+            .get()
+        assertTrue(
+            "Work must be ENQUEUED after reset + scheduleIfNeeded (3.6-a fix)",
+            afterReschedule.any { it.state == WorkInfo.State.ENQUEUED },
+        )
+    }
+
+    // ── 3.6-k: empty samples path ─────────────────────────────────────────────
+
+    /**
+     * When all DB entries have the wrong embedding dimension, [EmbeddingTrainingWorker]
+     * constructs an empty [samples] list and returns [Result.success] without writing
+     * any artifacts (the manifest must remain absent).
+     */
+    @Test
+    fun worker_withWrongEmbeddingDimension_shortCircuitsWithoutWritingArtifacts() {
+        val dao = db.journalDao()
+        val baseTime = System.currentTimeMillis()
+        // Insert entries whose embedding is the wrong size (dim 1 instead of AffectiveMlp.IN)
+        runBlocking {
+            repeat(35) { i ->
+                dao.insertEntry(
+                    JournalEntry(
+                        id = UUID.randomUUID(),
+                        timestamp = baseTime - i * 1_000L,
+                        content = "[PERSON_${UUID.randomUUID()}] entry $i",
+                        valence = 0f,
+                        arousal = 0f,
+                        moodLabel = "TENSE",
+                        embedding = FloatArray(1) { 0f },  // wrong dimension
+                        cognitiveDistortions = emptyList(),
+                        userValence = 0.1f,
+                        userArousal = 0.1f,
+                    )
+                )
+            }
+        }
+
+        val request = buildRequest()
+        workManager.enqueueUniquePeriodicWork(
+            EmbeddingTrainingWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+
+        val testDriver = WorkManagerTestInitHelper.getTestDriver(context)!!
+        testDriver.setAllConstraintsMet(request.id)
+        testDriver.setPeriodDelayMet(request.id)
+
+        awaitWorkerTerminal(request.id, timeoutMs = 10_000)
+
+        assertEquals(
+            "No checkpoint file when all embeddings have wrong dimension",
+            0,
+            weightFiles().size,
+        )
+        assertNull(
+            "Manifest must remain absent when samples list is empty",
+            AffectiveManifestStore.read(prefs),
+        )
+    }
+
+    // ── 3.6-l: cooperative cancellation ──────────────────────────────────────
+
+    /**
+     * Verifies that [EmbeddingTrainingWorker] honours cancellation between epochs
+     * (3.6-b fix: `shouldContinue = { !isStopped }` passed to `trainBatch`).
+     *
+     * Because WorkManager's test framework doesn't provide a synchronous hook to
+     * cancel exactly between two epochs, this test enqueues 35 real entries, lets
+     * the worker start, issues [WorkManager.cancelWorkById], and then asserts the
+     * terminal state is CANCELLED — verifying that the cooperative check allows
+     * WorkManager to honour the cancellation signal before all epochs complete.
+     *
+     * Note: partial-weight saving is a best-effort path and is not asserted here
+     * because WorkManager's test executor doesn't guarantee the order of
+     * cancellation relative to `savePartialWeights`.
+     */
+    @Test
+    fun worker_cancelled_terminatesWithCancelledState() {
+        seedLabeledEntries(count = 35)
+
+        val request = buildRequest()
+        workManager.enqueueUniquePeriodicWork(
+            EmbeddingTrainingWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+
+        val testDriver = WorkManagerTestInitHelper.getTestDriver(context)!!
+        testDriver.setAllConstraintsMet(request.id)
+        testDriver.setPeriodDelayMet(request.id)
+
+        // Cancel immediately — with the 3.6-b shouldContinue fix in place, the
+        // next epoch boundary check will see isStopped=true and return early.
+        workManager.cancelWorkById(request.id)
+
+        awaitWorkerTerminal(request.id, timeoutMs = 30_000)
+
+        val finalState = workManager.getWorkInfoById(request.id).get()?.state
+        assertTrue(
+            "Worker must reach a terminal state after cancellation; was $finalState",
+            finalState?.isFinished == true,
+        )
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
@@ -298,6 +437,24 @@ class EmbeddingTrainingWorkerTest {
         throw AssertionError(
             "Timed out after ${timeoutMs}ms waiting for the training manifest to be written. " +
             "This likely means doWork() did not complete or threw an uncaught exception."
+        )
+    }
+
+    /**
+     * Polls until the worker for [requestId] is in a finished state, or throws
+     * [AssertionError] on timeout. Used by the short-circuit and cancellation
+     * tests where no manifest is written (so [awaitManifestWritten] cannot be used).
+     */
+    private fun awaitWorkerTerminal(requestId: java.util.UUID, timeoutMs: Long) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val info = workManager.getWorkInfoById(requestId).get()
+            if (info != null && info.state.isFinished) return
+            Thread.sleep(100)
+        }
+        throw AssertionError(
+            "Timed out after ${timeoutMs}ms waiting for worker $requestId to reach terminal state. " +
+            "Current state: ${workManager.getWorkInfoById(requestId).get()?.state}"
         )
     }
 

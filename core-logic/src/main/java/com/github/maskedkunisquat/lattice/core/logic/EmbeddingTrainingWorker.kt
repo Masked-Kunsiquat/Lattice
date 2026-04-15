@@ -23,8 +23,9 @@ import kotlinx.coroutines.CancellationException
  * 1. Capture `batchUpperBound = System.currentTimeMillis()` as the closed-window upper bound,
  *    then read [AffectiveManifest.lastTrainingTimestamp] as the lower bound.
  * 2. Count labeled entries since that timestamp; return immediately if < [MIN_LABELED_ENTRIES].
- * 3. Post a silent foreground notification (API 31+ requires the foreground service type
- *    to be declared in AndroidManifest.xml; see app manifest for `SystemForegroundService`).
+ * 3. Post a silent foreground notification (API 29+ exposes the foreground service type
+ *    constant; API 31+ requires it to be declared in AndroidManifest.xml as well — see
+ *    app manifest for `SystemForegroundService`).
  * 4. Fetch the full sample batch and build [TrainingSample] objects.
  * 5. Load existing MLP weights (falls back to random Xavier init if absent or stale).
  * 6. Run [AffectiveMlpTrainer.trainBatch] for [TRAIN_EPOCHS] passes.
@@ -87,7 +88,9 @@ class EmbeddingTrainingWorker(
         // Steps 6–9: train, save, manifest, cleanup — with cancellation guard
         val trainer = AffectiveMlpTrainer(mlp, epochs = TRAIN_EPOCHS)
         try {
-            val finalLoss = trainer.trainBatch(samples)
+            // 3.6-b: pass isStopped as a per-epoch cancellation gate so WorkManager
+            // cancellation is cooperative between epochs rather than fire-and-forget.
+            val finalLoss = trainer.trainBatch(samples, shouldContinue = { !isStopped })
             Log.i(TAG, "Training complete: ${samples.size} samples, final loss=${"%.6f".format(finalLoss)}")
 
             // Check for cancellation before writing to disk
@@ -181,6 +184,9 @@ class EmbeddingTrainingWorker(
             .setSilent(true)
             .setOngoing(true)
             .build()
+        // 3.6-i: FOREGROUND_SERVICE_TYPE_DATA_SYNC was added in API 29 (Q); the
+        // API 31 requirement is for the manifest foregroundServiceType *attribute*
+        // declaration, not for the Java API constant itself.
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {

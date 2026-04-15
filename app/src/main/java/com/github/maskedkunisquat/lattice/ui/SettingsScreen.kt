@@ -95,6 +95,7 @@ fun SettingsScreen(
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val copyProgress by viewModel.copyProgress.collectAsStateWithLifecycle()
     val manifest by viewModel.manifest.collectAsStateWithLifecycle()
+    val isResetting by viewModel.isResetting.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -183,6 +184,7 @@ fun SettingsScreen(
                 PersonalizationSection(
                     personalizationEnabled = settings.personalizationEnabled,
                     manifest = manifest,
+                    isResetting = isResetting,
                     onToggle = viewModel::setPersonalizationEnabled,
                     onReset = viewModel::resetPersonalization,
                 )
@@ -342,6 +344,7 @@ private fun LocalModelSection(
 private fun PersonalizationSection(
     personalizationEnabled: Boolean,
     manifest: AffectiveManifest?,
+    isResetting: Boolean,
     onToggle: (Boolean) -> Unit,
     onReset: () -> Unit,
 ) {
@@ -396,16 +399,20 @@ private fun PersonalizationSection(
         AboutRow("Trained on", "$trainedCount corrections")
         AboutRow("Last updated", formatRelativeTimestamp(lastTimestamp))
 
-        Spacer(Modifier.height(8.dp))
-
-        TextButton(
-            onClick = { showResetDialog = true },
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = MaterialTheme.colorScheme.error,
-            ),
-            modifier = Modifier.align(Alignment.End),
-        ) {
-            Text("Reset personalization")
+        // 3.6-g: only show the reset button when there is actually something to reset,
+        // and disable it while a reset is already in progress (double-tap guard).
+        if (trainedCount > 0 || isResetting) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = { showResetDialog = true },
+                enabled = !isResetting,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text(if (isResetting) "Resetting…" else "Reset personalization")
+            }
         }
     }
 }
@@ -418,7 +425,7 @@ private fun formatRelativeTimestamp(timestamp: Long): String {
         diff < 3_600_000L           -> "${diff / 60_000} min ago"
         diff < 86_400_000L          -> "${diff / 3_600_000} hr ago"
         diff < 2 * 86_400_000L      -> "Yesterday"
-        else                        -> "${diff / 86_400_000} days ago"
+        else                        -> (diff / 86_400_000).let { d -> if (d == 1L) "1 day ago" else "$d days ago" }
     }
 }
 

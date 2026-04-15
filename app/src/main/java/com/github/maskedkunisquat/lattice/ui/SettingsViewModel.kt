@@ -17,6 +17,7 @@ import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
 import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,10 @@ class SettingsViewModel(
     val modelLoadState: StateFlow<ModelLoadState>,
     val copyProgress: StateFlow<Float>,
     private val context: Context,
+    // 3.6-f: injected singleton instead of constructing ad-hoc in resetPersonalization
+    private val trainingCoordinator: TrainingCoordinator,
+    // 3.6-e: outlives the ViewModel so reset can't be cancelled mid-flight by navigation
+    private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     val settings: StateFlow<LatticeSettings> = settingsRepository.settings.stateIn(
@@ -56,6 +61,11 @@ class SettingsViewModel(
 
     private val _exportShareIntent = MutableSharedFlow<Intent>()
     val exportShareIntent = _exportShareIntent.asSharedFlow()
+
+    // 3.6-g: true while resetPersonalization is running — gates the UI button and
+    // prevents a second concurrent reset from being launched by double-tap.
+    private val _isResetting = MutableStateFlow(false)
+    val isResetting: StateFlow<Boolean> = _isResetting.asStateFlow()
 
     // API key state: true when a key is stored for the cloud_claude provider
     private val _apiKeySaved = MutableStateFlow(cloudCredentialStore.hasApiKey(CLOUD_CLAUDE_PROVIDER))
@@ -128,11 +138,26 @@ class SettingsViewModel(
     /**
      * Delegates to [TrainingCoordinator.resetPersonalization] — the single authoritative
      * path shared with the `resetPersonalization` instrumented test.
+     *
+     * Runs on [applicationScope] (3.6-e) so navigation away from Settings cannot cancel
+     * a reset in progress. Guards against double-tap via [_isResetting] (3.6-g).
+     * Re-schedules training afterward if personalization is still enabled (3.6-a).
      */
     fun resetPersonalization() {
-        viewModelScope.launch {
-            TrainingCoordinator().resetPersonalization(context)
-            // manifest StateFlow updates reactively via the SharedPreferences listener
+        if (_isResetting.value) return
+        applicationScope.launch {
+            _isResetting.value = true
+            try {
+                trainingCoordinator.resetPersonalization(context)
+                // manifest StateFlow updates reactively via the SharedPreferences listener
+                // 3.6-a: distinctUntilChanged won't re-fire since the toggle hasn't changed,
+                // so re-schedule here when personalization is still on.
+                if (settings.value.personalizationEnabled) {
+                    trainingCoordinator.scheduleIfNeeded(context)
+                }
+            } finally {
+                _isResetting.value = false
+            }
         }
     }
 
@@ -162,6 +187,8 @@ class SettingsViewModel(
                     modelLoadState = app.localFallbackProvider.modelLoadState,
                     copyProgress = app.localFallbackProvider.copyProgress,
                     context = app.applicationContext,
+                    trainingCoordinator = app.trainingCoordinator,
+                    applicationScope = app.applicationScope,
                 ) as T
         }
     }

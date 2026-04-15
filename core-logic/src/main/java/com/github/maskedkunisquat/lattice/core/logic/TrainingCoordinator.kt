@@ -7,6 +7,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
@@ -73,12 +74,19 @@ class TrainingCoordinator {
         val wm = WorkManager.getInstance(context)
         wm.cancelUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
 
-        // Poll until no RUNNING entry remains, or give up after 5 s
+        // 3.6-c: wait until neither RUNNING nor ENQUEUED entries remain.
+        // Checking only for RUNNING missed the window where a freshly-cancelled
+        // ENQUEUED entry had not yet transitioned to CANCELLED, creating a race
+        // with the file-deletion below.
+        // 3.6-d: delay() is suspending and cancellable; Thread.sleep() would pin
+        // the IO thread for the full sleep duration.
         val deadline = System.currentTimeMillis() + 5_000L
         while (System.currentTimeMillis() < deadline) {
             val infos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
-            if (infos.none { it.state == WorkInfo.State.RUNNING }) break
-            Thread.sleep(100)
+            if (infos.none {
+                it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+            }) break
+            delay(100)
         }
 
         context.filesDir.listFiles { f ->
