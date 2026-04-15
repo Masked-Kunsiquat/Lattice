@@ -44,6 +44,7 @@ class EmbeddingTrainingWorker(
 ) : CoroutineWorker(ctx, params) {
 
     private val journalDao get() = (applicationContext as TrainingDependencies).journalDao
+    private val manifestDao get() = (applicationContext as TrainingDependencies).manifestDao
 
     override suspend fun doWork(): Result {
         // Step 1 — watermark: capture the upper bound before any I/O so entries written
@@ -108,7 +109,7 @@ class EmbeddingTrainingWorker(
 
     // ── Checkpoint persistence ────────────────────────────────────────────────
 
-    private fun persistCheckpoint(
+    private suspend fun persistCheckpoint(
         mlp: AffectiveMlp,
         oldManifest: AffectiveManifest?,
         prefs: SharedPreferences,
@@ -141,6 +142,15 @@ class EmbeddingTrainingWorker(
             return Result.retry()
         }
         Log.i(TAG, "Manifest updated: trainedOnCount=$newTotalCount, headPath=$newPath")
+
+        // Mirror the manifest to Room so SettingsViewModel's Flow is notified reactively.
+        // A failure here is non-fatal: the SharedPreferences write succeeded, so
+        // AffectiveMlp.load works correctly. The UI updates on the next successful write.
+        try {
+            manifestDao.upsertManifest(newManifest.toEntity())
+        } catch (e: Exception) {
+            Log.w(TAG, "Room manifest write failed — UI may not reflect this cycle immediately", e)
+        }
 
         // Step 9 — purge orphaned weight files
         val orphans = applicationContext.filesDir.listFiles { f ->

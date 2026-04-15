@@ -17,9 +17,11 @@ import androidx.work.WorkManager
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.WorkManagerTestInitHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TrainingManifestDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -77,7 +79,7 @@ class EmbeddingTrainingWorkerTest {
                 ): ListenableWorker? = when (workerClassName) {
                     EmbeddingTrainingWorker::class.java.name ->
                         EmbeddingTrainingWorker(
-                            TrainingTestContext(appContext, db.journalDao()),
+                            TrainingTestContext(appContext, db.journalDao(), db.trainingManifestDao()),
                             workerParameters,
                         )
                     else -> null
@@ -189,7 +191,9 @@ class EmbeddingTrainingWorkerTest {
         prefs.edit().putBoolean(AffectiveMlpInitializer.PREF_KEY, true).apply()
 
         // Reset via the production helper — same code path as SettingsViewModel
-        runBlocking { TrainingCoordinator().resetPersonalization(context) }
+        runBlocking {
+            buildTestCoordinator().resetPersonalization()
+        }
 
         assertEquals("All weight files must be deleted after reset", 0, weightFiles().size)
         assertNull("Manifest must be absent after reset", AffectiveManifestStore.read(prefs))
@@ -211,9 +215,9 @@ class EmbeddingTrainingWorkerTest {
      */
     @Test
     fun trainingCoordinator_scheduleAndCancel_reflectedInWorkInfos() {
-        val coordinator = TrainingCoordinator()
+        val coordinator = buildTestCoordinator()
 
-        coordinator.scheduleIfNeeded(context)
+        coordinator.scheduleIfNeeded()
         val afterSchedule = workManager
             .getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
             .get()
@@ -223,7 +227,7 @@ class EmbeddingTrainingWorkerTest {
             afterSchedule.all { it.state == WorkInfo.State.ENQUEUED },
         )
 
-        coordinator.cancelAll(context)
+        coordinator.cancelAll()
         val afterCancel = workManager
             .getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
             .get()
@@ -233,7 +237,7 @@ class EmbeddingTrainingWorkerTest {
         )
 
         // Re-schedule after cancel — KEEP policy creates a fresh enqueue alongside the cancelled entry
-        coordinator.scheduleIfNeeded(context)
+        coordinator.scheduleIfNeeded()
         val afterReschedule = workManager
             .getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
             .get()
@@ -263,17 +267,17 @@ class EmbeddingTrainingWorkerTest {
             AffectiveManifest(trainedOnCount = 30, headPath = "affective_head_v1_c30.bin"),
         )
 
-        val coordinator = TrainingCoordinator()
+        val coordinator = buildTestCoordinator()
 
         // Reset (no work is running, so the cancellation wait is a no-op)
-        runBlocking { coordinator.resetPersonalization(context) }
+        runBlocking { coordinator.resetPersonalization() }
 
         assertEquals("All weight files must be deleted after reset", 0, weightFiles().size)
         assertNull("Manifest must be absent after reset", AffectiveManifestStore.read(prefs))
 
-        // Re-schedule — simulates what the 3.6-a fix does inside resetPersonalization
-        // when personalizationEnabled is true
-        coordinator.scheduleIfNeeded(context)
+        // Re-schedule — simulates what SettingsViewModel.resetPersonalization does after reset
+        // when personalizationEnabled is true (3.6-a fix: re-queue from the call site)
+        coordinator.scheduleIfNeeded()
 
         val afterReschedule = workManager
             .getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
@@ -463,13 +467,63 @@ class EmbeddingTrainingWorkerTest {
     } ?: emptyArray()
 
     private fun deleteWeightFiles() = weightFiles().forEach { it.delete() }
+
+    /**
+     * Creates a [TrainingCoordinator] wired to the test [WorkManager] instance, the
+     * test [context.filesDir], and the in-memory DB's [TrainingManifestDao].
+     */
+    private fun buildTestCoordinator() = TrainingCoordinator(
+        scheduler = WorkManagerTestScheduler(workManager),
+        weightFilesDir = context.filesDir,
+        prefs = prefs,
+        manifestDao = db.trainingManifestDao(),
+    )
 }
 
-// ── Test double ───────────────────────────────────────────────────────────────
+// ── Test doubles ─────────────────────────────────────────────────────────────
+
+/**
+ * [TrainingScheduler] backed by [WorkManager]. Used in instrumented tests so that
+ * [TrainingCoordinator] can be exercised against a real [WorkManagerTestInitHelper]
+ * without depending on the production [WorkManagerTrainingScheduler] class in `:app`.
+ *
+ * Constraints are omitted here; the happy-path tests use [TestDriver.setAllConstraintsMet].
+ * The production constraint configuration is exercised separately via
+ * [trainingCoordinator_scheduleAndCancel_reflectedInWorkInfos].
+ */
+private class WorkManagerTestScheduler(private val wm: WorkManager) : TrainingScheduler {
+
+    override fun schedulePeriodicTraining() {
+        val request = PeriodicWorkRequestBuilder<EmbeddingTrainingWorker>(24, TimeUnit.HOURS).build()
+        wm.enqueueUniquePeriodicWork(
+            EmbeddingTrainingWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+    }
+
+    override fun cancelTraining() {
+        wm.cancelUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
+    }
+
+    override suspend fun cancelAndAwaitQuiescence() {
+        wm.cancelUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
+        val deadline = System.currentTimeMillis() + 5_000L
+        while (System.currentTimeMillis() < deadline) {
+            val infos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
+            if (infos.none { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) break
+            delay(100)
+        }
+        val finalInfos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
+        check(finalInfos.none { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) {
+            "EmbeddingTrainingWorker did not quiesce within 5 s timeout"
+        }
+    }
+}
 
 /**
  * A [ContextWrapper] that additionally implements [TrainingDependencies], allowing
- * [EmbeddingTrainingWorker] to resolve its [JournalDao] via the standard
+ * [EmbeddingTrainingWorker] to resolve its DAOs via the standard
  * `applicationContext as TrainingDependencies` cast without requiring [LatticeApplication].
  *
  * The worker sets `applicationContext = appContext` from its constructor parameter, so
@@ -478,6 +532,8 @@ class EmbeddingTrainingWorkerTest {
 private class TrainingTestContext(
     base: Context,
     private val dao: JournalDao,
+    private val mDao: TrainingManifestDao,
 ) : ContextWrapper(base), TrainingDependencies {
     override val journalDao: JournalDao get() = dao
+    override val manifestDao: TrainingManifestDao get() = mDao
 }

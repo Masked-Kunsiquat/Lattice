@@ -1,99 +1,59 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import android.content.Context
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
+import android.content.SharedPreferences
+import com.github.maskedkunisquat.lattice.core.data.dao.TrainingManifestDao
+import java.io.File
 
 /**
- * Thin wrapper around [WorkManager] that enqueues or cancels the periodic
- * [EmbeddingTrainingWorker] job.
+ * Thin orchestrator that coordinates the periodic [EmbeddingTrainingWorker] lifecycle and
+ * exposes the single authoritative reset path shared by
+ * [com.github.maskedkunisquat.lattice.ui.SettingsViewModel] and instrumented tests.
  *
- * Call [scheduleIfNeeded] on app startup (after DAOs are initialized) and from
- * the settings screen when personalization is re-enabled. Call [cancelAll] when
- * the user disables personalization.
+ * All WorkManager / Android-framework interaction is delegated to [scheduler] so this class
+ * carries no Android framework imports and is testable on the desktop JVM.
+ *
+ * @param scheduler      Schedules, cancels, and awaits quiescence of the training worker.
+ * @param weightFilesDir Directory where `affective_head_*.bin` files are stored
+ *                       (production: [android.content.Context.filesDir]).
+ * @param prefs          SharedPreferences used by [AffectiveManifestStore] for the JSON
+ *                       manifest and the [AffectiveMlpInitializer] warm-start guard.
+ * @param manifestDao    Room DAO that mirrors the manifest for reactive UI updates.
  */
-class TrainingCoordinator {
+class TrainingCoordinator(
+    private val scheduler: TrainingScheduler,
+    private val weightFilesDir: File,
+    private val prefs: SharedPreferences,
+    private val manifestDao: TrainingManifestDao,
+) {
 
     /**
-     * Enqueues a 24-hour periodic [EmbeddingTrainingWorker] with
-     * [ExistingPeriodicWorkPolicy.KEEP] — a no-op if the work is already enqueued
-     * or running.
-     *
-     * Constraints: device must be charging, idle, and have adequate storage.
-     * Note: [androidx.work.BackoffPolicy] is not compatible with [Constraints.requiresDeviceIdle]
-     * on JobScheduler — failures are silently retried on the next 24-hour period instead.
+     * Enqueues a 24-hour periodic [EmbeddingTrainingWorker]; no-op if already enqueued.
      */
-    fun scheduleIfNeeded(context: Context) {
-        val constraints = Constraints.Builder()
-            .setRequiresCharging(true)
-            .setRequiresDeviceIdle(true)
-            .setRequiresStorageNotLow(true)
-            .build()
-
-        val request = PeriodicWorkRequestBuilder<EmbeddingTrainingWorker>(
-            repeatInterval = 24,
-            repeatIntervalTimeUnit = TimeUnit.HOURS,
-        )
-            .setConstraints(constraints)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            EmbeddingTrainingWorker.UNIQUE_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
-        )
-    }
+    fun scheduleIfNeeded() = scheduler.schedulePeriodicTraining()
 
     /**
      * Cancels all enqueued/running instances of [EmbeddingTrainingWorker].
-     * Called when the user disables personalization in settings.
      */
-    fun cancelAll(context: Context) {
-        WorkManager.getInstance(context)
-            .cancelUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
-    }
+    fun cancelAll() = scheduler.cancelTraining()
 
     /**
-     * Cancels any in-flight [EmbeddingTrainingWorker] run, waits until it is no longer
-     * RUNNING (up to 5 s), then deletes all `affective_head_*.bin` weight files and
-     * clears the manifest and warm-start guard via [AffectiveManifestStore.resetAll].
+     * Cancels any in-flight [EmbeddingTrainingWorker] run, waits until it has quiesced,
+     * then deletes all `affective_head_*.bin` weight files and clears both the
+     * SharedPreferences manifest/warm-start guard (via [AffectiveManifestStore.resetAll])
+     * and the Room manifest row (via [manifestDao]).
      *
      * This is the single authoritative reset path shared by
      * [com.github.maskedkunisquat.lattice.ui.SettingsViewModel] and the
-     * `resetPersonalization` instrumented test, so both exercise the same
-     * cancellation/waiting and WorkManager-related behaviour.
+     * `resetPersonalization` instrumented test.
      */
-    suspend fun resetPersonalization(context: Context) = withContext(Dispatchers.IO) {
-        val wm = WorkManager.getInstance(context)
-        wm.cancelUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
+    suspend fun resetPersonalization() {
+        scheduler.cancelAndAwaitQuiescence()
 
-        // 3.6-c: wait until neither RUNNING nor ENQUEUED entries remain.
-        // Checking only for RUNNING missed the window where a freshly-cancelled
-        // ENQUEUED entry had not yet transitioned to CANCELLED, creating a race
-        // with the file-deletion below.
-        // 3.6-d: delay() is suspending and cancellable; Thread.sleep() would pin
-        // the IO thread for the full sleep duration.
-        val deadline = System.currentTimeMillis() + 5_000L
-        while (System.currentTimeMillis() < deadline) {
-            val infos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
-            if (infos.none {
-                it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
-            }) break
-            delay(100)
-        }
-
-        context.filesDir.listFiles { f ->
+        weightFilesDir.listFiles { f ->
             f.name.startsWith("affective_head_") && f.name.endsWith(".bin")
         }?.forEach { it.delete() }
 
-        val prefs = context.getSharedPreferences(AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE)
         AffectiveManifestStore.resetAll(prefs)
+        manifestDao.clearManifest()
     }
 }

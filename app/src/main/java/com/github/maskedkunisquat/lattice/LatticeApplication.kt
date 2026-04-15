@@ -7,6 +7,7 @@ import androidx.room.Room
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.KeyProvider
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifestStore
 import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
@@ -41,8 +42,9 @@ private const val PREF_ENCRYPTION_DONE = "encryption_migration_done"
 
 class LatticeApplication : Application(), TrainingDependencies {
 
-    // TrainingDependencies — exposes the DAO to EmbeddingTrainingWorker via applicationContext cast
+    // TrainingDependencies — exposes DAOs to EmbeddingTrainingWorker via applicationContext cast
     override val journalDao get() = database.journalDao()
+    override val manifestDao get() = database.trainingManifestDao()
 
     val database by lazy {
         val passphrase = KeyProvider.getOrCreateKey(this)
@@ -59,6 +61,7 @@ class LatticeApplication : Application(), TrainingDependencies {
                 LatticeDatabase.MIGRATION_8_9,
                 LatticeDatabase.MIGRATION_9_10,
                 LatticeDatabase.MIGRATION_10_11,
+                LatticeDatabase.MIGRATION_11_12,
             )
             .build()
     }
@@ -79,7 +82,16 @@ class LatticeApplication : Application(), TrainingDependencies {
 
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
 
-    val trainingCoordinator by lazy { TrainingCoordinator() }
+    val workManagerScheduler by lazy { WorkManagerTrainingScheduler(this) }
+
+    val trainingCoordinator by lazy {
+        TrainingCoordinator(
+            scheduler = workManagerScheduler,
+            weightFilesDir = filesDir,
+            prefs = getSharedPreferences(AffectiveManifestStore.PREFS_NAME, MODE_PRIVATE),
+            manifestDao = database.trainingManifestDao(),
+        )
+    }
 
     /** Application-scoped coroutine scope for long-lived observers (e.g. settings → WorkManager). */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -156,8 +168,8 @@ class LatticeApplication : Application(), TrainingDependencies {
                 .map { it.personalizationEnabled }
                 .distinctUntilChanged()
                 .collect { enabled ->
-                    if (enabled) trainingCoordinator.scheduleIfNeeded(this@LatticeApplication)
-                    else trainingCoordinator.cancelAll(this@LatticeApplication)
+                    if (enabled) trainingCoordinator.scheduleIfNeeded()
+                    else trainingCoordinator.cancelAll()
                 }
         }
     }

@@ -1,31 +1,29 @@
 package com.github.maskedkunisquat.lattice.ui
 
-import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TrainingManifestDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
-import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifestStore
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
 import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
+import com.github.maskedkunisquat.lattice.core.logic.toAffectiveManifest
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -38,7 +36,7 @@ class SettingsViewModel(
     private val cloudCredentialStore: CloudCredentialStore,
     val modelLoadState: StateFlow<ModelLoadState>,
     val copyProgress: StateFlow<Float>,
-    private val context: Context,
+    private val manifestDao: TrainingManifestDao,
     // 3.6-f: injected singleton instead of constructing ad-hoc in resetPersonalization
     private val trainingCoordinator: TrainingCoordinator,
     // 3.6-e: outlives the ViewModel so reset can't be cancelled mid-flight by navigation
@@ -71,16 +69,11 @@ class SettingsViewModel(
     private val _apiKeySaved = MutableStateFlow(cloudCredentialStore.hasApiKey(CLOUD_CLAUDE_PROVIDER))
     val apiKeySaved: StateFlow<Boolean> = _apiKeySaved.asStateFlow()
 
-    // Affective MLP manifest — reactive: re-emits whenever the SharedPreferences key changes
-    val manifest: StateFlow<AffectiveManifest?> = callbackFlow {
-        val prefs = context.getSharedPreferences(AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE)
-        trySend(AffectiveManifestStore.read(prefs))
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == AffectiveManifestStore.PREF_KEY) trySend(AffectiveManifestStore.read(prefs))
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialValue = null)
+    // Affective MLP manifest — Room-backed reactive stream; emits null until the first
+    // training run completes (or after resetPersonalization clears the table).
+    val manifest: StateFlow<AffectiveManifest?> = manifestDao.getManifest()
+        .map { it?.toAffectiveManifest() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialValue = null)
 
     fun setApiKey(key: String) {
         val trimmed = key.trim()
@@ -148,12 +141,12 @@ class SettingsViewModel(
         applicationScope.launch {
             _isResetting.value = true
             try {
-                trainingCoordinator.resetPersonalization(context)
-                // manifest StateFlow updates reactively via the SharedPreferences listener
+                trainingCoordinator.resetPersonalization()
+                // manifest StateFlow updates reactively via the Room Flow.
                 // 3.6-a: distinctUntilChanged won't re-fire since the toggle hasn't changed,
                 // so re-schedule here when personalization is still on.
                 if (settings.value.personalizationEnabled) {
-                    trainingCoordinator.scheduleIfNeeded(context)
+                    trainingCoordinator.scheduleIfNeeded()
                 }
             } finally {
                 _isResetting.value = false
@@ -186,7 +179,7 @@ class SettingsViewModel(
                     cloudCredentialStore = app.cloudCredentialStore,
                     modelLoadState = app.localFallbackProvider.modelLoadState,
                     copyProgress = app.localFallbackProvider.copyProgress,
-                    context = app.applicationContext,
+                    manifestDao = app.database.trainingManifestDao(),
                     trainingCoordinator = app.trainingCoordinator,
                     applicationScope = app.applicationScope,
                 ) as T
