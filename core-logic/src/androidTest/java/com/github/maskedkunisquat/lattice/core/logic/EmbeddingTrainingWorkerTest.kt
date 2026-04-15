@@ -375,16 +375,23 @@ class EmbeddingTrainingWorkerTest {
         testDriver.setAllConstraintsMet(request.id)
         testDriver.setPeriodDelayMet(request.id)
 
-        // Cancel immediately — with the 3.6-b shouldContinue fix in place, the
-        // next epoch boundary check will see isStopped=true and return early.
+        // Wait for the worker to enter RUNNING before cancelling; cancelling while still
+        // ENQUEUED races the scheduler and may leave the state as CANCELLED-before-start,
+        // which some WorkManager versions do not reflect as WorkInfo.State.CANCELLED.
+        val runDeadline = System.currentTimeMillis() + 30_000L
+        while (System.currentTimeMillis() < runDeadline) {
+            if (workManager.getWorkInfoById(request.id).get()?.state == WorkInfo.State.RUNNING) break
+            Thread.sleep(100)
+        }
         workManager.cancelWorkById(request.id)
 
         awaitWorkerTerminal(request.id, timeoutMs = 30_000)
 
         val finalState = workManager.getWorkInfoById(request.id).get()?.state
-        assertTrue(
-            "Worker must reach a terminal state after cancellation; was $finalState",
-            finalState?.isFinished == true,
+        assertEquals(
+            "Worker must be in CANCELLED state after cancellation; was $finalState",
+            WorkInfo.State.CANCELLED,
+            finalState,
         )
     }
 

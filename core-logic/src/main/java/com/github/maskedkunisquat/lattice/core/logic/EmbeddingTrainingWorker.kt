@@ -12,6 +12,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 
 /**
  * WorkManager worker that fine-tunes [AffectiveMlp] on accumulated user corrections.
@@ -54,7 +55,9 @@ class EmbeddingTrainingWorker(
         val prefs = applicationContext.getSharedPreferences(
             AffectiveManifestStore.PREFS_NAME, Context.MODE_PRIVATE
         )
-        val manifest = AffectiveManifestStore.read(prefs)
+        // Room is the authoritative manifest source; SharedPreferences is only a mirror for
+        // AffectiveMlp.load() base-model-hash verification.
+        val manifest = manifestDao.getManifest().first()?.toAffectiveManifest()
         val lastTimestamp = manifest?.lastTrainingTimestamp ?: 0L
 
         // Step 2 — gate: skip if insufficient labeled entries in the closed window
@@ -135,21 +138,23 @@ class EmbeddingTrainingWorker(
             lastTrainingTimestamp = batchUpperBound,
             baseLayerVersion      = oldManifest?.baseLayerVersion ?: AffectiveMlpInitializer.BASE_LAYER_VERSION,
         )
-        val wrote = AffectiveManifestStore.write(prefs, newManifest)
-        if (!wrote) {
-            Log.w(TAG, "Manifest write failed — deleting newly saved weights at $newPath and retrying")
+        // Step 8 — write manifest to Room (authoritative source of truth).
+        // If this fails, abort and retry — the weight file is deleted to keep disk and DB in sync.
+        try {
+            manifestDao.upsertManifest(newManifest.toEntity())
+        } catch (e: Exception) {
+            Log.w(TAG, "Room manifest write failed — deleting newly saved weights at $newPath and retrying", e)
             weightFile.delete()
             return Result.retry()
         }
         Log.i(TAG, "Manifest updated: trainedOnCount=$newTotalCount, headPath=$newPath")
 
-        // Mirror the manifest to Room so SettingsViewModel's Flow is notified reactively.
-        // A failure here is non-fatal: the SharedPreferences write succeeded, so
-        // AffectiveMlp.load works correctly. The UI updates on the next successful write.
-        try {
-            manifestDao.upsertManifest(newManifest.toEntity())
-        } catch (e: Exception) {
-            Log.w(TAG, "Room manifest write failed — UI may not reflect this cycle immediately", e)
+        // Mirror the persisted manifest to SharedPreferences so AffectiveMlp.load() can verify
+        // the base-model hash. Room is the source of truth; a mirror failure is non-fatal because
+        // the DAO write already succeeded.
+        val mirrored = AffectiveManifestStore.write(prefs, newManifest)
+        if (!mirrored) {
+            Log.w(TAG, "SharedPreferences manifest mirror failed — AffectiveMlp.load() may use stale hash until next cycle")
         }
 
         // Step 9 — purge orphaned weight files
