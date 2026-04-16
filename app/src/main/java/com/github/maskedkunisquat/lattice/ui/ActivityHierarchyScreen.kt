@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -78,7 +79,14 @@ class ActivityHierarchyViewModel(app: LatticeApplication) : ViewModel() {
     }
 
     fun updateActivity(activity: ActivityHierarchy) {
-        viewModelScope.launch { dao.updateActivity(activity) }
+        viewModelScope.launch {
+            dao.updateActivity(
+                activity.copy(
+                    taskName = activity.taskName.trim(),
+                    valueCategory = activity.valueCategory.trim(),
+                )
+            )
+        }
     }
 
     fun deleteActivity(activity: ActivityHierarchy) {
@@ -205,6 +213,14 @@ private fun ActivityHierarchyItem(
                 headlineContent = { Text(activity.taskName) },
                 supportingContent = {
                     Text("Difficulty ${activity.difficulty}/10 · ${activity.valueCategory}")
+                },
+                trailingContent = {
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete activity",
+                        )
+                    }
                 },
                 modifier = Modifier.clickable(onClick = onEdit),
             )

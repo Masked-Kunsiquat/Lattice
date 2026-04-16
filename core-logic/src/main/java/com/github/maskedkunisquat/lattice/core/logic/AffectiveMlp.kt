@@ -179,6 +179,46 @@ class AffectiveMlp(
         }
 
         /**
+         * Loads [AffectiveMlp] from a [manifest] already fetched from Room, bypassing
+         * [AffectiveManifestStore] (SharedPreferences). Use this instead of [load] when
+         * the caller already holds the authoritative manifest from the DAO so the model
+         * is always initialised from the Room-backed source of truth.
+         *
+         * @param manifest The manifest from Room, or `null` to return `null` immediately.
+         * @param context Android context — used for asset access and `filesDir`.
+         * @return A trained [AffectiveMlp], or `null` when the head is unavailable or stale.
+         */
+        fun loadFromManifest(manifest: AffectiveManifest?, context: Context): AffectiveMlp? {
+            if (manifest == null) return null
+
+            if (manifest.schemaVersion != CURRENT_SCHEMA_VERSION) {
+                Log.e(TAG_LOAD, "Manifest schema version ${manifest.schemaVersion} != $CURRENT_SCHEMA_VERSION — discarding stale checkpoint")
+                context.filesDir.resolve(manifest.headPath).delete()
+                return null
+            }
+
+            val currentHash = try {
+                "sha256:${context.assets.open(EMBEDDING_ASSET).use { sha256Hex(it) }}"
+            } catch (e: Exception) {
+                Log.e(TAG_LOAD, "Failed to hash $EMBEDDING_ASSET — cannot verify manifest", e)
+                return null
+            }
+            if (manifest.baseModelHash != currentHash) {
+                Log.w(TAG_LOAD, "Embedding model hash mismatch — discarding stale head")
+                context.filesDir.resolve(manifest.headPath).delete()
+                return null
+            }
+
+            val weightFile = context.filesDir.resolve(manifest.headPath)
+            if (!weightFile.exists() || weightFile.length() != WEIGHT_BYTES.toLong()) return null
+            return runCatching { loadWeights(weightFile) }.getOrElse { e ->
+                Log.e(TAG_LOAD, "Failed to load weights from ${weightFile.name}", e)
+                weightFile.delete()
+                null
+            }
+        }
+
+        /**
          * Loads weights from [file] and returns a ready-to-use [AffectiveMlp].
          *
          * @throws IllegalArgumentException if the file size does not match [WEIGHT_BYTES].

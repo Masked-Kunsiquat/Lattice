@@ -86,8 +86,10 @@ class EmbeddingTrainingWorker(
             return Result.success()
         }
 
-        // Step 5 — load weights (or Xavier init)
-        val mlp = AffectiveMlp.load(applicationContext) ?: AffectiveMlp()
+        // Step 5 — load weights from the Room-backed manifest (or Xavier init).
+        // Uses loadFromManifest so the model is always initialised from the authoritative
+        // DAO manifest already fetched above, not from a potentially stale SharedPreferences mirror.
+        val mlp = AffectiveMlp.loadFromManifest(manifest, applicationContext) ?: AffectiveMlp()
 
         // Steps 6–9: train, save, manifest, cleanup — with cancellation guard
         val trainer = AffectiveMlpTrainer(mlp, epochs = TRAIN_EPOCHS)

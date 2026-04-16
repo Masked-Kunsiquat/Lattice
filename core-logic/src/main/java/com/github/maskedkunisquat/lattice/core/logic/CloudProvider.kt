@@ -17,6 +17,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -49,6 +50,7 @@ class CloudProvider(
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
 
@@ -68,7 +70,7 @@ class CloudProvider(
 
         var attempt = 0
         while (true) {
-            val result = runCatching { streamOnce(prompt, apiKey) }
+            val result = runCatching { streamOnce(prompt, apiKey) { emit(it) } }
             val error = result.exceptionOrNull()
 
             if (error is CancellationException) throw error
@@ -77,8 +79,10 @@ class CloudProvider(
                 val retryable = error is RetryableCloudException
                 if (retryable && attempt < MAX_RETRIES) {
                     val backoffMs = BACKOFF_BASE_MS shl attempt   // 1 s, 2 s, 4 s
-                    Log.w(TAG, "Cloud request failed (attempt ${attempt + 1}), retrying in ${backoffMs}ms", error)
-                    delay(backoffMs)
+                    val jitter = kotlin.random.Random.nextLong(backoffMs / 2)
+                    val jitteredMs = backoffMs + jitter
+                    Log.w(TAG, "Cloud request failed (attempt ${attempt + 1}), retrying in ${jitteredMs}ms", error)
+                    delay(jitteredMs)
                     attempt++
                     continue
                 }
@@ -86,27 +90,27 @@ class CloudProvider(
                 return@flow
             }
 
-            // Success — emit all collected results
-            for (item in result.getOrThrow()) {
-                emit(item)
-            }
             return@flow
         }
     }.flowOn(dispatcher)
 
     /**
-     * Executes a single streaming request to the Anthropic Messages API.
+     * Executes a single streaming request to the Anthropic Messages API, emitting each
+     * [LlmResult] token to [onResult] as it is parsed from the SSE stream.
      *
-     * Returns a list of [LlmResult] items collected from the SSE stream.
      * Throws [RetryableCloudException] for transient HTTP errors (429, 5xx),
      * or [IOException] for network failures.
      */
-    private suspend fun streamOnce(prompt: String, apiKey: String): List<LlmResult> {
+    private suspend fun streamOnce(
+        prompt: String,
+        apiKey: String,
+        onResult: suspend (LlmResult) -> Unit,
+    ) {
         val body = JSONObject()
             .put("model", MODEL)
             .put("max_tokens", MAX_TOKENS)
             .put("stream", true)
-            .put("messages", org.json.JSONArray().apply {
+            .put("messages", JSONArray().apply {
                 put(JSONObject().put("role", "user").put("content", prompt))
             })
             .toString()
@@ -120,7 +124,7 @@ class CloudProvider(
             .build()
 
         val response = executeRequest(client.newCall(request))
-        return response.use { resp ->
+        response.use { resp ->
             if (!resp.isSuccessful) {
                 val code = resp.code
                 val msg = runCatching { resp.body?.string() }.getOrNull() ?: ""
@@ -130,7 +134,6 @@ class CloudProvider(
                 throw IOException("Cloud API error HTTP $code: $msg")
             }
 
-            val results = mutableListOf<LlmResult>()
             val reader = resp.body?.charStream()?.buffered()
                 ?: throw IOException("Empty response body from cloud API")
 
@@ -142,28 +145,25 @@ class CloudProvider(
                     if (!raw.startsWith("data:")) continue
 
                     val data = raw.removePrefix("data:").trim()
-                    if (data == "[DONE]") break
-
                     val json = runCatching { JSONObject(data) }.getOrNull() ?: continue
                     when (json.optString("type")) {
                         "content_block_delta" -> {
                             val delta = json.optJSONObject("delta")
                             val text = delta?.optString("text") ?: continue
-                            if (text.isNotEmpty()) results.add(LlmResult.Token(text))
+                            if (text.isNotEmpty()) onResult(LlmResult.Token(text))
                         }
                         "message_stop" -> break
                         "error" -> {
                             val errorObj = json.optJSONObject("error")
                             val msg = errorObj?.optString("message") ?: "Unknown cloud error"
-                            results.add(LlmResult.Error(IOException("Cloud API error: $msg")))
-                            return@use results
+                            onResult(LlmResult.Error(IOException("Cloud API error: $msg")))
+                            return@use
                         }
                     }
                 }
             }
 
-            results.add(LlmResult.Complete)
-            results
+            onResult(LlmResult.Complete)
         }
     }
 
@@ -176,7 +176,11 @@ class CloudProvider(
             cont.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onResponse(call: Call, response: Response) {
-                    cont.resume(response)
+                    if (cont.isActive) {
+                        cont.resume(response)
+                    } else {
+                        response.close()
+                    }
                 }
                 override fun onFailure(call: Call, e: IOException) {
                     if (cont.isActive) cont.resumeWithException(e)

@@ -19,6 +19,7 @@ import androidx.work.WorkerParameters
 import androidx.work.await
 import androidx.work.testing.WorkManagerTestInitHelper
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
@@ -135,6 +136,14 @@ class EmbeddingTrainingWorkerTest {
         assertEquals("trainedOnCount must equal the number of seeded entries", 35, manifest.trainedOnCount)
         assertEquals("headPath must match the checkpoint file name", weightFiles[0].name, manifest.headPath)
         assertTrue("lastTrainingTimestamp must be a positive epoch-ms value", manifest.lastTrainingTimestamp > 0L)
+
+        // Room is the authoritative source of truth — verify it matches the prefs mirror
+        val roomManifest = runBlocking { db.trainingManifestDao().getManifest().first() }
+        assertNotNull("Room manifest must be written after successful training", roomManifest)
+        checkNotNull(roomManifest)
+        assertEquals("Room trainedOnCount must equal seeded entries", 35, roomManifest.trainedOnCount)
+        assertEquals("Room headPath must match the checkpoint file name", weightFiles[0].name, roomManifest.headPath)
+        assertTrue("Room lastTrainingTimestamp must be a positive epoch-ms value", roomManifest.lastTrainingTimestamp > 0L)
     }
 
     // ── Short-circuit ─────────────────────────────────────────────────────────
@@ -229,6 +238,16 @@ class EmbeddingTrainingWorkerTest {
         )
 
         coordinator.cancelAll()
+        // Poll until all work entries reach a terminal state before asserting, to avoid
+        // a race between the cancellation signal being delivered and the immediate check.
+        val cancelDeadline = System.currentTimeMillis() + 5_000L
+        while (System.currentTimeMillis() < cancelDeadline) {
+            val infos = workManager
+                .getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
+                .get()
+            if (infos.all { it.state.isFinished }) break
+            Thread.sleep(50)
+        }
         val afterCancel = workManager
             .getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
             .get()
@@ -378,11 +397,19 @@ class EmbeddingTrainingWorkerTest {
         // Wait for the worker to enter RUNNING before cancelling; cancelling while still
         // ENQUEUED races the scheduler and may leave the state as CANCELLED-before-start,
         // which some WorkManager versions do not reflect as WorkInfo.State.CANCELLED.
+        var seenRunning = false
         val runDeadline = System.currentTimeMillis() + 30_000L
         while (System.currentTimeMillis() < runDeadline) {
-            if (workManager.getWorkInfoById(request.id).get()?.state == WorkInfo.State.RUNNING) break
+            if (workManager.getWorkInfoById(request.id).get()?.state == WorkInfo.State.RUNNING) {
+                seenRunning = true
+                break
+            }
             Thread.sleep(100)
         }
+        assertTrue(
+            "Worker must enter RUNNING state before cancellation; did not reach RUNNING within 30s",
+            seenRunning,
+        )
         workManager.cancelWorkById(request.id)
 
         awaitWorkerTerminal(request.id, timeoutMs = 30_000)
