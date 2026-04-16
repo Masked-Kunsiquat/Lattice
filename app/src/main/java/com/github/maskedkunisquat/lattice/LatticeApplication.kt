@@ -7,6 +7,7 @@ import androidx.room.Room
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.KeyProvider
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifestStore
 import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
@@ -21,7 +22,15 @@ import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import com.github.maskedkunisquat.lattice.core.logic.SearchRepository
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedManager
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
+import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
+import com.github.maskedkunisquat.lattice.core.logic.TrainingDependencies
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 import java.io.File
@@ -31,7 +40,11 @@ private val Application.settingsDataStore by preferencesDataStore(name = "lattic
 private const val TAG = "LatticeApplication"
 private const val PREF_ENCRYPTION_DONE = "encryption_migration_done"
 
-class LatticeApplication : Application() {
+class LatticeApplication : Application(), TrainingDependencies {
+
+    // TrainingDependencies — exposes DAOs to EmbeddingTrainingWorker via applicationContext cast
+    override val journalDao get() = database.journalDao()
+    override val manifestDao get() = database.trainingManifestDao()
 
     val database by lazy {
         val passphrase = KeyProvider.getOrCreateKey(this)
@@ -48,6 +61,7 @@ class LatticeApplication : Application() {
                 LatticeDatabase.MIGRATION_8_9,
                 LatticeDatabase.MIGRATION_9_10,
                 LatticeDatabase.MIGRATION_10_11,
+                LatticeDatabase.MIGRATION_11_12,
             )
             .build()
     }
@@ -67,6 +81,20 @@ class LatticeApplication : Application() {
     val placeRepository by lazy { PlaceRepository(database.placeDao()) }
 
     val settingsRepository by lazy { SettingsRepository(settingsDataStore) }
+
+    val workManagerScheduler by lazy { WorkManagerTrainingScheduler(this) }
+
+    val trainingCoordinator by lazy {
+        TrainingCoordinator(
+            scheduler = workManagerScheduler,
+            weightFilesDir = filesDir,
+            prefs = getSharedPreferences(AffectiveManifestStore.PREFS_NAME, MODE_PRIVATE),
+            manifestDao = database.trainingManifestDao(),
+        )
+    }
+
+    /** Application-scoped coroutine scope for long-lived observers (e.g. settings → WorkManager). */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val cloudCredentialStore by lazy { CloudCredentialStore(this) }
 
@@ -132,6 +160,18 @@ class LatticeApplication : Application() {
 
         embeddingProvider.initialize(this)
         Thread { localFallbackProvider.initialize() }.start()
+
+        // Schedule periodic MLP refinement (no-op if already enqueued) and observe
+        // the personalization toggle so the job is cancelled/re-enqueued reactively.
+        applicationScope.launch {
+            settingsRepository.settings
+                .map { it.personalizationEnabled }
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    if (enabled) trainingCoordinator.scheduleIfNeeded()
+                    else trainingCoordinator.cancelAll()
+                }
+        }
     }
 
     /**

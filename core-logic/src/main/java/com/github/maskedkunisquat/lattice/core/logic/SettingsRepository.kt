@@ -25,6 +25,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val CLOUD_PROVIDER = stringPreferencesKey("cloud_provider")
         val TRANSIT_RETENTION_DAYS = intPreferencesKey("transit_retention_days")
         val EXPORT_INCLUDE_TRANSIT_LOG = booleanPreferencesKey("export_include_transit_log")
+        val PERSONALIZATION_ENABLED = booleanPreferencesKey("personalization_enabled")
     }
 
     val settings: Flow<LatticeSettings> = dataStore.data.map { prefs ->
@@ -33,6 +34,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             cloudProvider = prefs[Keys.CLOUD_PROVIDER] ?: "none",
             transitRetentionDays = prefs[Keys.TRANSIT_RETENTION_DAYS] ?: 90,
             exportIncludeTransitLog = prefs[Keys.EXPORT_INCLUDE_TRANSIT_LOG] ?: true,
+            personalizationEnabled = prefs[Keys.PERSONALIZATION_ENABLED] ?: true,
         )
     }
 
@@ -52,6 +54,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setExportIncludeTransitLog(include: Boolean) {
         dataStore.edit { it[Keys.EXPORT_INCLUDE_TRANSIT_LOG] = include }
     }
+
+    suspend fun setPersonalizationEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.PERSONALIZATION_ENABLED] = enabled }
+    }
 }
 
 data class LatticeSettings(
@@ -59,4 +65,5 @@ data class LatticeSettings(
     val cloudProvider: String = "none",
     val transitRetentionDays: Int = 90,
     val exportIncludeTransitLog: Boolean = true,
+    val personalizationEnabled: Boolean = true,
 )

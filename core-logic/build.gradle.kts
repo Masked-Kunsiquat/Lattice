@@ -59,6 +59,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.androidx.room.ktx)
     implementation(libs.onnxruntime.android)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     // org.json is bundled in the Android SDK but not on the desktop JVM.
@@ -73,4 +75,5 @@ dependencies {
     androidTestImplementation(libs.androidx.runner)
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.benchmark.junit4)
+    androidTestImplementation(libs.androidx.work.testing)
 }

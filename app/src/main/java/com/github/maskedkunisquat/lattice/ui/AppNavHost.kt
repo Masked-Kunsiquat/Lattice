@@ -58,7 +58,7 @@ fun AppNavHost(app: LatticeApplication) {
                     NavigationBarItem(
                         selected = currentDestination
                             ?.hierarchy
-                            ?.any { it.route == dest.route } == true,
+                            ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true,
                         onClick = {
                             navController.navigate(dest.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
@@ -126,6 +126,7 @@ fun AppNavHost(app: LatticeApplication) {
                     SettingsScreen(
                         viewModel = vm,
                         onNavigateToAudit = { navController.navigate("settings/audit") },
+                        onNavigateToActivities = { navController.navigate("settings/activities") },
                         onNavigateToDebugSeed = { navController.navigate("settings/debug/seed") },
                     )
                 }
@@ -140,9 +141,13 @@ fun AppNavHost(app: LatticeApplication) {
                 }
             }
 
-            // TODO(6.5): replace with ActivityHierarchyScreen
             composable("settings/activities") {
-                PlaceholderScreen("Behavioral Activation", Modifier.testTag("screen:activities"))
+                val vm: ActivityHierarchyViewModel = viewModel(
+                    factory = ActivityHierarchyViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:activities")) {
+                    ActivityHierarchyScreen(viewModel = vm)
+                }
             }
 
             if (BuildConfig.DEBUG) {

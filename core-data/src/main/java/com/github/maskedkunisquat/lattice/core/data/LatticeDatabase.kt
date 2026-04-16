@@ -12,6 +12,7 @@ import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PhoneNumberDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TagDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TrainingManifestDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
@@ -21,6 +22,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
 import com.github.maskedkunisquat.lattice.core.data.model.Place
 import com.github.maskedkunisquat.lattice.core.data.model.Tag
+import com.github.maskedkunisquat.lattice.core.data.model.TrainingManifestEntity
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 
 @Database(
@@ -33,8 +35,9 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
         ActivityHierarchy::class,
         Tag::class,
         Place::class,
+        TrainingManifestEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(LatticeTypeConverters::class)
@@ -47,6 +50,7 @@ abstract class LatticeDatabase : RoomDatabase() {
     abstract fun activityHierarchyDao(): ActivityHierarchyDao
     abstract fun tagDao(): TagDao
     abstract fun placeDao(): PlaceDao
+    abstract fun trainingManifestDao(): TrainingManifestDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -252,6 +256,27 @@ abstract class LatticeDatabase : RoomDatabase() {
                 db.execSQL("DROP TABLE places")
                 db.execSQL("ALTER TABLE places_new RENAME TO places")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_places_name ON places (name)")
+            }
+        }
+
+        /**
+         * Adds the `training_manifest` singleton table that mirrors the affective MLP checkpoint
+         * manifest for reactive UI updates. The SharedPreferences copy (used by [AffectiveMlp.load])
+         * is not touched by this migration — both stores are written in parallel going forward.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS training_manifest (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        schemaVersion INTEGER NOT NULL,
+                        baseModelHash TEXT NOT NULL,
+                        headPath TEXT NOT NULL,
+                        trainedOnCount INTEGER NOT NULL,
+                        lastTrainingTimestamp INTEGER NOT NULL,
+                        baseLayerVersion TEXT NOT NULL
+                    )
+                """.trimIndent())
             }
         }
     }

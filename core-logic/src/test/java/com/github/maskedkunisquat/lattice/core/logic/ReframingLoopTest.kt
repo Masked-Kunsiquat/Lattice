@@ -174,10 +174,16 @@ class ReframingLoopTest {
         assertEquals(ReframingLoop.AffectiveSource.REGEX, result.getOrThrow().source)
     }
 
-    // 2.7-e: unmasked text with raw names must be rejected before reaching EmbeddingProvider or LLM
-    @Test(expected = IllegalArgumentException::class)
-    fun `runStage1AffectiveMap - rejects non-blank text without PERSON placeholders`() = runTest {
-        loopWithResponse("v=0.5 a=0.1").runStage1AffectiveMap("John Smith made me feel terrible.")
+    // 2.7-e inline review: PII enforcement belongs at the PiiShield boundary, not here.
+    // runStage1AffectiveMap cannot distinguish "unmasked raw name" from "valid entry with no
+    // person names at all" — both are non-blank strings without [PERSON_uuid] placeholders.
+    // The stage trusts its callers and passes all text through; PiiShield.mask() must be
+    // called upstream before any text reaches the ReframingLoop.
+    @Test
+    fun `runStage1AffectiveMap - passes placeholder-free text to LLM without rejection`() = runTest {
+        val result = loopWithResponse("v=0.5 a=0.1")
+            .runStage1AffectiveMap("John Smith made me feel terrible.")
+        assertTrue(result.isSuccess)
     }
 
     @Test

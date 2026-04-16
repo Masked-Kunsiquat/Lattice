@@ -13,12 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Visibility
@@ -39,16 +36,12 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberSwipeToDismissBoxState
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -57,7 +50,6 @@ import com.github.maskedkunisquat.lattice.BuildConfig
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -85,6 +77,7 @@ private val CLOUD_PROVIDERS = listOf(
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onNavigateToAudit: () -> Unit,
+    onNavigateToActivities: () -> Unit,
     onNavigateToDebugSeed: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -93,6 +86,8 @@ fun SettingsScreen(
     val apiKeySaved by viewModel.apiKeySaved.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val copyProgress by viewModel.copyProgress.collectAsStateWithLifecycle()
+    val manifest by viewModel.manifest.collectAsStateWithLifecycle()
+    val isResetting by viewModel.isResetting.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -116,31 +111,6 @@ fun SettingsScreen(
         CloudEnableWarningDialog(
             onConfirm = viewModel::confirmCloudEnable,
             onDismiss = viewModel::dismissCloudEnableDialog,
-        )
-    }
-
-    var activityDialogTarget by remember { mutableStateOf<ActivityHierarchy?>(null) }
-    var showAddDialog by remember { mutableStateOf(false) }
-
-    if (showAddDialog) {
-        ActivityEditDialog(
-            initial = null,
-            onConfirm = { name, diff, cat ->
-                viewModel.insertActivity(name, diff, cat)
-                showAddDialog = false
-            },
-            onDismiss = { showAddDialog = false },
-        )
-    }
-
-    activityDialogTarget?.let { activity ->
-        ActivityEditDialog(
-            initial = activity,
-            onConfirm = { name, diff, cat ->
-                viewModel.updateActivity(activity.copy(taskName = name, difficulty = diff, valueCategory = cat))
-                activityDialogTarget = null
-            },
-            onDismiss = { activityDialogTarget = null },
         )
     }
 
@@ -175,6 +145,18 @@ fun SettingsScreen(
                 )
             }
 
+            // ── Personalization ──────────────────────────────────────────────
+            item { SectionHeader("Personalization") }
+            item {
+                PersonalizationSection(
+                    personalizationEnabled = settings.personalizationEnabled,
+                    manifest = manifest,
+                    isResetting = isResetting,
+                    onToggle = viewModel::setPersonalizationEnabled,
+                    onReset = viewModel::resetPersonalization,
+                )
+            }
+
             // ── Audit Trail ──────────────────────────────────────────────────
             item { SectionHeader("Audit Trail") }
             item {
@@ -187,43 +169,23 @@ fun SettingsScreen(
             }
 
             // ── Behavioral Activation ────────────────────────────────────────
+            item { SectionHeader("Behavioral Activation") }
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Behavioral Activation",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    IconButton(onClick = { showAddDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add activity")
-                    }
-                }
-            }
-
-            if (activities.isEmpty()) {
-                item {
-                    Text(
-                        "No activities yet. Tap + to add one.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
-                }
-            } else {
-                items(activities, key = { it.id }) { activity ->
-                    ActivityItem(
-                        activity = activity,
-                        onEdit = { activityDialogTarget = activity },
-                        onDelete = { viewModel.deleteActivity(activity) },
-                    )
-                }
+                val activityCount = activities.size
+                ListItem(
+                    headlineContent = { Text("Manage Activities") },
+                    supportingContent = {
+                        Text(
+                            when (activityCount) {
+                                0    -> "No activities yet"
+                                1    -> "1 activity"
+                                else -> "$activityCount activities"
+                            }
+                        )
+                    },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onNavigateToActivities),
+                )
             }
 
             // ── Data Portability ─────────────────────────────────────────────
@@ -320,6 +282,97 @@ private fun LocalModelSection(
             }
             else -> Unit
         }
+    }
+}
+
+// ── Personalization section ───────────────────────────────────────────────────
+
+@Composable
+private fun PersonalizationSection(
+    personalizationEnabled: Boolean,
+    manifest: AffectiveManifest?,
+    isResetting: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onReset: () -> Unit,
+) {
+    var showResetDialog by remember { mutableStateOf(false) }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Reset personalization?") },
+            text = {
+                Text(
+                    "All learned preferences will be deleted and the model will restart " +
+                    "from its default state on next launch. This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { onReset(); showResetDialog = false },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Personalization", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Improves mood detection over time using your corrections. " +
+                    "All learning happens on this device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = personalizationEnabled, onCheckedChange = onToggle)
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        val trainedCount = manifest?.trainedOnCount ?: 0
+        val lastTimestamp = manifest?.lastTrainingTimestamp ?: 0L
+        AboutRow("Trained on", "$trainedCount corrections")
+        AboutRow("Last updated", formatRelativeTimestamp(lastTimestamp))
+
+        // 3.6-g: only show the reset button when there is actually something to reset,
+        // and disable it while a reset is already in progress (double-tap guard).
+        if (trainedCount > 0 || isResetting) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = { showResetDialog = true },
+                enabled = !isResetting,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text(if (isResetting) "Resetting…" else "Reset personalization")
+            }
+        }
+    }
+}
+
+private fun formatRelativeTimestamp(timestamp: Long): String {
+    if (timestamp == 0L) return "Never"
+    val diff = System.currentTimeMillis() - timestamp
+    return when {
+        diff < 60_000L              -> "Just now"
+        diff < 3_600_000L           -> "${diff / 60_000} min ago"
+        diff < 86_400_000L          -> "${diff / 3_600_000} hr ago"
+        diff < 2 * 86_400_000L      -> "Yesterday"
+        else                        -> (diff / 86_400_000).let { d -> if (d == 1L) "1 day ago" else "$d days ago" }
     }
 }
 
@@ -492,108 +545,6 @@ private fun ApiKeySection(
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Save key") }
     }
-}
-
-// ── Activity list item ────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ActivityItem(
-    activity: ActivityHierarchy,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) { onDelete(); true } else false
-        }
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error)
-            }
-        },
-        enableDismissFromStartToEnd = false,
-    ) {
-        Surface {
-            ListItem(
-                headlineContent = { Text(activity.taskName) },
-                supportingContent = {
-                    Text("Difficulty ${activity.difficulty}/10 · ${activity.valueCategory}")
-                },
-                modifier = Modifier.clickable(onClick = onEdit),
-            )
-        }
-    }
-}
-
-// ── Activity add/edit dialog ──────────────────────────────────────────────────
-
-@Composable
-private fun ActivityEditDialog(
-    initial: ActivityHierarchy?,
-    onConfirm: (name: String, difficulty: Int, category: String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var name by remember { mutableStateOf(initial?.taskName ?: "") }
-    var difficulty by remember { mutableFloatStateOf((initial?.difficulty ?: 5).toFloat()) }
-    var category by remember { mutableStateOf(initial?.valueCategory ?: "") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Add Activity" else "Edit Activity") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Task name") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Column {
-                    Text(
-                        "Difficulty: ${difficulty.toInt()}/10",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Slider(
-                        value = difficulty,
-                        onValueChange = { difficulty = it },
-                        valueRange = 0f..10f,
-                        steps = 9,
-                    )
-                }
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Value category") },
-                    placeholder = { Text("e.g. connection, health, creativity") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(name, difficulty.toInt(), category) },
-                enabled = name.isNotBlank() && category.isNotBlank(),
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
 }
 
 // ── Cloud enable warning dialog ───────────────────────────────────────────────

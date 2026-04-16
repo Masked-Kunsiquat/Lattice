@@ -161,8 +161,8 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
 **Blocking on:** Milestone 2 (`AffectiveMlpTrainer` complete) + Milestone 1 (schema v11 populated with real user labels).
 
 ### 3.1 `EmbeddingTrainingWorker`
-- [ ] Create `core-logic/src/main/java/.../EmbeddingTrainingWorker.kt` (extends `CoroutineWorker`)
-- [ ] `doWork()` steps:
+- [x] Create `core-logic/src/main/java/.../EmbeddingTrainingWorker.kt` (extends `CoroutineWorker`)
+- [x] `doWork()` steps:
   1. Read `lastTrainingTimestamp` from manifest
   2. Call `journalDao.countLabeledEntriesSince(lastTrainingTimestamp)` — if `< 30`, return `Result.success()` immediately
   3. Fetch full sample batch: `journalDao.getLabeledEntriesSince(lastTrainingTimestamp)` — returns `List<JournalEntry>` with non-null `userValence`/`userArousal`
@@ -173,33 +173,60 @@ Derived from `training-idea.md`. Three sequential milestones. Each milestone is 
   8. Write updated manifest (bump `trainedOnCount`, update `lastTrainingTimestamp`, update `headPath`)
   9. Delete orphaned `affective_head_*.bin` files not matching new `headPath`
   10. Return `Result.success()`
-- [ ] Set `ForegroundInfo` with a silent (no sound) notification: "Personalizing Lattice…" — required API 31+
-- [ ] Handle `CancellationException` from `isStopped` check: save partial weights before exiting
+- [x] Set `ForegroundInfo` with a silent (no sound) notification: "Personalizing Lattice…" — required API 31+
+- [x] Handle `CancellationException` from `isStopped` check: save partial weights before exiting
 
 ### 3.2 `TrainingCoordinator` (`:core-logic`)
-- [ ] Create `TrainingCoordinator.kt` — thin wrapper that registers/cancels the WorkManager request
-- [ ] `scheduleIfNeeded(context: Context)`: enqueues `PeriodicWorkRequest` with `ExistingPeriodicWorkPolicy.KEEP` (no-op if already enqueued)
-- [ ] `cancelAll(context: Context)`: for settings "disable personalization" toggle
-- [ ] Constraints: `requiresCharging + requiresDeviceIdle + requiresStorageNotLow`
-- [ ] Period: 24 hours, backoff: `EXPONENTIAL` starting at 1 hour
+- [x] Create `TrainingCoordinator.kt` — thin wrapper that registers/cancels the WorkManager request
+- [x] `scheduleIfNeeded(context: Context)`: enqueues `PeriodicWorkRequest` with `ExistingPeriodicWorkPolicy.KEEP` (no-op if already enqueued)
+- [x] `cancelAll(context: Context)`: for settings "disable personalization" toggle
+- [x] Constraints: `requiresCharging + requiresDeviceIdle + requiresStorageNotLow`
+- [x] Period: 24 hours. Note: `setBackoffCriteria` is incompatible with `requiresDeviceIdle` on JobScheduler — failures are silently retried on the next 24-hour window instead.
 
 ### 3.3 Wire into `LatticeApplication`
-- [ ] Call `trainingCoordinator.scheduleIfNeeded(this)` in `LatticeApplication.onCreate()` — after DB and DAOs are initialized
-- [ ] Add `SettingsRepository` key `personalizationEnabled: Boolean` (default `true`)
-- [ ] In `SettingsRepository` observer: when toggled off → `trainingCoordinator.cancelAll()`; when toggled on → `trainingCoordinator.scheduleIfNeeded()`
+- [x] Call `trainingCoordinator.scheduleIfNeeded(this)` in `LatticeApplication.onCreate()` — after DB and DAOs are initialized
+- [x] Add `SettingsRepository` key `personalizationEnabled: Boolean` (default `true`)
+- [x] In `LatticeApplication.onCreate()`: collect `settingsRepository.settings.map { it.personalizationEnabled }.distinctUntilChanged()` on `applicationScope`; when toggled off → `trainingCoordinator.cancelAll()`; when toggled on → `trainingCoordinator.scheduleIfNeeded()`
 
 ### 3.4 Settings UI
-- [ ] Add "Personalization" toggle to the existing settings screen
-- [ ] Subtitle: "Improves mood detection over time using your corrections. All learning happens on this device."
-- [ ] Show `trainedOnCount` from manifest as a read-only stat: "Trained on N corrections"
-- [ ] Show `lastTrainingTimestamp` formatted as "Last updated: <relative date>"
-- [ ] "Reset personalization" destructive action: deletes all `affective_head_*.bin` from `filesDir`, clears manifest, re-runs base warm-start on next launch
+- [x] Add "Personalization" toggle to the existing settings screen
+- [x] Subtitle: "Improves mood detection over time using your corrections. All learning happens on this device."
+- [x] Show `trainedOnCount` from manifest as a read-only stat: "Trained on N corrections"
+- [x] Show `lastTrainingTimestamp` formatted as "Last updated: <relative date>"
+- [x] "Reset personalization" destructive action: deletes all `affective_head_*.bin` from `filesDir`, clears manifest, re-runs base warm-start on next launch
 
 ### 3.5 Instrumented integration test
-- [ ] Create `EmbeddingTrainingWorkerTest` using `WorkManagerTestInitHelper`
-- [ ] Seed Room with 35 entries all having `userValence`/`userArousal` set
-- [ ] Enqueue worker, call `testDriver.setAllConstraintsMet(workRequest)`, await completion
-- [ ] Assert: checkpoint file exists in `filesDir`, manifest `trainedOnCount == 35`, no orphan weight files
+- [x] Create `EmbeddingTrainingWorkerTest` using `WorkManagerTestInitHelper`
+- [x] Seed Room with 35 entries all having `userValence`/`userArousal` set
+- [x] Enqueue worker, call `testDriver.setAllConstraintsMet(workRequest)`, await completion
+- [x] Assert: checkpoint file exists in `filesDir`, manifest `trainedOnCount == 35`, no orphan weight files
+
+### 3.6 Audit follow-ups (post-implementation findings)
+
+#### Correctness
+- [x] **3.6-a** `TrainingCoordinator.resetPersonalization` — after cancelling the unique work and clearing all artifacts, `scheduleIfNeeded` is never called. The `LatticeApplication` observer uses `distinctUntilChanged()` on `personalizationEnabled`; since the toggle value hasn't changed, the observer will not re-fire. Training remains permanently dead until the user manually toggles personalization off and back on, or relaunches the app. Fix: `scheduleIfNeeded` is called from `SettingsViewModel.resetPersonalization` after `TrainingCoordinator.resetPersonalization` returns (artifact cleanup), so the job is immediately re-queued without changing `TrainingCoordinator` itself.
+- [x] **3.6-b** `EmbeddingTrainingWorker.doWork` — `CancellationException` can only be thrown at coroutine suspension points; `AffectiveMlpTrainer.trainBatch` is synchronous CPU work with no suspension points, so a WorkManager cancellation signal cannot interrupt mid-training. The `isStopped` check (post-training, line 94) and the `catch (e: CancellationException)` block are effectively unreachable during training. The KDoc promise "save partial weights before exiting" is not met on cancellation during training. Fix: add `yield()` or `ensureActive()` calls inside `trainBatch` between epochs so cancellation is cooperative.
+- [x] **3.6-c** `TrainingCoordinator.resetPersonalization` — the cancellation-wait loop exits as soon as no RUNNING entry is found. If the work is currently ENQUEUED (not yet transitioned to RUNNING), the condition is immediately true and weight-file deletion races with a worker that may be transitioning ENQUEUED → RUNNING at that moment. Fix: also require that no ENQUEUED entries remain before proceeding to file deletion, or add a short delay after `cancelUniqueWork` to let the cancellation propagate before checking state.
+
+#### Robustness
+- [x] **3.6-d** `TrainingCoordinator.resetPersonalization` — `Thread.sleep(100)` inside `withContext(Dispatchers.IO)` pins an IO thread for the full sleep duration; replace with `delay(100)` (suspending, cancellable). Similarly, `wm.getWorkInfosForUniqueWork(...).get()` is a blocking `Future.get()` call; replace with the WorkManager KTX `await()` extension (`androidx.work:work-runtime-ktx`) or a `suspendCancellableCoroutine` wrapper.
+- [x] **3.6-e** `SettingsViewModel.resetPersonalization` launches on `viewModelScope`; if the ViewModel is cleared while the 5 s cancellation poll is running, the coroutine is cancelled mid-flight and state may be left partially cleared (e.g., weight files deleted but warm-start guard not yet cleared, or manifest cleared but guard still set). Fix: run the reset on `applicationScope` (passed as a constructor dependency to `SettingsViewModel`) so it outlives the ViewModel.
+
+#### Architecture
+- [x] **3.6-f** `SettingsViewModel.resetPersonalization` instantiates `TrainingCoordinator()` inline rather than using `app.trainingCoordinator`. This diverges from the singleton pattern used for every other dependency. Add `trainingCoordinator: TrainingCoordinator` as a constructor parameter to `SettingsViewModel` and supply `app.trainingCoordinator` in `SettingsViewModel.factory`.
+
+#### UX
+- [x] **3.6-g** `PersonalizationSection` always renders the destructive "Reset personalization" button even when `manifest == null` and `trainedOnCount == 0` (no training has occurred). Gate it on `manifest != null && manifest.trainedOnCount > 0`. Also add a loading/disabled state during the async reset to prevent a double-tap from launching two concurrent `resetPersonalization` coroutines.
+- [x] **3.6-h** `formatRelativeTimestamp` — the `else` branch produces `"${diff / 86_400_000} days ago"`, yielding "1 days ago" for diffs just over one day. Use singular "day" when the quotient is 1.
+
+#### Docs
+- [x] **3.6-i** `EmbeddingTrainingWorker.buildForegroundInfo` KDoc says "required API 31+" but `FOREGROUND_SERVICE_TYPE_DATA_SYNC` was added in API 29 (Q) and the runtime guard is already `>= Build.VERSION_CODES.Q`. Update the comment to "API 29+" and note that the API 31 requirement is for the manifest `foregroundServiceType` attribute declaration, not for the Java API itself.
+
+#### Test coverage
+- [x] **3.6-j** Add post-reset re-schedule assertion to `EmbeddingTrainingWorkerTest`: after `TrainingCoordinator.resetPersonalization()` with personalization enabled, assert that `getWorkInfosForUniqueWork` contains an ENQUEUED entry. This directly exercises the fix from 3.6-a.
+- [x] **3.6-k** Add `samples.isEmpty()` path test to `EmbeddingTrainingWorkerTest`: seed entries with `embedding.size != AffectiveMlp.IN`; after worker completion assert no checkpoint file exists and manifest remains absent (same postconditions as the short-circuit test).
+- [x] **3.6-l** Add cooperative-cancellation test to `EmbeddingTrainingWorkerTest`: after the fix from 3.6-b, verify that a `WorkManager.cancelUniqueWork()` call issued during training causes partial weights to be written to the path referenced in the existing manifest.
+- [x] **3.6-m** Replace the 5 s `Thread.sleep` in `worker_withInsufficientEntries_shortCircuitsWithoutWritingArtifacts` with a poll on `WorkManager.getWorkInfoById(request.id)` until state is no longer RUNNING (mirroring the `awaitManifestWritten` pattern from the happy-path test), with a 10 s timeout.
 
 **Milestone 3 exit criteria:**
 - Worker runs end-to-end in instrumented test without error

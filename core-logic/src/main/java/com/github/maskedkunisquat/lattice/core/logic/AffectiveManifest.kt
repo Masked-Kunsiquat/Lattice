@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
 import android.content.SharedPreferences
+import com.github.maskedkunisquat.lattice.core.data.model.TrainingManifestEntity
 import org.json.JSONObject
 import java.io.InputStream
 import java.security.MessageDigest
@@ -108,6 +109,28 @@ object AffectiveManifestStore {
         )
     }
 }
+
+// ── Room ↔ domain mapping ─────────────────────────────────────────────────────
+
+/** Maps a [TrainingManifestEntity] to its [AffectiveManifest] domain representation. */
+fun TrainingManifestEntity.toAffectiveManifest() = AffectiveManifest(
+    schemaVersion         = schemaVersion,
+    baseModelHash         = baseModelHash,
+    headPath              = headPath,
+    trainedOnCount        = trainedOnCount,
+    lastTrainingTimestamp = lastTrainingTimestamp,
+    baseLayerVersion      = baseLayerVersion,
+)
+
+/** Maps an [AffectiveManifest] to a [TrainingManifestEntity] for Room persistence. */
+fun AffectiveManifest.toEntity() = TrainingManifestEntity(
+    schemaVersion         = schemaVersion,
+    baseModelHash         = baseModelHash,
+    headPath              = headPath,
+    trainedOnCount        = trainedOnCount,
+    lastTrainingTimestamp = lastTrainingTimestamp,
+    baseLayerVersion      = baseLayerVersion,
+)
 
 /**
  * Computes the SHA-256 digest of [stream] and returns it as a lowercase hex string.
