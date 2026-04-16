@@ -138,25 +138,6 @@ class EntryDetailViewModel(
     }
 
     /**
-     * Persists the accepted reframe text to [JournalEntry.reframedContent].
-     * No-op if [reframeState] is not [ReframeState.Done].
-     */
-    fun applyReframe() {
-        val reframe = (_reframeState.value as? ReframeState.Done)?.text ?: return
-        viewModelScope.launch {
-            try {
-                val maskedReframe = journalRepository.maskText(reframe)
-                journalRepository.updateReframedContent(entryId.toString(), maskedReframe)
-                _reframeState.value = ReframeState.Idle
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _reframeState.value = ReframeState.Error("Failed to save reframe: ${e.message}")
-            }
-        }
-    }
-
-    /**
      * Persists the user's mood coordinates from the circumplex grid ("How does this land?").
      * No-op if the entry is not loaded. Coordinates remain null if the user skips the grid.
      */

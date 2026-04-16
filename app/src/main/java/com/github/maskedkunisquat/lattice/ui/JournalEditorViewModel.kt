@@ -261,11 +261,37 @@ class JournalEditorViewModel(
     }
 
     fun save() {
+        savedEntryId = null  // invalidate any prior entry before the async write
+        viewModelScope.launch {
+            try {
+                persistEntry()
+                _uiState.update { it.copy(saved = true) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                savedEntryId = null
+                _uiState.update { it.copy(error = e.message ?: "Failed to save entry") }
+            }
+        }
+    }
+
+    /**
+     * Builds a [JournalEntry] from the current UI state, persists it via
+     * [JournalRepository.saveEntry], and sets [savedEntryId]. Does NOT set
+     * [EditorUiState.saved] — callers decide whether to signal a save-complete
+     * transition. Returns the persisted entry's UUID.
+     *
+     * Called by [save] (explicit user action) and by [applyReframe] when the
+     * user applies a reframe before having manually saved — the auto-save fires
+     * after Stage 1 has already updated mood coordinates in [_uiState], so the
+     * entry is persisted with valid affective data rather than the zero-vector
+     * default.
+     */
+    private suspend fun persistEntry(): UUID {
         val state = _uiState.value
         // Reuse the original entry ID when editing an existing entry so we UPDATE the row
         // rather than inserting a duplicate. For new entries, generate a fresh UUID.
         val newId = initialEntryId ?: UUID.randomUUID()
-        savedEntryId = null  // invalidate any prior entry before the async write
         // Collect UUIDs for #tag tokens still present in the text
         val tagIds = TAG_WORD_REGEX.findAll(state.text)
             .mapNotNull { state.resolvedTags[it.groupValues[1]] }
@@ -277,7 +303,6 @@ class JournalEditorViewModel(
             .mapNotNull { state.resolvedPlaces[it.groupValues[1]] }
             .distinct()
             .toList()
-
         // Substitute display-form mentions with PII sentinels before handing off to
         // JournalRepository (which will further mask any remaining plain-text names via PiiShield).
         val content = if (state.text.isBlank()) null else {
@@ -295,29 +320,21 @@ class JournalEditorViewModel(
                 }
             masked
         }
-
-        viewModelScope.launch {
-            try {
-                journalRepository.saveEntry(
-                    JournalEntry(
-                        id = newId,
-                        timestamp = System.currentTimeMillis(),
-                        content = content,
-                        valence = state.valence,
-                        arousal = state.arousal,
-                        moodLabel = state.label.name,
-                        embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
-                        tagIds = tagIds,
-                        placeIds = placeIds,
-                    )
-                )
-                savedEntryId = newId
-                _uiState.update { it.copy(saved = true) }
-            } catch (e: Exception) {
-                savedEntryId = null
-                _uiState.update { it.copy(error = e.message ?: "Failed to save entry") }
-            }
-        }
+        journalRepository.saveEntry(
+            JournalEntry(
+                id = newId,
+                timestamp = System.currentTimeMillis(),
+                content = content,
+                valence = state.valence,
+                arousal = state.arousal,
+                moodLabel = state.label.name,
+                embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
+                tagIds = tagIds,
+                placeIds = placeIds,
+            )
+        )
+        savedEntryId = newId
+        return newId
     }
 
     fun resetSaved() {
@@ -326,20 +343,27 @@ class JournalEditorViewModel(
     }
 
     /**
-     * Persists the accepted reframe to the already-saved entry and transitions
+     * Persists the accepted reframe to the saved entry and transitions
      * [EditorUiState.reframeState] back to [ReframeState.Idle].
-     * No-op when [reframeState] is not [ReframeState.Done] or [savedEntryId] is unset.
+     *
+     * If the entry has not been explicitly saved yet, [persistEntry] is called first.
+     * This auto-save fires after Stage 1 has updated mood coordinates in [_uiState],
+     * so the entry is always written with valid affective data.
+     *
+     * No-op when [reframeState] is not [ReframeState.Done].
      * No new [TransitEvent] is logged here — one was already written by the pipeline at
      * generation time.
      */
     fun applyReframe() {
-        val entryId = savedEntryId ?: return
         val reframe = (_uiState.value.reframeState as? ReframeState.Done)?.text ?: return
         viewModelScope.launch {
             try {
+                val entryId = savedEntryId ?: persistEntry()
                 journalRepository.updateReframedContent(entryId.toString(), reframe)
                 _uiState.update { it.copy(reframeState = ReframeState.Idle) }
-            } catch (e: Throwable) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Failed to save reframe: ${e.message}") }
             }
         }

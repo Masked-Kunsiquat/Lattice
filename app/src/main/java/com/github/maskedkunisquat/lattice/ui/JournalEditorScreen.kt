@@ -123,11 +123,17 @@ fun JournalEditorScreen(
                         ModelLoadState.COPYING_SHARDS ->
                             "Preparing local model… ${(copyProgress * 100).toInt()}%"
                         else ->
-                            "Loading model session… (first launch may take several minutes)"
+                            "Loading model session… (first launch may take a few minutes)"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
+                )
+                Text(
+                    text = "Running entirely on-device — no network needed.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 1.dp),
                 )
             }
         }
@@ -353,7 +359,12 @@ private fun JournalEditorContent(
                 .fillMaxWidth()
                 .weight(1f)
                 .onFocusChanged { focus -> if (!focus.isFocused) onMentionDismiss() },
-            placeholder = { Text("What's on your mind?") },
+            placeholder = {
+                Text(
+                    "What's on your mind?\n\n" +
+                    "Tip: type @name to mention a person, #tag to add a tag, !place to log a location."
+                )
+            },
             visualTransformation = PiiHighlightTransformation(
                 highlightColor = MaterialTheme.colorScheme.tertiary,
                 tagHighlightColor = MaterialTheme.colorScheme.secondary,
