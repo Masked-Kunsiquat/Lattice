@@ -46,15 +46,15 @@ coroutine. Name / place / tag are cheap LIKE queries and share one debounced lau
 
 ### Tasks
 
-- [ ] Add `SearchHistoryViewModel` with `SearchUiState(query, expanded, activeTab, entryResults, peopleResults, placeResults, tagResults, isLoading)`
-- [ ] Wire `SearchRepository`, `PeopleRepository`, `PlaceRepository`, `TagRepository` into the VM
-- [ ] Implement debounced query dispatch — semantic search cancels on each keystroke; LIKE queries debounce 150 ms
-- [ ] Build `SearchBar` composable in `JournalHistoryScreen` — collapsed pill above the `LazyColumn`, expanded overlay with `TabRow`
-- [ ] Entry results row — mood label chip + 2-line content snippet, tap navigates to `EntryDetailScreen`
-- [ ] People results row — display name + relationship chip + vibeScore dot, tap navigates to `PersonDetailScreen` (stub until M6)
-- [ ] Place results row — name + entry count
-- [ ] Tag results row — name + entry count
-- [ ] Back-press / focus loss collapses the `SearchBar` and clears results
+- [x] Add `SearchHistoryViewModel` with `SearchUiState(query, expanded, activeTab, entryResults, peopleResults, placeResults, tagResults, isLoading)`
+- [x] Wire `SearchRepository`, `PeopleRepository`, `PlaceRepository`, `TagRepository` into the VM
+- [x] Implement debounced query dispatch — semantic search cancels on each keystroke; LIKE queries debounce 150 ms
+- [x] Build `SearchBar` composable in `JournalHistoryScreen` — collapsed pill above the `LazyColumn`, expanded overlay with `TabRow`
+- [x] Entry results row — mood label chip + 2-line content snippet, tap navigates to `EntryDetailScreen`
+- [x] People results row — display name + relationship chip + vibeScore dot, tap navigates to `PersonDetailScreen` (stub until M6)
+- [x] Place results row — name + entry count
+- [x] Tag results row — name + entry count
+- [x] Back-press / focus loss collapses the `SearchBar` and clears results
 
 ---
 

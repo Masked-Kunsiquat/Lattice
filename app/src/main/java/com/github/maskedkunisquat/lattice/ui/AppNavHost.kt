@@ -93,9 +93,13 @@ fun AppNavHost(app: LatticeApplication) {
                 val vm: JournalHistoryViewModel = viewModel(
                     factory = JournalHistoryViewModel.factory(app),
                 )
+                val searchVm: SearchHistoryViewModel = viewModel(
+                    factory = SearchHistoryViewModel.factory(app),
+                )
                 Box(Modifier.fillMaxSize().testTag("screen:history")) {
                     JournalHistoryScreen(
                         viewModel = vm,
+                        searchViewModel = searchVm,
                         onOpenEntry = { entryId ->
                             navController.navigate("history/$entryId")
                         },
