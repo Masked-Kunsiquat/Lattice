@@ -9,7 +9,9 @@ import androidx.work.WorkManager
 import androidx.work.await
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingTrainingWorker
 import com.github.maskedkunisquat.lattice.core.logic.TrainingScheduler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
 /**
@@ -76,14 +78,16 @@ class WorkManagerTrainingScheduler(private val context: Context) : TrainingSched
 
         val deadline = System.currentTimeMillis() + 5_000L
         while (System.currentTimeMillis() < deadline) {
-            val infos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).await()
-            if (infos.none {
-                it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
-            }) break
+            val infos = withContext(Dispatchers.IO) {
+                wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
+            }
+            if (infos.none { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) break
             delay(100)
         }
 
-        val finalInfos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).await()
+        val finalInfos = withContext(Dispatchers.IO) {
+            wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).get()
+        }
         check(finalInfos.none { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) {
             "EmbeddingTrainingWorker did not quiesce within 5 s timeout; remaining states: ${
                 finalInfos.map { it.state }

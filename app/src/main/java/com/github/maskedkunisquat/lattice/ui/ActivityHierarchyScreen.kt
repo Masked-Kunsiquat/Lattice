@@ -34,7 +34,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -261,9 +260,9 @@ private fun ActivityHierarchyEditDialog(
     onConfirm: (name: String, difficulty: Int, category: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var name by rememberSaveable { mutableStateOf(initial?.taskName ?: "") }
-    var difficulty by rememberSaveable { mutableStateOf((initial?.difficulty ?: 5).toFloat()) }
-    var category by rememberSaveable { mutableStateOf(initial?.valueCategory ?: "") }
+    var name by remember { mutableStateOf(initial?.taskName ?: "") }
+    var difficulty by remember { mutableStateOf((initial?.difficulty ?: 5).toFloat()) }
+    var category by remember { mutableStateOf(initial?.valueCategory ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
