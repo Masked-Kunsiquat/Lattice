@@ -261,7 +261,6 @@ class JournalEditorViewModel(
     }
 
     fun save() {
-        savedEntryId = null  // invalidate any prior entry before the async write
         viewModelScope.launch {
             try {
                 persistEntry()
@@ -269,7 +268,6 @@ class JournalEditorViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                savedEntryId = null
                 _uiState.update { it.copy(error = e.message ?: "Failed to save entry") }
             }
         }
@@ -289,9 +287,10 @@ class JournalEditorViewModel(
      */
     private suspend fun persistEntry(): UUID {
         val state = _uiState.value
-        // Reuse the original entry ID when editing an existing entry so we UPDATE the row
-        // rather than inserting a duplicate. For new entries, generate a fresh UUID.
-        val newId = initialEntryId ?: UUID.randomUUID()
+        // Priority: savedEntryId (already persisted this session) → initialEntryId (opened
+        // from history) → fresh UUID (brand-new entry). This ensures repeated Save presses
+        // update the same row rather than inserting duplicates.
+        val newId = savedEntryId ?: initialEntryId ?: UUID.randomUUID()
         // Collect UUIDs for #tag tokens still present in the text
         val tagIds = TAG_WORD_REGEX.findAll(state.text)
             .mapNotNull { state.resolvedTags[it.groupValues[1]] }
