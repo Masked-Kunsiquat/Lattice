@@ -57,7 +57,12 @@ class EmbeddingTrainingWorker(
         )
         // Room is the authoritative manifest source; SharedPreferences is only a mirror for
         // AffectiveMlp.load() base-model-hash verification.
-        val manifest = manifestDao.getManifest().first()?.toAffectiveManifest()
+        val rawManifest = manifestDao.getManifest().first()?.toAffectiveManifest()
+        // Pre-validate: loadFromManifest checks schema version and model hash.
+        // If it returns null the manifest is stale/incompatible — treat as a full reset so
+        // trainedOnCount, baseModelHash, and lastTrainingTimestamp are not carried forward.
+        val validatedMlp = AffectiveMlp.loadFromManifest(rawManifest, applicationContext)
+        val manifest = if (validatedMlp != null) rawManifest else null
         val lastTimestamp = manifest?.lastTrainingTimestamp ?: 0L
 
         // Step 2 — gate: skip if insufficient labeled entries in the closed window
@@ -86,10 +91,8 @@ class EmbeddingTrainingWorker(
             return Result.success()
         }
 
-        // Step 5 — load weights from the Room-backed manifest (or Xavier init).
-        // Uses loadFromManifest so the model is always initialised from the authoritative
-        // DAO manifest already fetched above, not from a potentially stale SharedPreferences mirror.
-        val mlp = AffectiveMlp.loadFromManifest(manifest, applicationContext) ?: AffectiveMlp()
+        // Step 5 — use the pre-validated weights (or Xavier init if manifest was rejected/absent).
+        val mlp = validatedMlp ?: AffectiveMlp()
 
         // Steps 6–9: train, save, manifest, cleanup — with cancellation guard
         val trainer = AffectiveMlpTrainer(mlp, epochs = TRAIN_EPOCHS)

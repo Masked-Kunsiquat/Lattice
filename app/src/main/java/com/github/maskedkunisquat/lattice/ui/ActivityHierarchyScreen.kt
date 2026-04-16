@@ -32,9 +32,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,11 +48,29 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+
+// ── MVI contract ──────────────────────────────────────────────────────────────
+
+sealed class ActivityIntent {
+    data class Insert(val name: String, val difficulty: Int, val category: String) : ActivityIntent()
+    data class Update(val activity: ActivityHierarchy) : ActivityIntent()
+    data class Delete(val activity: ActivityHierarchy) : ActivityIntent()
+    object OpenAddDialog : ActivityIntent()
+    object DismissDialog : ActivityIntent()
+    data class OpenEditDialog(val activity: ActivityHierarchy) : ActivityIntent()
+}
+
+data class ActivityScreenState(
+    val activities: List<ActivityHierarchy> = emptyList(),
+    val showAddDialog: Boolean = false,
+    val editTarget: ActivityHierarchy? = null,
+)
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
@@ -60,37 +78,46 @@ class ActivityHierarchyViewModel(app: LatticeApplication) : ViewModel() {
 
     private val dao = app.database.activityHierarchyDao()
 
-    val activities: StateFlow<List<ActivityHierarchy>> =
-        dao.getAllActivities().stateIn(
-            viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
-        )
+    private val _uiState = MutableStateFlow(ActivityScreenState())
+    val uiState: StateFlow<ActivityScreenState> = _uiState.asStateFlow()
 
-    fun insertActivity(name: String, difficulty: Int, category: String) {
+    init {
         viewModelScope.launch {
-            dao.insertActivity(
-                ActivityHierarchy(
-                    id = UUID.randomUUID(),
-                    taskName = name.trim(),
-                    difficulty = difficulty,
-                    valueCategory = category.trim(),
-                )
-            )
+            dao.getAllActivities().collect { activities ->
+                _uiState.update { it.copy(activities = activities) }
+            }
         }
     }
 
-    fun updateActivity(activity: ActivityHierarchy) {
-        viewModelScope.launch {
-            dao.updateActivity(
-                activity.copy(
-                    taskName = activity.taskName.trim(),
-                    valueCategory = activity.valueCategory.trim(),
+    fun processIntent(intent: ActivityIntent) {
+        when (intent) {
+            is ActivityIntent.Insert -> viewModelScope.launch {
+                dao.insertActivity(
+                    ActivityHierarchy(
+                        id = UUID.randomUUID(),
+                        taskName = intent.name.trim(),
+                        difficulty = intent.difficulty,
+                        valueCategory = intent.category.trim(),
+                    )
                 )
-            )
+                _uiState.update { it.copy(showAddDialog = false) }
+            }
+            is ActivityIntent.Update -> viewModelScope.launch {
+                dao.updateActivity(
+                    intent.activity.copy(
+                        taskName = intent.activity.taskName.trim(),
+                        valueCategory = intent.activity.valueCategory.trim(),
+                    )
+                )
+                _uiState.update { it.copy(editTarget = null) }
+            }
+            is ActivityIntent.Delete -> viewModelScope.launch {
+                dao.deleteActivity(intent.activity)
+            }
+            ActivityIntent.OpenAddDialog -> _uiState.update { it.copy(showAddDialog = true) }
+            ActivityIntent.DismissDialog -> _uiState.update { it.copy(showAddDialog = false, editTarget = null) }
+            is ActivityIntent.OpenEditDialog -> _uiState.update { it.copy(editTarget = intent.activity) }
         }
-    }
-
-    fun deleteActivity(activity: ActivityHierarchy) {
-        viewModelScope.launch { dao.deleteActivity(activity) }
     }
 
     companion object {
@@ -106,43 +133,41 @@ class ActivityHierarchyViewModel(app: LatticeApplication) : ViewModel() {
 
 @Composable
 fun ActivityHierarchyScreen(viewModel: ActivityHierarchyViewModel) {
-    val activities by viewModel.activities.collectAsStateWithLifecycle()
-    var showAddDialog by remember { mutableStateOf(false) }
-    var activityDialogTarget by remember { mutableStateOf<ActivityHierarchy?>(null) }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    if (showAddDialog) {
+    if (uiState.showAddDialog) {
         ActivityHierarchyEditDialog(
             initial = null,
             onConfirm = { name, diff, cat ->
-                viewModel.insertActivity(name, diff, cat)
-                showAddDialog = false
+                viewModel.processIntent(ActivityIntent.Insert(name, diff, cat))
             },
-            onDismiss = { showAddDialog = false },
+            onDismiss = { viewModel.processIntent(ActivityIntent.DismissDialog) },
         )
     }
 
-    activityDialogTarget?.let { activity ->
+    uiState.editTarget?.let { activity ->
         ActivityHierarchyEditDialog(
             initial = activity,
             onConfirm = { name, diff, cat ->
-                viewModel.updateActivity(activity.copy(taskName = name, difficulty = diff, valueCategory = cat))
-                activityDialogTarget = null
+                viewModel.processIntent(
+                    ActivityIntent.Update(activity.copy(taskName = name, difficulty = diff, valueCategory = cat))
+                )
             },
-            onDismiss = { activityDialogTarget = null },
+            onDismiss = { viewModel.processIntent(ActivityIntent.DismissDialog) },
         )
     }
 
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = { viewModel.processIntent(ActivityIntent.OpenAddDialog) },
                 modifier = Modifier.testTag("fab:add-activity"),
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add activity")
             }
         },
     ) { innerPadding ->
-        if (activities.isEmpty()) {
+        if (uiState.activities.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -166,11 +191,11 @@ fun ActivityHierarchyScreen(viewModel: ActivityHierarchyViewModel) {
                     .testTag("list:activities"),
                 contentPadding = PaddingValues(bottom = 88.dp),
             ) {
-                items(activities, key = { it.id }) { activity ->
+                items(uiState.activities, key = { it.id }) { activity ->
                     ActivityHierarchyItem(
                         activity = activity,
-                        onEdit = { activityDialogTarget = activity },
-                        onDelete = { viewModel.deleteActivity(activity) },
+                        onEdit = { viewModel.processIntent(ActivityIntent.OpenEditDialog(activity)) },
+                        onDelete = { viewModel.processIntent(ActivityIntent.Delete(activity)) },
                     )
                 }
             }
@@ -236,9 +261,9 @@ private fun ActivityHierarchyEditDialog(
     onConfirm: (name: String, difficulty: Int, category: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var name by remember { mutableStateOf(initial?.taskName ?: "") }
-    var difficulty by remember { mutableFloatStateOf((initial?.difficulty ?: 5).toFloat()) }
-    var category by remember { mutableStateOf(initial?.valueCategory ?: "") }
+    var name by rememberSaveable { mutableStateOf(initial?.taskName ?: "") }
+    var difficulty by rememberSaveable { mutableStateOf((initial?.difficulty ?: 5).toFloat()) }
+    var category by rememberSaveable { mutableStateOf(initial?.valueCategory ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,

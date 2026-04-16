@@ -58,7 +58,7 @@ fun AppNavHost(app: LatticeApplication) {
                     NavigationBarItem(
                         selected = currentDestination
                             ?.hierarchy
-                            ?.any { it.route?.startsWith(dest.route) == true } == true,
+                            ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true,
                         onClick = {
                             navController.navigate(dest.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {

@@ -463,18 +463,19 @@ class EmbeddingTrainingWorkerTest {
     }
 
     /**
-     * Polls until [AffectiveManifestStore] contains a manifest or the timeout elapses.
-     * The manifest is the last artifact written in a successful training run, making it
-     * a reliable completion signal for the happy-path test.
+     * Polls until the Room [TrainingManifestDao] contains a manifest or the timeout elapses.
+     * Room is the authoritative source of truth; the SharedPreferences mirror is verified
+     * separately as a postcondition in the happy-path test.
      */
     private fun awaitManifestWritten(timeoutMs: Long) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            if (AffectiveManifestStore.read(prefs) != null) return
+            val roomManifest = runBlocking { db.trainingManifestDao().getManifest().first() }
+            if (roomManifest != null) return
             Thread.sleep(100)
         }
         throw AssertionError(
-            "Timed out after ${timeoutMs}ms waiting for the training manifest to be written. " +
+            "Timed out after ${timeoutMs}ms waiting for the training manifest to be written to Room. " +
             "This likely means doWork() did not complete or threw an uncaught exception."
         )
     }

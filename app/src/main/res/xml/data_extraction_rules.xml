@@ -13,17 +13,21 @@
                             without the key is pointless; including both would undermine
                             the per-device isolation guarantee.
 
-  Everything else (DataStore app settings, training metadata, etc.) is safe to back up.
+  Everything else (DataStore app settings, training metadata, etc.) is currently expected to be safe to back up.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="cloud_credentials.xml"/>
         <exclude domain="sharedpref" path="lattice_db_prefs.xml"/>
         <exclude domain="database"   path="lattice.db"/>
+        <exclude domain="database"   path="lattice.db-wal"/>
+        <exclude domain="database"   path="lattice.db-shm"/>
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="cloud_credentials.xml"/>
         <exclude domain="sharedpref" path="lattice_db_prefs.xml"/>
         <exclude domain="database"   path="lattice.db"/>
+        <exclude domain="database"   path="lattice.db-wal"/>
+        <exclude domain="database"   path="lattice.db-shm"/>
     </device-transfer>
 </data-extraction-rules>
