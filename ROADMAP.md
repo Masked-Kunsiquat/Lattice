@@ -142,14 +142,14 @@ reliably formatted on the first pass (fewer malformed outputs to handle).
 
 **Tasks:**
 
-- [ ] Add MediaPipe Tasks dependency (`com.google.mediapipe:tasks-genai`) to `:core-logic`
-- [ ] Add Gemma 3 1B `.task` model to `downloadModels` Gradle task (source: Kaggle / HuggingFace `google/gemma-3-1b-it-litert-preview`)
-- [ ] Rewrite `LocalFallbackProvider` against `LlmInference` API — streaming via `LlmInference.generateAsync()`, `ModelLoadState` flow preserved
-- [ ] Remove Llama shard copy logic (`copyAssetsToFilesDir`, `ASSET_FILES`) — MediaPipe handles model loading from a single file path
-- [ ] Remove `LlamaTokenizer`, `LlamaTokenizerTest` — MediaPipe tokenizes internally
-- [ ] Remove ORT KV-cache forward-pass loop (`runForwardPass`, `nativeBytesAt`, `nativeFloatsAt`, `greedySample`) — all replaced by the MediaPipe session
-- [ ] Update `downloadModels` Gradle task to fetch Gemma 1B instead of (or alongside) Llama shards; update `CLAUDE.md` assets table
-- [ ] Update `LatticeApplication` wiring — `localFallbackProvider.initialize()` call stays, internals change
+- [x] Add MediaPipe Tasks dependency (`com.google.mediapipe:tasks-genai`) to `:core-logic`
+- [x] Add Gemma 3 1B `.task` model to `downloadModels` Gradle task (source: Kaggle / HuggingFace `google/gemma-3-1b-it-litert-preview`)
+- [x] Rewrite `LocalFallbackProvider` against `LlmInference` API — streaming via `LlmInference.generateAsync()`, `ModelLoadState` flow preserved
+- [x] Remove Llama shard copy logic (`copyAssetsToFilesDir`, `ASSET_FILES`) — MediaPipe handles model loading from a single file path
+- [x] Remove `LlamaTokenizer`, `LlamaTokenizerTest` — MediaPipe tokenizes internally
+- [x] Remove ORT KV-cache forward-pass loop (`runForwardPass`, `nativeBytesAt`, `nativeFloatsAt`, `greedySample`) — all replaced by the MediaPipe session
+- [x] Update `downloadModels` Gradle task to fetch Gemma 1B instead of (or alongside) Llama shards; update `CLAUDE.md` assets table
+- [x] Update `LatticeApplication` wiring — `localFallbackProvider.initialize()` call stays, internals change
 - [ ] Smoke-test all three CBT stages through the new provider on device
 
 ---

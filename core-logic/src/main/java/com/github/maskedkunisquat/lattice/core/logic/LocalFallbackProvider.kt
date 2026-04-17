@@ -1,78 +1,54 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
-import ai.onnxruntime.providers.NNAPIFlags
 import android.content.Context
 import android.util.Log
-import java.util.EnumSet
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.FloatBuffer
-import java.nio.LongBuffer
 
 enum class ModelLoadState { IDLE, COPYING_SHARDS, LOADING_SESSION, READY, ERROR }
 
 /**
- * LLM provider backed by the locally-bundled Llama-3.2-3B-Instruct ONNX model (Q4).
+ * LLM provider backed by the locally-bundled Gemma 3 1B Instruct LiteRT model.
  *
  * This is the primary fallback when Gemini Nano (AICore) is unavailable. The model
- * runs entirely on-device via ONNX Runtime — no data leaves the device.
+ * runs entirely on-device via MediaPipe Tasks GenAI — no data leaves the device.
  *
  * ## Asset setup
- * Place the following files in app/src/main/assets/:
- *   model_q4.onnx              — model graph
- *   model_q4.onnx_data         — external weight shard 0
- *   model_q4.onnx_data_1       — external weight shard 1
- *   tokenizer.json             — Llama-3 BPE vocabulary and merge rules
- *   tokenizer_config.json      — tokenizer metadata
- *   generation_config.json     — default generation parameters
- *   config.json                — model architecture (vocab_size, num_key_value_heads, head_dim)
+ * Place the following file in app/src/main/assets/:
+ *   gemma3_1b_it.task   — Gemma 3 1B Instruct LiteRT task bundle (INT4)
  *
- * ## Inference loop
- * Uses a KV-cached autoregressive decode loop:
- *   1. Tokenise the prompt with [LlamaTokenizer] (BPE, Llama-3 chat template).
- *   2. First forward pass: full prompt, empty KV cache.
- *   3. Greedy-sample the next token from the last position's logits.
- *   4. Emit [LlmResult.Token] (streaming to UI).
- *   5. Subsequent passes: single new token + accumulated KV cache.
- *   6. Terminate on EOS (128001 / 128008 / 128009) or [MAX_NEW_TOKENS].
+ * Run `./gradlew downloadModels` to fetch from HuggingFace.
  *
- * ## Hardware acceleration
- * NNAPI is requested first, routing eligible ops to the Snapdragon 8 Elite's NPU/GPU.
- * If NNAPI initialisation fails the session falls back to CPU transparently.
+ * ## Inference
+ * Uses MediaPipe's [LlmInference] session. On Adreno 700-series GPUs (e.g. the S25
+ * Ultra's Snapdragon 8 Elite) this runs at 35–50 tok/s vs ~8 tok/s for the prior
+ * Llama 3.2-3B on CPU+NNAPI. Backend selection is automatic — GPU when available,
+ * CPU fallback otherwise.
+ *
+ * ## Model lifecycle
+ * The .task file is copied from assets to internal storage on first [initialize] call.
+ * Subsequent launches skip the copy if the file is already present. MediaPipe loads
+ * the session directly from the filesystem path.
  */
 class LocalFallbackProvider(
     private val context: Context,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : LlmProvider {
 
-    override val id = "llama3_onnx_local"
+    override val id = "gemma3_1b_mediapipe"
 
-    @Volatile private var session: OrtSession? = null
-    private val env = OrtEnvironment.getEnvironment()
-    private val tokenizer = LlamaTokenizer(context)
-
-    // Architecture constants — populated from config.json during initialize(),
-    // falling back to compile-time defaults if the asset is missing or malformed.
-    private var vocabSize  = VOCAB_SIZE_DEFAULT
-    private var numKvHeads = NUM_KV_HEADS_DEFAULT
-    private var headDim    = HEAD_DIM_DEFAULT
+    @Volatile private var llmInference: LlmInference? = null
 
     @Volatile private var initAttempted = false
     @Volatile private var initFailureReason: String? = null
@@ -86,10 +62,10 @@ class LocalFallbackProvider(
     val copyProgress: StateFlow<Float> = _copyProgress.asStateFlow()
 
     /**
-     * Copies the model shards from assets to internal storage (if needed) then
-     * opens an [OrtSession] with NNAPI acceleration and initialises the tokenizer.
-     * Silent on failure — [isAvailable] returns false and the orchestrator handles
-     * the fallback. Safe to call multiple times; subsequent calls are no-ops.
+     * Copies the model file from assets to internal storage (if needed) then opens
+     * a [LlmInference] session via MediaPipe. Safe to call multiple times; subsequent
+     * calls are no-ops. Silent on failure — [isAvailable] returns false and the
+     * orchestrator handles the fallback.
      */
     fun initialize() {
         if (initAttempted) return
@@ -97,27 +73,17 @@ class LocalFallbackProvider(
             if (initAttempted) return
             initAttempted = true
             try {
-                loadArchConfig()
                 _modelLoadState.value = ModelLoadState.COPYING_SHARDS
-                copyAssetsToFilesDir()
-                _copyProgress.value = 0f
+                copyModelIfNeeded()
                 _modelLoadState.value = ModelLoadState.LOADING_SESSION
                 val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
-                val newSession = createSession(modelPath)
-                try {
-                    tokenizer.initialize()
-                } catch (e: Exception) {
-                    // Close the newly created OrtSession before re-throwing so we don't
-                    // leak a native resource when tokenizer init fails.
-                    newSession.close()
-                    throw e
-                }
-                // Assign only after both session AND tokenizer are ready;
-                // isAvailable() correctly returns false until this line executes.
-                session = newSession
+                val options = LlmInference.LlmInferenceOptions.builder()
+                    .setModelPath(modelPath)
+                    .setMaxTokens(MAX_NEW_TOKENS)
+                    .build()
+                llmInference = LlmInference.createFromOptions(context, options)
                 _modelLoadState.value = ModelLoadState.READY
-                // Log after assignment so session?.let inside logSessionInfo() sees the session.
-                logSessionInfo()
+                Log.i(TAG, "MediaPipe LlmInference session ready — model=$MODEL_ASSET")
             } catch (e: Exception) {
                 _copyProgress.value = 0f
                 _modelLoadState.value = ModelLoadState.ERROR
@@ -129,421 +95,86 @@ class LocalFallbackProvider(
 
     override suspend fun isAvailable(): Boolean {
         if (!initAttempted) withContext(dispatcher) { initialize() }
-        return session != null
+        return llmInference != null
     }
 
     /**
-     * Runs the Llama-3.2-3B autoregressive inference loop on [prompt].
+     * Streams inference results for [prompt] via the Gemma 3 1B MediaPipe session.
      *
-     * Emits [LlmResult.Token] for each decoded token (streaming). Terminates with
-     * [LlmResult.Complete] on EOS or when [MAX_NEW_TOKENS] is reached, or
-     * [LlmResult.Error] on any inference failure.
+     * Emits [LlmResult.Token] for each text chunk (streaming), then [LlmResult.Complete]
+     * on finish or [LlmResult.Error] on failure.
      */
-    override fun process(prompt: String): Flow<LlmResult> = flow {
-        val sess = session
-        if (sess == null) {
+    override fun process(prompt: String): Flow<LlmResult> = callbackFlow {
+        val inference = llmInference
+        if (inference == null) {
             val reason = initFailureReason
                 ?.let { " Init failed with: $it" }
-                ?: " Ensure $MODEL_ASSET and its data shards are in app/src/main/assets/" +
+                ?: " Ensure $MODEL_ASSET is in app/src/main/assets/" +
                    " and call LocalFallbackProvider.initialize() at app startup."
-            emit(LlmResult.Error(IllegalStateException("Llama-3.2-3B model not loaded.$reason")))
-            return@flow
+            send(LlmResult.Error(IllegalStateException("Gemma 3 1B model not loaded.$reason")))
+            close()
+            return@callbackFlow
         }
 
         try {
-            val promptTokens = tokenizer.encode(prompt, allowSpecialTokens = true)
-            if (promptTokens.isEmpty()) {
-                emit(LlmResult.Complete)
-                return@flow
-            }
-
-            // Discover KV cache layer count from the session's declared inputs.
-            val numLayers = sess.inputInfo.keys
-                .count { it.startsWith("past_key_values.") && it.endsWith(".key") }
-            if (numLayers == 0) {
-                emit(LlmResult.Error(IllegalStateException(
-                    "Could not find past_key_values inputs in model. Inputs: ${sess.inputInfo.keys}"
-                )))
-                return@flow
-            }
-
-            // KV cache: off-heap DirectByteBuffers so they don't count against the
-            // 256 MB Java heap limit. Both start empty (capacity 0).
-            var kvCache = Array(numLayers) {
-                Pair(ByteBuffer.allocateDirect(0), ByteBuffer.allocateDirect(0))
-            }
-            var pastLen = 0
-            val byteBuffer = ByteArrayOutputStream()
-
-            // ── First pass: encode the full prompt ───────────────────────────
-            var result = runForwardPass(
-                sess        = sess,
-                inputIds    = promptTokens,
-                pastLen     = 0,
-                kvCache     = kvCache,
-                numLayers   = numLayers,
-            )
-            kvCache = result.presentKv
-            pastLen = promptTokens.size
-
-            var nextTokenId = greedySample(result.logits, 0)
-            result.logits = FloatArray(0) // release memory
-
-            // Streaming byte buffer for UTF-8 reconstruction
-            byteBuffer.write(tokenizer.decodeToBytes(nextTokenId))
-            val text = flushUtf8(byteBuffer)
-            if (text.isNotEmpty()) emit(LlmResult.Token(text))
-
-            // ── Autoregressive loop ──────────────────────────────────────────
-            var newTokensGenerated = 1
-            while (!tokenizer.isEos(nextTokenId) && newTokensGenerated < MAX_NEW_TOKENS) {
-                currentCoroutineContext().ensureActive()
-
-                result = runForwardPass(
-                    sess        = sess,
-                    inputIds    = longArrayOf(nextTokenId.toLong()),
-                    pastLen     = pastLen,
-                    kvCache     = kvCache,
-                    numLayers   = numLayers,
-                )
-                kvCache = result.presentKv
-                pastLen++
-
-                nextTokenId = greedySample(result.logits, 0)
-                result.logits = FloatArray(0)
-
-                if (!tokenizer.isEos(nextTokenId)) {
-                    byteBuffer.write(tokenizer.decodeToBytes(nextTokenId))
-                    val chunk = flushUtf8(byteBuffer)
-                    if (chunk.isNotEmpty()) emit(LlmResult.Token(chunk))
+            inference.generateAsync(prompt) { partialResult, done ->
+                if (!partialResult.isNullOrEmpty()) {
+                    trySend(LlmResult.Token(partialResult))
                 }
-                newTokensGenerated++
+                if (done) {
+                    trySend(LlmResult.Complete)
+                    close()
+                }
             }
-
-            // Flush any remaining buffered bytes
-            if (byteBuffer.size() > 0) {
-                emit(LlmResult.Token(byteBuffer.toString(Charsets.UTF_8.name())))
-            }
-
-            emit(LlmResult.Complete)
         } catch (e: Exception) {
-            emit(LlmResult.Error(e))
+            close(e)
         }
+
+        awaitClose { /* MediaPipe does not expose a per-request cancellation API */ }
     }.flowOn(dispatcher)
-
-    // ── Forward pass ─────────────────────────────────────────────────────────
-
-    private data class ForwardResult(
-        var logits: FloatArray,
-        val presentKv: Array<Pair<ByteBuffer, ByteBuffer>>,
-        val numLayers: Int,
-    )
-
-    /**
-     * Runs a single forward pass through [sess].
-     *
-     * @param inputIds   Token ids for this step (prompt on first pass, single token thereafter).
-     * @param pastLen    Number of tokens in the accumulated KV cache.
-     * @param kvCache    Current KV cache per layer (empty float arrays on first call).
-     * @param numLayers  Number of transformer layers (discovered from session input names).
-     */
-    private fun runForwardPass(
-        sess: OrtSession,
-        inputIds: LongArray,
-        pastLen: Int,
-        kvCache: Array<Pair<ByteBuffer, ByteBuffer>>,
-        numLayers: Int,
-    ): ForwardResult {
-        val seqLen = inputIds.size
-        val inputs = mutableMapOf<String, OnnxTensor>()
-
-        try {
-            // Standard input tensors.
-            // position_ids is NOT passed — this model computes positions internally.
-            inputs["input_ids"] = OnnxTensor.createTensor(
-                env, LongBuffer.wrap(inputIds), longArrayOf(1, seqLen.toLong())
-            )
-            inputs["attention_mask"] = OnnxTensor.createTensor(
-                env,
-                LongBuffer.wrap(LongArray(pastLen + seqLen) { 1L }),
-                longArrayOf(1, (pastLen + seqLen).toLong())
-            )
-
-            // Past KV cache tensors (empty on first pass: shape [1, kvHeads, 0, headDim])
-            for (i in 0 until numLayers) {
-                val (kd, vd) = kvCache[i]
-                val kvPastLen = if (kd.capacity() == 0) 0L else pastLen.toLong()
-                val kvShape = longArrayOf(1, numKvHeads, kvPastLen, headDim)
-                inputs["past_key_values.$i.key"] = OnnxTensor.createTensor(
-                    env, (kd.rewind() as ByteBuffer).order(ByteOrder.nativeOrder()).asFloatBuffer(), kvShape
-                )
-                inputs["past_key_values.$i.value"] = OnnxTensor.createTensor(
-                    env, (vd.rewind() as ByteBuffer).order(ByteOrder.nativeOrder()).asFloatBuffer(), kvShape
-                )
-            }
-
-            val outputs = sess.run(inputs)
-            return outputs.use { out ->
-                // Read only the last-position logits from the native tensor buffer.
-                // OnnxTensor.getFloatBuffer() copies the entire [1,seqLen,vocab] tensor
-                // (~114 MB at seqLen=233) to the Java heap. Instead, we reflect into the
-                // private getBuffer() which returns the direct ByteBuffer wrapping native
-                // memory (zero-copy), then read just vocabSize floats from the last position.
-                val logitsTensor = out["logits"].get() as OnnxTensor
-                val lastPosLogits = FloatArray(vocabSize)
-                nativeFloatsAt(logitsTensor, (seqLen - 1) * vocabSize, lastPosLogits)
-
-                // Extract present KV cache into off-heap DirectByteBuffers so the
-                // growing KV state doesn't count against the 256 MB Java heap limit.
-                val presentKv = Array(numLayers) { i ->
-                    val kTensor = out["present.$i.key"].get() as OnnxTensor
-                    val vTensor = out["present.$i.value"].get() as OnnxTensor
-                    val kBytes = kTensor.info.getNumElements().toInt() * Float.SIZE_BYTES
-                    val vBytes = vTensor.info.getNumElements().toInt() * Float.SIZE_BYTES
-                    val kData = ByteBuffer.allocateDirect(kBytes).order(ByteOrder.nativeOrder())
-                    val vData = ByteBuffer.allocateDirect(vBytes).order(ByteOrder.nativeOrder())
-                    nativeBytesAt(kTensor, kData)
-                    nativeBytesAt(vTensor, vData)
-                    Pair(kData, vData)
-                }
-
-                ForwardResult(logits = lastPosLogits, presentKv = presentKv, numLayers = numLayers)
-            }
-        } finally {
-            // Always release input tensors regardless of output collection success
-            inputs.values.forEach { it.close() }
-        }
-    }
-
-    // ── Sampling ──────────────────────────────────────────────────────────────
-
-    /**
-     * Greedy sampling: returns the token id with the highest logit at [offset] in [logits].
-     *
-     * [offset] addresses the start of a single vocab-sized slice within [logits].
-     * When called with a single-step forward pass, offset=0 and logits.size==VOCAB_SIZE.
-     */
-    private fun greedySample(logits: FloatArray, offset: Int): Int {
-        var maxVal = Float.NEGATIVE_INFINITY
-        var maxIdx = 0
-        for (i in 0 until vocabSize) {
-            val v = logits[offset + i]
-            if (v > maxVal) {
-                maxVal = v
-                maxIdx = i
-            }
-        }
-        return maxIdx
-    }
-
-    // ── Streaming UTF-8 helper ────────────────────────────────────────────────
-
-    /**
-     * Attempts to decode all accumulated bytes in [buffer] as UTF-8.
-     *
-     * Trailing bytes that begin a multi-byte sequence but are incomplete are held
-     * back (kept in [buffer]); the rest are returned as a decoded string.
-     */
-    private fun flushUtf8(buffer: ByteArrayOutputStream): String {
-        if (buffer.size() == 0) return ""
-        val bytes = buffer.toByteArray()
-        // Scan backwards to find the last complete UTF-8 sequence boundary.
-        // The loop intentionally uses `continue` to skip each continuation byte
-        // (10xxxxxx) and `break` once a lead byte (11xxxxxx) or ASCII byte is
-        // reached. At that point expectedContinuations determines whether the
-        // trailing multi-byte sequence is complete; if not, validLen is left at
-        // the lead-byte index so those bytes stay buffered. This is not an
-        // unconditional jump — the control flow is required to handle the
-        // two distinct cases (continuation byte vs. lead/ASCII byte) within a
-        // single backwards pass over `bytes`.
-        var validLen = bytes.size
-        while (validLen > 0) {
-            val b = bytes[validLen - 1].toInt() and 0xFF
-            // If the last byte is a UTF-8 continuation byte (10xxxxxx), keep trimming
-            if (b and 0xC0 == 0x80) {
-                validLen--
-                continue
-            }
-            // If it's a lead byte (11xxxxxx), check if its sequence is complete
-            val expectedContinuations = when {
-                b and 0xE0 == 0xC0 -> 1   // 2-byte sequence needs 1 more
-                b and 0xF0 == 0xE0 -> 2   // 3-byte sequence needs 2 more
-                b and 0xF8 == 0xF0 -> 3   // 4-byte sequence needs 3 more
-                else               -> 0   // ASCII or complete continuation — flush all
-            }
-            val available = bytes.size - validLen
-            if (expectedContinuations > available) {
-                // Incomplete sequence — keep this lead byte and continuations buffered
-                // validLen stays at the index of this lead byte
-            } else {
-                validLen = bytes.size // all bytes are valid
-            }
-            break
-        }
-
-        if (validLen <= 0) return ""
-        buffer.reset()
-        if (validLen < bytes.size) {
-            // Re-buffer the trailing incomplete bytes
-            buffer.write(bytes, validLen, bytes.size - validLen)
-        }
-        return String(bytes, 0, validLen, Charsets.UTF_8)
-    }
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
-    private fun loadArchConfig() {
-        try {
-            context.assets.open(CONFIG_ASSET).bufferedReader().use { reader ->
-                val json = org.json.JSONObject(reader.readText())
-                vocabSize  = json.optInt("vocab_size",           VOCAB_SIZE_DEFAULT)
-                numKvHeads = json.optLong("num_key_value_heads", NUM_KV_HEADS_DEFAULT)
-                headDim    = json.optLong("head_dim",            HEAD_DIM_DEFAULT)
-                Log.d(TAG, "Arch config loaded: vocab=$vocabSize, kvHeads=$numKvHeads, headDim=$headDim")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "config.json missing or malformed — using hardcoded arch defaults", e)
+    /**
+     * Copies [MODEL_ASSET] from assets to [Context.filesDir] if not already present.
+     * Uses a .tmp intermediary and atomic rename so a partial copy is never visible
+     * as a complete file.
+     */
+    private fun copyModelIfNeeded() {
+        val dest = File(context.filesDir, MODEL_ASSET)
+        val tmp  = File(context.filesDir, "$MODEL_ASSET.tmp")
+        if (tmp.exists()) tmp.delete()
+        if (dest.exists()) {
+            _copyProgress.value = 1f
+            return
         }
-    }
-
-    private fun copyAssetsToFilesDir() {
-        // Known total for the three model shards — used for determinate progress.
-        // Slight over/under-count is fine; progress is clamped to [0, 1].
-        val approxTotalBytes = 3_435_000_000L
-        var copiedBytes = 0L
-
-        for (asset in ASSET_FILES) {
-            val dest = File(context.filesDir, asset)
-            val tmp  = File(context.filesDir, "$asset.tmp")
-            // Clean up any leftover temp file from a previous interrupted copy.
-            if (tmp.exists()) tmp.delete()
-            if (dest.exists()) {
-                // Already present from a previous launch — count its size and move on.
-                copiedBytes += dest.length()
-                _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
-                continue
-            }
-            try {
-                context.assets.open(asset).use { src ->
-                    tmp.outputStream().use { dst ->
-                        val buf = ByteArray(2 * 1024 * 1024) // 2 MB chunks
-                        var n: Int
-                        while (src.read(buf).also { n = it } != -1) {
-                            dst.write(buf, 0, n)
-                            copiedBytes += n
-                            _copyProgress.value = (copiedBytes.toFloat() / approxTotalBytes).coerceIn(0f, 1f)
-                        }
+        try {
+            context.assets.open(MODEL_ASSET).use { src ->
+                tmp.outputStream().use { dst ->
+                    val buf = ByteArray(2 * 1024 * 1024) // 2 MB chunks
+                    var copied = 0L
+                    var n: Int
+                    while (src.read(buf).also { n = it } != -1) {
+                        dst.write(buf, 0, n)
+                        copied += n
+                        _copyProgress.value = (copied.toFloat() / APPROX_MODEL_BYTES).coerceIn(0f, 1f)
                     }
                 }
-                // Atomic rename: dest is only visible after a complete write.
-                if (!tmp.renameTo(dest)) {
-                    throw IOException("Failed to rename $tmp to $dest")
-                }
-            } catch (e: Exception) {
-                tmp.delete()
-                throw e
             }
-        }
-        _copyProgress.value = 1f
-    }
-
-    private fun createSession(modelPath: String): OrtSession {
-        val t0 = System.currentTimeMillis()
-        return try {
-            // USE_FP16 lets NNAPI run eligible ops in FP16 — smaller compilation
-            // units, less NNAPI IR to compile, and faster inference on NPU/GPU.
-            OrtSession.SessionOptions().use { opts ->
-                opts.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16))
-                opts.setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(4))
-                env.createSession(modelPath, opts).also {
-                    Log.i(TAG, "NNAPI session ready in ${System.currentTimeMillis() - t0} ms")
-                }
+            if (!tmp.renameTo(dest)) {
+                throw IOException("Failed to rename $tmp to $dest")
             }
+            _copyProgress.value = 1f
         } catch (e: Exception) {
-            Log.w(TAG, "NNAPI unavailable (${e.message}) — CPU fallback after ${System.currentTimeMillis() - t0} ms")
-            OrtSession.SessionOptions().use { cpuOpts ->
-                cpuOpts.setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(4))
-                env.createSession(modelPath, cpuOpts).also {
-                    Log.i(TAG, "CPU session ready in ${System.currentTimeMillis() - t0} ms total")
-                }
-            }
-        }
-    }
-
-    private fun logSessionInfo() {
-        session?.let { sess ->
-            Log.d(TAG, "Session inputs:  ${sess.inputInfo.keys.sorted()}")
-            Log.d(TAG, "Session outputs: ${sess.outputInfo.keys.sorted()}")
-        }
-    }
-
-    // ── Zero-copy tensor read ─────────────────────────────────────────────────
-
-    /**
-     * Reads [dst.size] floats from [tensor]'s native memory starting at float-index [offset],
-     * without copying the whole tensor to the Java heap.
-     *
-     * OnnxTensor.getFloatBuffer() / getByteBuffer() both call FloatBuffer.allocate() /
-     * ByteBuffer.allocate() internally, copying the entire tensor to a new heap buffer.
-     * For the logits tensor that's ~114 MB per step at seqLen=233 — enough to OOM.
-     *
-     * The private `getBuffer()` method returns a DirectByteBuffer wrapping the native C++
-     * tensor memory directly (zero-copy). We access it via reflection and position to the
-     * slice we need. Falls back to the heap copy on reflection failure.
-     */
-    /**
-     * Copies all bytes from [tensor]'s native memory into [dst] (a pre-sized DirectByteBuffer)
-     * without routing through a heap-allocated intermediate buffer.
-     */
-    private fun nativeBytesAt(tensor: OnnxTensor, dst: ByteBuffer) {
-        try {
-            val m = OnnxTensor::class.java.getDeclaredMethod("getBuffer")
-                .also { it.isAccessible = true }
-            val src = (m.invoke(tensor) as ByteBuffer).order(ByteOrder.nativeOrder())
-            dst.clear()
-            dst.put(src)
-            dst.rewind()
-        } catch (_: Exception) {
-            dst.clear()
-            dst.order(ByteOrder.nativeOrder()).asFloatBuffer().put(tensor.floatBuffer)
-            dst.rewind()
-        }
-    }
-
-    private fun nativeFloatsAt(tensor: OnnxTensor, offset: Int, dst: FloatArray) {
-        try {
-            val m = OnnxTensor::class.java.getDeclaredMethod("getBuffer")
-                .also { it.isAccessible = true }
-            val buf = (m.invoke(tensor) as ByteBuffer)
-                .order(ByteOrder.nativeOrder())
-            (buf.position(offset * Float.SIZE_BYTES) as ByteBuffer)
-                .asFloatBuffer()
-                .get(dst)
-        } catch (_: Exception) {
-            // Reflection unavailable — fall back to heap copy.
-            (tensor.floatBuffer.position(offset) as FloatBuffer).get(dst)
+            tmp.delete()
+            throw e
         }
     }
 
     companion object {
         private const val TAG = "LocalFallbackProvider"
-        private const val MODEL_ASSET  = "model_q4.onnx"
-        private const val CONFIG_ASSET = "config.json"
-
-        // Only model shards are copied to filesDir — ORT requires real filesystem paths
-        // for external-data models. Tokenizer files are read directly from assets.
-        private val ASSET_FILES = listOf(
-            "model_q4.onnx",
-            "model_q4.onnx_data",
-            "model_q4.onnx_data_1",
-        )
-
-        // ── Llama-3.2-3B architecture defaults ───────────────────────────────
-        // Runtime values are parsed from app/src/main/assets/config.json; these
-        // constants are used only as fallbacks if that asset is missing or malformed.
-        private const val VOCAB_SIZE_DEFAULT    = 128_256
-        private const val NUM_KV_HEADS_DEFAULT  = 8L
-        private const val HEAD_DIM_DEFAULT      = 128L
+        private const val MODEL_ASSET = "gemma3_1b_it.task"
         private const val MAX_NEW_TOKENS = 512
+        private const val APPROX_MODEL_BYTES = 1_500_000_000L
     }
 }

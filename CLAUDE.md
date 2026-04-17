@@ -94,7 +94,7 @@ KeyProvider → LatticeDatabase (SQLCipher, encrypted) → DAOs
                                                       ↓
 SettingsRepository (DataStore) ──────────────────────→ LlmOrchestrator → ReframingLoop
 EmbeddingProvider (ONNX) ─────────────────────────────↗
-LocalFallbackProvider (ONNX, background init) ────────↗
+LocalFallbackProvider (MediaPipe, background init) ───↗
 CloudProvider (Retrofit) ─────────────────────────────↗
 JournalRepository / SearchRepository ────────────────→ ReframingLoop
 ```
@@ -119,7 +119,7 @@ PII masking is enforced at every system boundary:
 Three-tier, local-first:
 
 1. **Nano** — Gemini on-device via Google AICore (API 35+, checked at runtime)
-2. **LocalFallback** — Llama-3.2-3B quantized via ONNX Runtime (all APIs, CPU + NNAPI)
+2. **LocalFallback** — Gemma 3 1B Instruct via MediaPipe Tasks GenAI (all APIs, GPU + CPU fallback)
 3. **Cloud** — Remote API via Retrofit (disabled by default, requires explicit user opt-in)
 
 When cloud is selected, `privacyState` transitions to `PrivacyLevel.CloudTransit` (amber UI border) and a `TransitEvent` is logged — **the prompt is never persisted**. A `SecurityException` blocks cloud dispatch if raw PII is detected in the prompt.
@@ -169,24 +169,21 @@ Seed JSON files contain real 384-dim embeddings generated from the masked entry 
 
 ## Assets
 
-**Llama-3.2-3B model files** in `app/src/main/assets/` are gitignored. Fetch them once with:
+**Gemma 3 1B model file** in `app/src/main/assets/` is gitignored. Fetch it once with:
 
 ```bash
 ./gradlew downloadModels
 ```
 
+Requires accepting Google's Gemma Terms of Use on HuggingFace. Authenticate with
+`huggingface-cli login` (or set `HF_TOKEN`) before running.
+
 | File | Size | Source |
 |---|---|---|
-| `model_q4.onnx` | 259 KB | HuggingFace (Llama repo) |
-| `model_q4.onnx_data` | 2.1 GB | HuggingFace (Llama repo) |
-| `model_q4.onnx_data_1` | 1.3 GB | HuggingFace (Llama repo) |
-| `tokenizer.json` | 11.5 MB | HuggingFace (Llama repo) |
-| `tokenizer_config.json` | 57 KB | HuggingFace (Llama repo) |
-| `config.json` | 1 KB | HuggingFace (Llama repo) |
-| `generation_config.json` | < 1 KB | HuggingFace (Llama repo) |
+| `gemma3_1b_it.task` | ~1.5 GB | HuggingFace (Gemma repo) |
 
 HuggingFace repos:
-- **Llama model**: `https://huggingface.co/masked-kunsiquat/Llama-3.2-3B-Instruct-Q4`
+- **Gemma model**: `https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert`
 - **Embedding model**: `https://huggingface.co/masked-kunsiquat/snowflake-arctic-embed-xs`
 - **Clinical persona seeds (dataset)**: `https://huggingface.co/datasets/masked-kunsiquat/clinical-personas`
 

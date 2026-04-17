@@ -33,9 +33,9 @@ android {
         }
     }
     sourceSets {
-        // Make the Llama-3.2-3B shards (gitignored, in :app assets) available to
-        // CognitiveLoopBenchmark without duplicating the 3.5 GB files.
-        // The benchmark's assumeTrue gate skips gracefully if shards are absent.
+        // Make the Gemma 3 1B model file (gitignored, in :app assets) available to
+        // CognitiveLoopBenchmark without duplicating the ~1.5 GB file.
+        // The benchmark's assumeTrue gate skips gracefully when the model is absent.
         getByName("androidTest") {
             assets.srcDirs("../app/src/main/assets")
         }
@@ -58,7 +58,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.androidx.room.ktx)
-    implementation(libs.onnxruntime.android)
+    implementation(libs.mediapipe.tasks.genai)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.okhttp)
     testImplementation(libs.junit)

@@ -27,11 +27,10 @@ import org.junit.runner.RunWith
  * End-to-end performance benchmarks for the three-stage CBT reframing pipeline.
  *
  * ## Device requirement
- * Requires the Llama-3.2-3B ONNX shards to be present in the test APK's assets.
- * The shards are gitignored — fetch them with `./gradlew downloadModels`, then
- * symlink or copy into `core-logic/src/androidTest/assets/` before running.
- * The entire class is skipped via [assumeTrue] when the model is absent, so it
- * runs cleanly on emulators and CI without modification.
+ * Requires the Gemma 3 1B LiteRT model file (`gemma3_1b_it.task`) to be present
+ * in the test APK's assets. The file is gitignored — fetch it with
+ * `./gradlew downloadModels`. The entire class is skipped via [assumeTrue] when
+ * the model is absent, so it runs cleanly on emulators and CI without modification.
  *
  * ## Personas
  * - **Holmes** — Q2 (v<0, a≥0): triggers [ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING]
@@ -98,9 +97,9 @@ class CognitiveLoopBenchmark {
         // Shards live in app/src/main/assets/ (gitignored). Symlink or copy them to
         // core-logic/src/androidTest/assets/ to enable this benchmark locally.
         assumeTrue(
-            "Llama-3.2-3B shards not loaded " +
+            "Gemma 3 1B model not loaded " +
             "(state=${provider.modelLoadState.value}). " +
-            "Run ./gradlew downloadModels and add shards to core-logic/src/androidTest/assets/.",
+            "Run ./gradlew downloadModels to fetch gemma3_1b_it.task into app/src/main/assets/.",
             provider.modelLoadState.value == ModelLoadState.READY
         )
 

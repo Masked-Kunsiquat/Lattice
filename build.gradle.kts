@@ -9,30 +9,28 @@ plugins {
 
 // ── Model download ────────────────────────────────────────────────────────────
 //
-// Llama-3.2-3B ONNX shards are not committed to git. Run once before building:
+// Gemma 3 1B Instruct (LiteRT / MediaPipe task bundle) is not committed to git.
+// Run once before building:
 //   ./gradlew downloadModels
 //
-// Files land in app/src/main/assets/ (gitignored). Existing files are skipped.
-// Source: https://huggingface.co/masked-kunsiquat/Llama-3.2-3B-Instruct-Q4
+// The file lands in app/src/main/assets/ (gitignored). Existing file is skipped.
+// Source: https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert
+//
+// NOTE: The model requires accepting Google's Gemma Terms of Use on HuggingFace.
+// Authenticate with `huggingface-cli login` (or set HF_TOKEN env var) before running.
 
-private val HF_LLAMA = "https://huggingface.co/masked-kunsiquat/Llama-3.2-3B-Instruct-Q4/resolve/main"
+private val HF_GEMMA = "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
-private val llamaFiles = listOf(
-    "model_q4.onnx",
-    "model_q4.onnx_data",
-    "model_q4.onnx_data_1",
-    "tokenizer.json",
-    "tokenizer_config.json",
-    "config.json",
-    "generation_config.json",
+private val gemmaFiles = listOf(
+    "gemma3_1b_it.task",
 )
 
 tasks.register("downloadModels") {
     group = "lattice"
-    description = "Downloads Llama-3.2-3B ONNX shards from HuggingFace into app/src/main/assets/."
+    description = "Downloads Gemma 3 1B LiteRT task bundle from HuggingFace into app/src/main/assets/."
     doLast {
         val assetDir = file("app/src/main/assets")
-        llamaFiles.forEach { name ->
+        gemmaFiles.forEach { name ->
             val dest = assetDir.resolve(name)
             if (dest.exists()) {
                 logger.lifecycle("  ✓  $name  (already present)")
@@ -41,7 +39,7 @@ tasks.register("downloadModels") {
             logger.lifecycle("  ↓  $name …")
             val tmp = assetDir.resolve("$name.tmp")
             try {
-                hfDownload("$HF_LLAMA/$name", tmp, logger)
+                hfDownload("$HF_GEMMA/$name", tmp, logger)
                 if (!tmp.renameTo(dest)) tmp.copyTo(dest, overwrite = true).also { tmp.delete() }
                 logger.lifecycle("  ✓  $name  (${dest.length().toHuman()})")
             } catch (e: Exception) {

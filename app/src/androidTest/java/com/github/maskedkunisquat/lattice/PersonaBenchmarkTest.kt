@@ -33,7 +33,7 @@ private const val TAG_TELEMETRY = "Lattice:Hardware:Telemetry"
 private const val TAG_SETUP    = "Lattice:Benchmark:Setup"
 
 /**
- * Clinical Benchmarking Suite — validates the Unified Agent Loop (Llama-3.2-3B) against
+ * Clinical Benchmarking Suite — validates the Unified Agent Loop (Gemma 3 1B) against
  * three literary personas under Total Air-Gap Privacy.
  *
  * ## What is always asserted (no model required)
@@ -43,20 +43,20 @@ private const val TAG_SETUP    = "Lattice:Benchmark:Setup"
  * - Sovereignty: [PrivacyLevel.LocalOnly] throughout; zero cloud [TransitEvent]s in the DB.
  * - Cleanup: [SeedManager.clearPersona] leaves a clean manifest.
  *
- * ## What requires the Llama model (gated on [modelLoaded])
+ * ## What requires the Gemma 3 1B model (gated on [modelLoaded])
  * - Stage 1 (Affective Mapping), Stage 2 (DoT), Stage 3 (Strategic Pivot) succeed.
  * - Stage 3 strategy matches the expected quadrant strategy.
  * - Werther Stage 2 flags [CognitiveDistortion.EMOTIONAL_REASONING].
  *
- * The ONNX model shards (model_q4.onnx + data files) are not committed to VCS. The
- * benchmark does NOT call [LocalFallbackProvider.initialize] in setUp — loading a 3 GB
- * model synchronously would OOM the test process. Instead, [modelLoaded] reflects
- * whatever state [LatticeApplication]'s background init thread has reached by the time
- * the inference block runs. For the CI / no-model path, inference stages are skipped
+ * The model file (gemma3_1b_it.task) is not committed to VCS. The benchmark does NOT
+ * call [LocalFallbackProvider.initialize] in setUp — loading a ~1.5 GB model
+ * synchronously would OOM the test process. Instead, [modelLoaded] reflects whatever
+ * state [LatticeApplication]'s background init thread has reached by the time the
+ * inference block runs. For the CI / no-model path, inference stages are skipped
  * gracefully and only the deterministic assertions execute.
  *
  * To enable full inference benchmarking:
- *   1. Run `./gradlew downloadModels` to fetch model shards into app/src/main/assets/.
+ *   1. Run `./gradlew downloadModels` to fetch gemma3_1b_it.task into app/src/main/assets/.
  *   2. Re-run the benchmark. LatticeApplication will load the model in its background
  *      thread; [modelLoaded] will be true before the inference block is reached
  *      (provided setUp and seed ingestion give the thread enough lead time).
@@ -108,8 +108,8 @@ class PersonaBenchmarkTest {
         Log.i(TAG_SETUP, "setUp: EmbeddingProvider created (no initialize — zero-vector fallback)")
 
         // Do NOT call localFallbackProvider.initialize() here. Calling it synchronously on the
-        // test thread would block until the 3 GB Llama model is loaded (or fail-fast if shards
-        // are absent). Either path either OOMs the process or is redundant. The application's
+        // test thread would block until the ~1.5 GB Gemma model is loaded (or fail-fast if the
+        // file is absent). Either path either OOMs the process or is redundant. The application's
         // background thread handles model loading; modelLoaded reflects that state.
         localFallbackProvider = LocalFallbackProvider(context)
         Log.i(TAG_SETUP, "setUp: LocalFallbackProvider created — modelLoadState=${localFallbackProvider.modelLoadState.value}")
@@ -299,7 +299,7 @@ class PersonaBenchmarkTest {
         var stage2Result: ReframingLoop.DiagnosisResult? = null
 
         if (modelLoaded) {
-            Log.i(TAG_BENCHMARK, "🚀 $persona — Llama ONNX inference starting (NNAPI requested)")
+            Log.i(TAG_BENCHMARK, "🚀 $persona — Gemma 3 1B MediaPipe inference starting")
 
             val t0 = System.currentTimeMillis()
 
@@ -345,9 +345,9 @@ class PersonaBenchmarkTest {
         } else {
             Log.w(
                 TAG_BENCHMARK,
-                "$persona — Llama ONNX model not loaded (modelLoadState=${localFallbackProvider.modelLoadState.value}); " +
-                "inference stages skipped. Bundle model_q4.onnx + data shards into " +
-                "app/src/main/assets/ and re-run to enable full benchmark execution."
+                "$persona — Gemma 3 1B model not loaded (modelLoadState=${localFallbackProvider.modelLoadState.value}); " +
+                "inference stages skipped. Run ./gradlew downloadModels to fetch " +
+                "gemma3_1b_it.task into app/src/main/assets/ and re-run to enable full benchmark execution."
             )
         }
 
