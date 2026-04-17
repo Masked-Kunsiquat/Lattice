@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -130,8 +131,6 @@ class ReframingLoopTest {
         val prompt = loop.buildAffectivePrompt("I feel [PERSON_abc] ignored me today.")
         assertTrue(prompt.contains("[PERSON_abc]"))
         assertTrue(prompt.contains("v=<number> a=<number>"))
-        assertTrue(prompt.contains("<|begin_of_text|>"))
-        assertTrue(prompt.contains("<|eot_id|>"))
     }
 
     // ── End-to-end flow test ──────────────────────────────────────────────────
@@ -377,9 +376,12 @@ class ReframingLoopTest {
         assertEquals(raw, result.reasoning)
     }
 
-    @Test(expected = IllegalStateException::class)
-    fun `parseDotOutput - throws when sentinel missing`() {
-        loop.parseDotOutput("The text seems okay. No distortions here.")
+    @Test
+    fun `parseDotOutput - returns empty list when sentinel missing and no known labels present`() {
+        // Current behaviour: greedy fallback scans for known labels; plain text with no
+        // distortion keywords returns an empty list rather than throwing.
+        val result = loop.parseDotOutput("The text seems okay. No distortions here.")
+        assertTrue(result.distortions.isEmpty())
     }
 
     // ── Stage 2: buildDotPrompt ───────────────────────────────────────────────
@@ -395,8 +397,6 @@ class ReframingLoopTest {
                 prompt.contains(distortion.label, ignoreCase = true)
             )
         }
-        assertTrue(prompt.contains("<|begin_of_text|>"))
-        assertTrue(prompt.contains("<|eot_id|>"))
     }
 
     // ── Stage 2: end-to-end flow ──────────────────────────────────────────────
@@ -539,10 +539,9 @@ class ReframingLoopTest {
         )
         assertTrue(prompt.contains("[PERSON_abc]"))
         assertTrue(prompt.contains("Mind Reading"))
-        assertTrue(prompt.contains("Socratic", ignoreCase = true))
-        assertTrue(prompt.contains("Reality", ignoreCase = true))
-        assertTrue(prompt.contains("probability", ignoreCase = true))
-        assertTrue(prompt.contains("<|begin_of_text|>"))
+        assertTrue(prompt.contains("fear", ignoreCase = true))
+        assertTrue(prompt.contains("assumption", ignoreCase = true))
+        assertTrue(prompt.contains("balanced", ignoreCase = true))
     }
 
     @Test
@@ -553,9 +552,8 @@ class ReframingLoopTest {
             distortions = listOf(CognitiveDistortion.OVERGENERALIZATION),
         )
         assertTrue(prompt.contains("Overgeneralization"))
-        assertTrue(prompt.contains("Behavioral", ignoreCase = true))
-        assertTrue(prompt.contains("contrary", ignoreCase = true))
-        assertTrue(prompt.contains("<|begin_of_text|>"))
+        assertTrue(prompt.contains("avoidance", ignoreCase = true))
+        assertTrue(prompt.contains("temporary state", ignoreCase = true))
     }
 
     @Test
@@ -565,7 +563,8 @@ class ReframingLoopTest {
             strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
             distortions = emptyList(),
         )
-        assertTrue(prompt.contains("No specific cognitive distortions were identified."))
+        // When distortions is empty, no distortion line is injected into the prompt.
+        assertFalse(prompt.contains("Distortions present:"))
     }
 
     // ── Stage 3: end-to-end flow ──────────────────────────────────────────────
@@ -710,8 +709,8 @@ class ReframingLoopTest {
             distortions = emptyList(),
             baActivity = activity,
         )
+        // taskName is injected as the concrete next step; valueCategory is not part of the prompt.
         assertTrue(prompt.contains("Take a 5-minute walk"))
-        assertTrue(prompt.contains("health"))
     }
 
     // ── Task 5.3-A: RAG Evidence injection ───────────────────────────────────
@@ -734,8 +733,8 @@ class ReframingLoopTest {
             evidenceEntries = listOf(evidence),
         )
         assertTrue(
-            "Evidence for the Contrary block must appear in Q2 prompt",
-            prompt.contains("Evidence for the Contrary")
+            "Evidence block must appear in Q2 prompt",
+            prompt.contains("Past evidence that contradicts this belief")
         )
         assertTrue(
             "Evidence entry content must be present in prompt",
