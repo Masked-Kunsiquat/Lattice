@@ -158,15 +158,14 @@ class LocalFallbackProvider(
             _modelLoadState.value = ModelLoadState.ERROR
             initFailureReason = "${e::class.simpleName}: ${e.message}"
             Log.w(TAG, "LocalFallbackProvider init failed", e)
-            // If the engine rejected the model (format / signature mismatch), delete it
-            // so the next "Download" tap fetches a fresh, compatible copy.
-            if (e is IllegalStateException && e.message?.contains("Failed to initialize engine") == true) {
-                try {
-                    if (modelFile.delete()) {
-                        Log.w(TAG, "Deleted incompatible model file: ${modelFile.name} — re-download required")
-                    }
-                } catch (_: Exception) { }
-            }
+            // Delete the model file on any engine-creation failure so the next
+            // "Download" tap fetches a fresh copy. Covers format/signature mismatches
+            // (LiteRtLmJniException), truncated downloads, and version skew.
+            try {
+                if (modelFile.exists() && modelFile.delete()) {
+                    Log.w(TAG, "Deleted incompatible model file: ${modelFile.name} — re-download required")
+                }
+            } catch (_: Exception) { }
         }
     }
 
@@ -204,21 +203,31 @@ class LocalFallbackProvider(
     /**
      * Returns the model asset filename for the current device based on [Build.BOARD]
      * and [Build.HARDWARE].
+     *
+     * Board → SoC mapping:
+     * - "sun" / "kailua"   → SM8750 Snapdragon 8 Elite  (S25 series, Pixel 9 series)
+     * - "pineapple"        → SM8650 Snapdragon 8 Gen 3  (S24 series)
+     * - "kalama"           → SM8550 Snapdragon 8 Gen 2  (S23 series)
+     * - anything else      → universal CPU model
+     *
+     * Note: "kalama" is SM8550, NOT SM8650 — an earlier mapping was incorrect.
      */
     private fun resolveModelName(): String {
         val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
         val hardware = Build.HARDWARE.lowercase(java.util.Locale.ROOT)
 
         return when {
-            board == "sun" || board == "kailua" || (hardware == "qcom" && board.contains("8750")) -> MODEL_ELITE
-            board == "kalama" || board.contains("8650") -> MODEL_ULTRA
+            board == "sun" || board == "kailua" || (hardware == "qcom" && board.contains("8750")) -> MODEL_SM8750
+            board == "pineapple" || board.contains("8650") -> MODEL_SM8650
+            board == "kalama" || board.contains("8550") -> MODEL_SM8550
             else -> MODEL_UNIVERSAL
         }
     }
 
     /**
-     * Returns [Backend.GPU] for Snapdragon devices with AOT-compiled Adreno kernels,
-     * [Backend.CPU] for the universal model.
+     * Returns [Backend.GPU] for Snapdragon tiers with AOT-compiled Adreno kernels,
+     * [Backend.CPU] for the universal model. [initialize] will fall back to CPU
+     * automatically if GPU init fails.
      */
     private fun resolveBackend(): Backend {
         val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
@@ -226,7 +235,8 @@ class LocalFallbackProvider(
 
         return when {
             board == "sun" || board == "kailua" || (hardware == "qcom" && board.contains("8750")) -> Backend.GPU()
-            board == "kalama" || board.contains("8650") -> Backend.GPU()
+            board == "pineapple" || board.contains("8650") -> Backend.GPU()
+            board == "kalama" || board.contains("8550") -> Backend.GPU()
             else -> Backend.CPU()
         }
     }
@@ -234,15 +244,15 @@ class LocalFallbackProvider(
     companion object {
         private const val TAG = "LocalFallbackProvider"
 
+        // Files sourced from https://huggingface.co/litert-community/Gemma3-1B-IT
+        // These are AOT-compiled with Adreno GPU kernels for each SoC tier.
+        // The universal model is CPU-only (q4 quantised, any ARM64).
         private const val HF_BASE_URL =
-            "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
+            "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main"
 
-        private const val MODEL_ELITE     = "gemma3-1b-it-elite.litertlm"     // 689 MB — SM8750 (S25 Ultra)
-        private const val MODEL_ULTRA     = "gemma3-1b-it-ultra.litertlm"     // 690 MB — SM8650 (S24 Ultra)
-        // TODO: replace gemma3-1b-it-universal.task in your HF repo with
-        // Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm (584 MB) from litert-community,
-        // renamed to gemma3-1b-it-universal.litertlm. The .task file is MediaPipe format
-        // and will not load with the LiteRT-LM runtime.
-        private const val MODEL_UNIVERSAL = "gemma3-1b-it-universal.litertlm" // 584 MB — any ARM64
+        private const val MODEL_SM8750   = "Gemma3-1B-IT_q4_ekv1280_sm8750.litertlm" // 689 MB — Snapdragon 8 Elite
+        private const val MODEL_SM8650   = "Gemma3-1B-IT_q4_ekv1280_sm8650.litertlm" // 690 MB — Snapdragon 8 Gen 3
+        private const val MODEL_SM8550   = "Gemma3-1B-IT_q4_ekv1280_sm8550.litertlm" // 690 MB — Snapdragon 8 Gen 2
+        private const val MODEL_UNIVERSAL = "Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm" // 584 MB — any ARM64
     }
 }
