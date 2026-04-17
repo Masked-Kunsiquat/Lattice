@@ -3,70 +3,62 @@ package com.github.maskedkunisquat.lattice.core.logic
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
 import java.io.File
-import java.io.FileNotFoundException
+import java.io.IOException
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import java.io.IOException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class ModelLoadState { IDLE, COPYING_MODEL, LOADING_SESSION, READY, ERROR }
 
 /**
- * LLM provider backed by the locally-bundled Gemma 3 1B Instruct LiteRT model.
+ * LLM provider backed by a locally-stored Gemma 3 1B Instruct LiteRT-LM model.
  *
- * This is the primary fallback when Gemini Nano (AICore) is unavailable. The model
- * runs entirely on-device via MediaPipe Tasks GenAI — no data leaves the device.
+ * This is the primary fallback when Gemini Nano (AICore) is unavailable. Inference
+ * runs entirely on-device via the [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM)
+ * runtime — no data leaves the device.
  *
  * ## Hardware tiers
- * Three variants are available. The asset is selected at [initialize] time based on
- * [Build.BOARD]:
+ * Three variants are available from [litert-community/Gemma3-1B-IT](https://huggingface.co/litert-community/Gemma3-1B-IT).
+ * The model file is selected at [initialize] time based on [Build.BOARD]:
  *
  * | Tier | File | Target SoC | Backend |
  * |---|---|---|---|
- * | Elite | `gemma3-1b-it-elite.litertlm` | SM8750 (S25 Ultra) | Adreno 830 AOT kernels |
- * | Ultra | `gemma3-1b-it-ultra.litertlm` | SM8650 (S24 Ultra) | Adreno 750 AOT kernels |
- * | Universal | `gemma3-1b-it-universal.task` | Any ARM64 | JIT / OpenCL fallback |
+ * | Elite | `Gemma3-1B-IT_q4_ekv1280_sm8750.litertlm` | SM8750 (S25 Ultra) | Adreno 830 AOT → GPU |
+ * | Ultra | `Gemma3-1B-IT_q4_ekv1280_sm8650.litertlm` | SM8650 (S24 Ultra) | Adreno 750 AOT → GPU |
+ * | Universal | `Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm` | Any ARM64 | CPU |
  *
  * Run `./gradlew downloadModels` to fetch the correct variant for the connected device.
- * Override with `-PdownloadTier=elite|ultra|universal`.
- *
- * ## Inference
- * Uses MediaPipe's [LlmInference] session with a 1,280-token KV-cache context (`ekv1280`).
  *
  * ## Model lifecycle
- * The selected file is copied from assets to [Context.filesDir] on first [initialize]
- * call. Subsequent launches skip the copy if the file is already present.
+ * The [Engine] is a heavy singleton created in [initialize] and kept alive for the
+ * lifetime of the provider. Each [process] call creates a fresh [Conversation] (no
+ * accumulated turn history — [ReframingLoop] manages all context externally).
  */
 class LocalFallbackProvider(
     private val context: Context,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : LlmProvider {
 
-    override val id = "gemma3_1b_mediapipe"
+    override val id = "gemma3_1b_litertlm"
 
-    @Volatile private var llmInference: LlmInference? = null
-    
-    // Bridging callbacks for the singleton LlmInference session. 
-    // Set per-request in process().
-    private var currentPartialResultListener: ((String, Boolean) -> Unit)? = null
-    private var currentErrorListener: ((Throwable) -> Unit)? = null
+    @Volatile private var engine: Engine? = null
 
     @Volatile private var initAttempted = false
     @Volatile private var initFailureReason: String? = null
@@ -82,7 +74,7 @@ class LocalFallbackProvider(
     fun downloadModel() {
         val modelAsset = resolveModelName()
         val workManager = WorkManager.getInstance(context)
-        
+
         val downloadRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
             .setInputData(workDataOf(
                 ModelDownloadWorker.KEY_MODEL_ASSET to modelAsset,
@@ -93,12 +85,12 @@ class LocalFallbackProvider(
 
         workManager.enqueueUniqueWork(
             ModelDownloadWorker.UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.KEEP, // Don't restart if already running
+            ExistingWorkPolicy.KEEP,
             downloadRequest
         )
     }
 
-    /** Returns a Flow of WorkInfo to track download progress in the UI. */
+    /** Returns a Flow of [WorkInfo] to track download progress in the UI. */
     fun getDownloadWorkInfo(): Flow<WorkInfo?> {
         return WorkManager.getInstance(context)
             .getWorkInfosForUniqueWorkFlow(ModelDownloadWorker.UNIQUE_WORK_NAME)
@@ -106,47 +98,48 @@ class LocalFallbackProvider(
     }
 
     /**
-     * Selects the hardware tier, copies the model file to internal storage (if needed),
-     * then opens a [LlmInference] session via MediaPipe. Safe to call multiple times;
-     * subsequent calls are no-ops if successful.
+     * Creates the [Engine] for the selected hardware tier and marks the provider ready.
+     * Safe to call multiple times — subsequent calls are no-ops once the engine is loaded.
+     * Retry is automatic after a failure (e.g. after a fresh download replaces a corrupt file).
      */
     fun initialize() {
-        if (llmInference != null) return
+        if (engine != null) return
         synchronized(initLock) {
-            if (llmInference != null) return
+            if (engine != null) return
             initAttempted = true
             try {
                 val modelAsset = resolveModelName()
                 Log.i(TAG, "Selected model tier: $modelAsset (board=${Build.BOARD}, hardware=${Build.HARDWARE})")
-                
-                _modelLoadState.value = ModelLoadState.COPYING_MODEL
-                copyModelIfNeeded(modelAsset)
-                
+
+                val modelFile = File(context.filesDir, modelAsset)
+                if (!modelFile.exists()) {
+                    throw IOException("Model not found: $modelAsset. Download it from Settings.")
+                }
+
                 _modelLoadState.value = ModelLoadState.LOADING_SESSION
-                val modelPath = File(context.filesDir, modelAsset).absolutePath
-                
-                val options = LlmInference.LlmInferenceOptions.builder()
-                    .setModelPath(modelPath)
-                    .setMaxTokens(MAX_TOKENS)
-                    .build()
-                
-                llmInference = LlmInference.createFromOptions(context, options)
+                val engineConfig = EngineConfig(
+                    modelPath = modelFile.absolutePath,
+                    backend = resolveBackend(),
+                    cacheDir = context.cacheDir.path,
+                )
+                val eng = Engine(engineConfig)
+                eng.initialize()
+                engine = eng
                 _modelLoadState.value = ModelLoadState.READY
-                Log.i(TAG, "MediaPipe LlmInference session ready — model=$modelAsset")
+                Log.i(TAG, "LiteRT-LM engine ready — model=$modelAsset")
             } catch (e: Exception) {
                 _modelLoadState.value = ModelLoadState.ERROR
                 initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed", e)
-                // If MediaPipe rejected the model (signature mismatch / format incompatibility),
-                // delete the file so the next "Download" tap fetches a fresh, compatible copy.
-                // Don't delete on transient errors (OOM, interrupted IO) — only on hard init failures.
+                // If the engine rejected the model (format / signature mismatch), delete it
+                // so the next "Download" tap fetches a fresh, compatible copy.
                 if (e is IllegalStateException && e.message?.contains("Failed to initialize engine") == true) {
                     try {
                         val staleFile = File(context.filesDir, resolveModelName())
                         if (staleFile.delete()) {
                             Log.w(TAG, "Deleted incompatible model file: ${staleFile.name} — re-download required")
                         }
-                    } catch (_: Exception) { /* resolveModelName() itself can't throw, but be safe */ }
+                    } catch (_: Exception) { }
                 }
             }
         }
@@ -154,129 +147,77 @@ class LocalFallbackProvider(
 
     override suspend fun isAvailable(): Boolean {
         if (!initAttempted) withContext(dispatcher) { initialize() }
-        return llmInference != null
+        return engine != null
     }
 
     /**
-     * Streams inference results for [prompt] via the Gemma 3 1B MediaPipe session.
+     * Streams inference results for [prompt] via a fresh LiteRT-LM [Conversation].
      *
-     * Emits [LlmResult.Token] for each text chunk (streaming), then [LlmResult.Complete]
-     * on finish or [LlmResult.Error] on failure.
+     * A new [Conversation] is created per call — [ReframingLoop] manages all multi-turn
+     * context externally and passes a self-contained prompt each time.
+     *
+     * Emits [LlmResult.Token] for each streamed chunk, then [LlmResult.Complete] on
+     * finish, or [LlmResult.Error] on failure.
      */
-    override fun process(prompt: String): Flow<LlmResult> = callbackFlow {
-        val inference = llmInference
-        if (inference == null) {
-            val reason = initFailureReason ?: "Call LocalFallbackProvider.initialize() first."
-            send(LlmResult.Error(IllegalStateException("Model not loaded. $reason")))
-            close()
-            return@callbackFlow
-        }
-
-        // Setup bridging for this specific flow collection
-        currentPartialResultListener = { partial, done ->
-            if (partial.isNotEmpty()) {
-                trySend(LlmResult.Token(partial))
+    override fun process(prompt: String): Flow<LlmResult> = flow {
+        val eng = engine ?: throw IllegalStateException(
+            "Model not loaded. ${initFailureReason ?: "Call initialize() first."}"
+        )
+        eng.createConversation().use { conversation ->
+            conversation.sendMessageAsync(prompt).collect { message ->
+                val text = message.toString()
+                if (text.isNotEmpty()) emit(LlmResult.Token(text))
             }
-            if (done) {
-                trySend(LlmResult.Complete)
-                close()
-            }
+            emit(LlmResult.Complete)
         }
-        
-        currentErrorListener = { error ->
-            close(error)
-        }
-
-        try {
-            inference.generateResponseAsync(prompt) { partial, done ->
-                currentPartialResultListener?.invoke(partial, done)
-            }
-        } catch (e: Exception) {
-            close(e)
-        }
-
-        awaitClose {
-            currentPartialResultListener = null
-            currentErrorListener = null
-        }
+    }.catch { e ->
+        emit(LlmResult.Error(e))
     }.flowOn(dispatcher)
 
     // ── Tier selection ────────────────────────────────────────────────────────
 
     /**
      * Returns the model asset filename for the current device based on [Build.BOARD]
-     * and [Build.HARDWARE]. Recognizes "sun" and "8750" for Elite tier, and "8650"
-     * for Ultra tier.
+     * and [Build.HARDWARE].
      */
     private fun resolveModelName(): String {
         val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
         val hardware = Build.HARDWARE.lowercase(java.util.Locale.ROOT)
-        
+
         return when {
-            // "sun" and "kailua" are codenames for SM8750 (S25 Series / Snapdragon 8 Elite)
             board == "sun" || board == "kailua" || (hardware == "qcom" && board.contains("8750")) -> MODEL_ELITE
-            // "kalama" and "8650" refer to Snapdragon 8 Gen 3 (S24 Series)
             board == "kalama" || board.contains("8650") -> MODEL_ULTRA
             else -> MODEL_UNIVERSAL
         }
     }
 
-    // ── Model copy ────────────────────────────────────────────────────────────
-
     /**
-     * Copies [modelAsset] from assets to [Context.filesDir] if not already present.
-     * Uses a .tmp intermediary and atomic rename so a partial copy is never visible
-     * as a complete file.
-     *
-     * Note: If the file is already in [Context.filesDir] (e.g. from a side-load or
-     * previous run), this method returns early.
+     * Returns [Backend.GPU] for Snapdragon devices with AOT-compiled Adreno kernels,
+     * [Backend.CPU] for the universal model.
      */
-    private fun copyModelIfNeeded(modelAsset: String) {
-        val dest = File(context.filesDir, modelAsset)
-        val tmp  = File(context.filesDir, "$modelAsset.tmp")
-        if (dest.exists()) {
-            Log.d(TAG, "Model $modelAsset already exists in internal storage; skipping copy.")
-            return
-        }
+    private fun resolveBackend(): Backend {
+        val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
+        val hardware = Build.HARDWARE.lowercase(java.util.Locale.ROOT)
 
-        // The downloader (Gradle/Settings) might have already placed it here.
-        // We only attempt to copy from Assets if it's missing from internal storage.
-        try {
-            context.assets.open(modelAsset).use { src ->
-                tmp.outputStream().use { dst ->
-                    val buf = ByteArray(2 * 1024 * 1024)
-                    var n: Int
-                    while (src.read(buf).also { n = it } != -1) {
-                        dst.write(buf, 0, n)
-                    }
-                }
-            }
-            if (!tmp.renameTo(dest)) {
-                throw IOException("Failed to rename $tmp to $dest")
-            }
-        } catch (e: FileNotFoundException) {
-            // If it's not in assets AND not in dest, then it's actually missing.
-            Log.e(TAG, "Model $modelAsset not found in assets. It must be downloaded or side-loaded.")
-            throw IOException("Model asset missing: $modelAsset. Run ./gradlew downloadModels or download in Settings.")
-        } catch (e: Exception) {
-            tmp.delete()
-            throw e
+        return when {
+            board == "sun" || board == "kailua" || (hardware == "qcom" && board.contains("8750")) -> Backend.GPU()
+            board == "kalama" || board.contains("8650") -> Backend.GPU()
+            else -> Backend.CPU()
         }
     }
 
     companion object {
         private const val TAG = "LocalFallbackProvider"
-        private const val HF_BASE_URL = "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
-        // Hardware-optimised tiers — selected by selectModelAsset() at runtime.
-        private const val MODEL_ELITE     = "gemma3-1b-it-elite.litertlm"
-        private const val MODEL_ULTRA     = "gemma3-1b-it-ultra.litertlm"
-        private const val MODEL_UNIVERSAL = "gemma3-1b-it-universal.task"
+        // Source: https://huggingface.co/litert-community/Gemma3-1B-IT
+        private const val HF_BASE_URL =
+            "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main"
 
-        // Matches the model's ekv1280 KV-cache context window.
-        private const val MAX_TOKENS = 1280
-
-        // Approximate compressed model size — used for copy-progress estimate.
-        private const val APPROX_MODEL_BYTES = 800_000_000L
+        private const val MODEL_ELITE =
+            "Gemma3-1B-IT_q4_ekv1280_sm8750.litertlm"         // 689 MB — SM8750 (S25 Ultra)
+        private const val MODEL_ULTRA =
+            "Gemma3-1B-IT_q4_ekv1280_sm8650.litertlm"         // 690 MB — SM8650 (S24 Ultra)
+        private const val MODEL_UNIVERSAL =
+            "Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm" // 584 MB — any ARM64
     }
 }

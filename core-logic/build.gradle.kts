@@ -58,7 +58,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.androidx.room.ktx)
-    implementation(libs.mediapipe.tasks.genai)
+    implementation(libs.litertlm.android)
     implementation(libs.onnxruntime.android)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.okhttp)
