@@ -35,14 +35,15 @@ enum class ModelLoadState { IDLE, COPYING_MODEL, LOADING_SESSION, READY, ERROR }
  * runtime — no data leaves the device.
  *
  * ## Hardware tiers
- * Three variants are available from [litert-community/Gemma3-1B-IT](https://huggingface.co/litert-community/Gemma3-1B-IT).
+ * Three variants are hosted at `masked-kunsiquat/gemma-3-1b-it-litert` on HuggingFace
+ * (sourced from [litert-community/Gemma3-1B-IT](https://huggingface.co/litert-community/Gemma3-1B-IT)).
  * The model file is selected at [initialize] time based on [Build.BOARD]:
  *
  * | Tier | File | Target SoC | Backend |
  * |---|---|---|---|
- * | Elite | `Gemma3-1B-IT_q4_ekv1280_sm8750.litertlm` | SM8750 (S25 Ultra) | Adreno 830 AOT → GPU |
- * | Ultra | `Gemma3-1B-IT_q4_ekv1280_sm8650.litertlm` | SM8650 (S24 Ultra) | Adreno 750 AOT → GPU |
- * | Universal | `Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm` | Any ARM64 | CPU |
+ * | Elite | `gemma3-1b-it-elite.litertlm` | SM8750 (S25 Ultra) | Adreno 830 AOT → GPU |
+ * | Ultra | `gemma3-1b-it-ultra.litertlm` | SM8650 (S24 Ultra) | Adreno 750 AOT → GPU |
+ * | Universal | `gemma3-1b-it-universal.litertlm` | Any ARM64 | CPU |
  *
  * Run `./gradlew downloadModels` to fetch the correct variant for the connected device.
  *
@@ -209,15 +210,15 @@ class LocalFallbackProvider(
     companion object {
         private const val TAG = "LocalFallbackProvider"
 
-        // Source: https://huggingface.co/litert-community/Gemma3-1B-IT
         private const val HF_BASE_URL =
-            "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main"
+            "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
-        private const val MODEL_ELITE =
-            "Gemma3-1B-IT_q4_ekv1280_sm8750.litertlm"         // 689 MB — SM8750 (S25 Ultra)
-        private const val MODEL_ULTRA =
-            "Gemma3-1B-IT_q4_ekv1280_sm8650.litertlm"         // 690 MB — SM8650 (S24 Ultra)
-        private const val MODEL_UNIVERSAL =
-            "Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm" // 584 MB — any ARM64
+        private const val MODEL_ELITE     = "gemma3-1b-it-elite.litertlm"     // 689 MB — SM8750 (S25 Ultra)
+        private const val MODEL_ULTRA     = "gemma3-1b-it-ultra.litertlm"     // 690 MB — SM8650 (S24 Ultra)
+        // TODO: replace gemma3-1b-it-universal.task in your HF repo with
+        // Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm (584 MB) from litert-community,
+        // renamed to gemma3-1b-it-universal.litertlm. The .task file is MediaPipe format
+        // and will not load with the LiteRT-LM runtime.
+        private const val MODEL_UNIVERSAL = "gemma3-1b-it-universal.litertlm" // 584 MB — any ARM64
     }
 }
