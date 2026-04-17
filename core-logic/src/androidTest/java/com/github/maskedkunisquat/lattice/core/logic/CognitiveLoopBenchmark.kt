@@ -119,7 +119,7 @@ class CognitiveLoopBenchmark {
             nanoProvider = object : LlmProvider {
                 override val id = "nano_stub"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = localDb.transitEventDao(),

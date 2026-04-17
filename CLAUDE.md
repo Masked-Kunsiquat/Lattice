@@ -93,13 +93,13 @@ There is no DI framework. `LatticeApplication` holds all singletons as `by lazy`
 KeyProvider → LatticeDatabase (SQLCipher, encrypted) → DAOs
                                                       ↓
 SettingsRepository (DataStore) ──────────────────────→ LlmOrchestrator → ReframingLoop
-EmbeddingProvider (ONNX) ─────────────────────────────↗
+EmbeddingProvider (TFLite) ───────────────────────────↗
 LocalFallbackProvider (MediaPipe, background init) ───↗
 CloudProvider (Retrofit) ─────────────────────────────↗
 JournalRepository / SearchRepository ────────────────→ ReframingLoop
 ```
 
-On first launch, SQLCipher performs a one-time plaintext-to-encrypted migration (guarded by a SharedPreferences flag). `localFallbackProvider.initialize()` copies 3 ONNX shards from assets to `context.filesDir` on a background thread.
+On first launch, SQLCipher performs a one-time plaintext-to-encrypted migration (guarded by a SharedPreferences flag). `localFallbackProvider.initialize()` loads the Gemma 3 1B LiteRT model from assets on a background thread.
 
 ### Privacy Model
 
@@ -161,7 +161,7 @@ Seed JSON must satisfy:
 
 ### Embeddings
 
-`EmbeddingProvider` loads `snowflake-arctic-embed-xs.onnx` directly from assets (23 MB, int8, 384-dim). It does **not** copy to `filesDir` — reads from assets on every init. Fallback is a zero-vector `FloatArray(384)`.
+`EmbeddingProvider` loads `snowflake-arctic-embed-xs_float32.tflite` from assets (87 MB, float32, fixed seq_len=128, 384-dim) via `org.tensorflow.lite.Interpreter` (`com.google.ai.edge.litert:litert` AAR). Inputs are INT64; output `last_hidden_state` [1×128×384] is masked mean-pooled over `attention_mask==1` positions. Does **not** copy to `filesDir` — reads from assets on every init. Fallback is a zero-vector `FloatArray(384)`.
 
 Seed JSON files contain real 384-dim embeddings generated from the masked entry text via Arctic Embed XS.
 
@@ -195,7 +195,7 @@ HuggingFace repos:
 - **Embedding model**: `https://huggingface.co/masked-kunsiquat/snowflake-arctic-embed-xs`
 - **Clinical persona seeds (dataset)**: `https://huggingface.co/datasets/masked-kunsiquat/clinical-personas`
 
-`core-logic/src/main/assets/` contains the embedding model (`snowflake-arctic-embed-xs.onnx`, 23 MB) and `vocab.txt` — these **are** committed to git (small enough, needed by `:core-logic` tests without any download step).
+`core-logic/src/main/assets/` contains the embedding models (`snowflake-arctic-embed-xs_float32.tflite` 87 MB, `snowflake-arctic-embed-xs_float16.tflite` 44 MB) and `vocab.txt` — these **are** committed to git, needed by `:core-logic` tests without any download step. The float32 model is the production path; float16 has a MEAN op dtype issue from onnx2tf conversion and is unused.
 
 ---
 

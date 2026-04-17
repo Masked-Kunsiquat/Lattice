@@ -60,7 +60,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.litertlm.android)
     implementation(libs.litert.android)
-    implementation(libs.onnxruntime.android)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.okhttp)
     testImplementation(libs.junit)

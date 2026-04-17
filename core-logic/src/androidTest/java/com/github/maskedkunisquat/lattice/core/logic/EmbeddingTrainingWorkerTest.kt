@@ -546,11 +546,11 @@ private class WorkManagerTestScheduler(private val wm: WorkManager) : TrainingSc
         wm.cancelUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME)
         val deadline = System.currentTimeMillis() + 5_000L
         while (System.currentTimeMillis() < deadline) {
-            val infos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).await()
+            val infos = wm.getWorkInfosForUniqueWorkFlow(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).first()
             if (infos.none { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) break
             delay(100)
         }
-        val finalInfos = wm.getWorkInfosForUniqueWork(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).await()
+        val finalInfos = wm.getWorkInfosForUniqueWorkFlow(EmbeddingTrainingWorker.UNIQUE_WORK_NAME).first()
         check(finalInfos.none { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) {
             "EmbeddingTrainingWorker did not quiesce within 5 s timeout"
         }
