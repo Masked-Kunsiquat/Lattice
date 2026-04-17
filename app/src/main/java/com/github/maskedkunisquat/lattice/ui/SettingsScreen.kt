@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
@@ -44,9 +45,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.work.WorkInfo
 import com.github.maskedkunisquat.lattice.BuildConfig
 import androidx.compose.runtime.Composable
@@ -247,6 +254,15 @@ private fun LocalModelSection(
     val isDownloading = downloadWorkInfo?.state == WorkInfo.State.RUNNING ||
             downloadWorkInfo?.state == WorkInfo.State.ENQUEUED
 
+    val context = LocalContext.current
+    val notificationsBlocked = remember(isDownloading) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        } else false
+    }
+
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val statusText = when {
             isDownloading -> "Downloading model… ${(downloadProgress * 100).toInt()}%"
@@ -292,6 +308,37 @@ private fun LocalModelSection(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (notificationsBlocked) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            "Notifications are off — no status bar progress.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        ) {
+                            Text("Enable", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
             modelLoadState == ModelLoadState.COPYING_MODEL -> {
                 LinearProgressIndicator(

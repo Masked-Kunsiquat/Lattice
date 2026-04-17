@@ -15,7 +15,8 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * WorkManager worker that downloads the Gemma 3 1B model tier from Hugging Face.
@@ -34,30 +35,43 @@ class ModelDownloadWorker(
 
     private val localFallbackProvider get() = (applicationContext as DownloadDependencies).localFallbackProvider
 
+    override suspend fun getForegroundInfo(): ForegroundInfo = buildForegroundInfo(0)
+
     override suspend fun doWork(): Result {
         val modelAsset = inputData.getString(KEY_MODEL_ASSET) ?: return Result.failure()
         val url = inputData.getString(KEY_URL) ?: return Result.failure()
         val dest = File(applicationContext.filesDir, modelAsset)
         val tmp = File(applicationContext.filesDir, "$modelAsset.tmp")
 
-        if (dest.exists()) return Result.success()
+        // If file exists, check if it's at least 100MB to avoid "success" on 404/interrupted files
+        if (dest.exists() && dest.length() > 100_000_000L) {
+            Log.i(TAG, "Valid model file already exists, skipping download.")
+            withContext(Dispatchers.IO) { localFallbackProvider.initialize() }
+            return Result.success()
+        }
 
         setForeground(buildForegroundInfo(0))
 
         return try {
-            downloadFile(url, tmp) { progress ->
-                setProgressAsync(workDataOf(KEY_PROGRESS to progress))
-                setForegroundAsync(buildForegroundInfo((progress * 100).toInt()))
-            }
+            withContext(Dispatchers.IO) {
+                downloadFile(url, tmp) { progress ->
+                    setProgressAsync(workDataOf(KEY_PROGRESS to progress))
+                    setForegroundAsync(buildForegroundInfo((progress * 100).toInt()))
+                }
 
-            if (!tmp.renameTo(dest)) {
-                tmp.copyTo(dest, overwrite = true)
-                tmp.delete()
+                // Final validation: Ensure the downloaded file isn't suspiciously small
+                if (tmp.length() < 100_000_000L) {
+                    throw IOException("Downloaded file is too small (${tmp.length()} bytes). Likely a 404 page.")
+                }
+
+                if (!tmp.renameTo(dest)) {
+                    tmp.copyTo(dest, overwrite = true)
+                    tmp.delete()
+                }
+
+                // Trigger initialization now that file is present
+                localFallbackProvider.initialize()
             }
-            
-            // Trigger initialization now that file is present
-            localFallbackProvider.initialize()
-            
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Model download failed", e)
@@ -66,23 +80,23 @@ class ModelDownloadWorker(
         }
     }
 
-    private fun downloadFile(url: String, dest: File, onProgress: suspend (Float) -> Unit) {
+    private fun downloadFile(url: String, dest: File, onProgress: (Float) -> Unit) {
         var location = url
         repeat(5) { // Follow up to 5 redirects
             val conn = URL(location).openConnection() as HttpURLConnection
             conn.instanceFollowRedirects = false
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 30_000
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 60_000
             conn.setRequestProperty("User-Agent", "Lattice-Android-Downloader")
-            
+
             val code = conn.responseCode
             if (code in 300..399) {
                 location = conn.getHeaderField("Location") ?: throw IOException("Redirect without location")
                 return@repeat
             }
-            
+
             if (code != 200) throw IOException("HTTP $code from $location")
-            
+
             val total = conn.contentLengthLong
             conn.inputStream.use { input ->
                 dest.outputStream().use { output ->
@@ -93,11 +107,10 @@ class ModelDownloadWorker(
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         output.write(buffer, 0, bytesRead)
                         totalRead += bytesRead
-                        
+
                         val now = System.currentTimeMillis()
                         if (total > 0 && now - lastUpdate > 500) {
-                            val progressValue = totalRead.toFloat() / total
-                            runBlocking { onProgress(progressValue) }
+                            onProgress(totalRead.toFloat() / total)
                             lastUpdate = now
                         }
                     }
