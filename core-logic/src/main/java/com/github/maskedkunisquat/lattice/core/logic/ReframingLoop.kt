@@ -34,7 +34,8 @@ class ReframingLoop(
     private val searchRepository: SearchRepository? = null,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val embeddingProvider: EmbeddingProvider? = null,
-    private val affectiveMlp: AffectiveMlp? = null,
+    @Volatile var affectiveMlp: AffectiveMlp? = null,
+    @Volatile var distortionMlp: DistortionMlp? = null,
 ) {
 
     // ── Stage 1 ──────────────────────────────────────────────────────────────
@@ -105,10 +106,30 @@ class ReframingLoop(
     suspend fun runStage2DiagnosisOfThought(maskedText: String): Result<DiagnosisResult> =
         withContext(dispatcher) {
             runCatching {
-                val raw = collectTokens(
-                    orchestrator.process(buildDotPrompt(maskedText), "dot_diagnosis", DOT_SYSTEM)
-                )
-                parseDotOutput(raw)
+                val mlp     = distortionMlp
+                val embedder = embeddingProvider
+                val mlpResult: DiagnosisResult? = if (mlp != null && embedder != null) {
+                    runCatching {
+                        val embedding  = embedder.generateEmbedding(maskedText)
+                        val labels     = mlp.forward(embedding)
+                        val distortions = CognitiveDistortion.entries.filterIndexed { i, _ -> labels[i] }
+                        Log.d(TAG, "Stage2: source=mlp, distortions=$distortions")
+                        DiagnosisResult(
+                            distortions = distortions,
+                            reasoning   = "MLP classifier (${distortions.size} classes active)",
+                            source      = DiagnosisSource.MLP,
+                        )
+                    }.onFailure { e ->
+                        Log.w(TAG, "Stage2: MLP path threw, falling back to LLM", e)
+                    }.getOrNull()
+                } else null
+
+                mlpResult ?: run {
+                    val raw = collectTokens(
+                        orchestrator.process(buildDotPrompt(maskedText), "dot_diagnosis", DOT_SYSTEM)
+                    )
+                    parseDotOutput(raw)
+                }
             }
         }
 
@@ -389,6 +410,14 @@ class ReframingLoop(
 
     // ── Result types ─────────────────────────────────────────────────────────
 
+    /** Source of the distortion classification in Stage 2. */
+    enum class DiagnosisSource {
+        /** Distortions produced by the on-device [DistortionMlp] head. */
+        MLP,
+        /** Distortions parsed from the LLM's `DISTORTIONS:` sentinel output. */
+        LLM,
+    }
+
     /** Source of the affective coordinates in Stage 1. */
     enum class AffectiveSource {
         /** Coordinates produced by the on-device [AffectiveMlp] head. */
@@ -419,7 +448,8 @@ class ReframingLoop(
      */
     data class DiagnosisResult(
         val distortions: List<CognitiveDistortion>,
-        val reasoning: String
+        val reasoning: String,
+        val source: DiagnosisSource = DiagnosisSource.LLM,
     )
 
     /**

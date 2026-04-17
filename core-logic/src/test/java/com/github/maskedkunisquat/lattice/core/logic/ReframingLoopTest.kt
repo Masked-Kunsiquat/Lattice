@@ -432,6 +432,64 @@ class ReframingLoopTest {
         assertTrue(result.isFailure)
     }
 
+    @Test
+    fun `runStage2DiagnosisOfThought - MLP path used when distortionMlp is wired`() = runTest {
+        // Wire a DistortionMlp whose b2 has all positive biases → all 12 classes fire.
+        val mlp = DistortionMlp(
+            w1 = FloatArray(DistortionMlp.OUT1 * DistortionMlp.IN),
+            b1 = FloatArray(DistortionMlp.OUT1),
+            w2 = FloatArray(DistortionMlp.OUT2 * DistortionMlp.OUT1),
+            b2 = FloatArray(DistortionMlp.OUT2) { 100f },  // sigmoid(100) ≈ 1.0 → all true
+        )
+        val fakeEmbedder = object : EmbeddingProvider() {
+            override suspend fun generateEmbedding(text: String) = FloatArray(384) { 0.1f }
+        }
+        val reframingLoop = loopWithResponse("DISTORTIONS: NONE")  // LLM would return NONE
+        reframingLoop.distortionMlp   = mlp
+        reframingLoop.affectiveMlp    = null  // only Stage 2 MLP is active here
+
+        // Replace embeddingProvider via the backdoor field isn't possible (private val).
+        // Instead wire it by constructing a loop directly with all three deps:
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = FakeProvider("local", listOf(LlmResult.Complete)),
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = { false },
+        )
+        val loop = ReframingLoop(
+            orchestrator      = orchestrator,
+            embeddingProvider = fakeEmbedder,
+            distortionMlp     = mlp,
+        )
+        val result = loop.runStage2DiagnosisOfThought("I always fail at everything.")
+        assertTrue(result.isSuccess)
+        val diagnosis = result.getOrThrow()
+        assertEquals(ReframingLoop.DiagnosisSource.MLP, diagnosis.source)
+        assertEquals(DistortionMlp.OUT2, diagnosis.distortions.size)  // all 12 classes fired
+    }
+
+    @Test
+    fun `runStage2DiagnosisOfThought - falls back to LLM when distortionMlp is null`() = runTest {
+        val response = "DISTORTIONS: Labeling"
+        val reframingLoop = loopWithResponse(*response.map { it.toString() }.toTypedArray())
+        // distortionMlp defaults to null → LLM path
+        val result = reframingLoop.runStage2DiagnosisOfThought("I am such a loser.")
+        assertTrue(result.isSuccess)
+        val diagnosis = result.getOrThrow()
+        assertEquals(ReframingLoop.DiagnosisSource.LLM, diagnosis.source)
+        assertEquals(listOf(CognitiveDistortion.LABELING), diagnosis.distortions)
+    }
+
+    @Test
+    fun `DiagnosisResult source defaults to LLM`() {
+        val d = ReframingLoop.DiagnosisResult(emptyList(), "raw")
+        assertEquals(ReframingLoop.DiagnosisSource.LLM, d.source)
+    }
+
     // ── Stage 3: selectStrategy ───────────────────────────────────────────────
 
     @Test

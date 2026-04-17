@@ -242,9 +242,9 @@ model to output an empty set rather than always firing something.
 - [x] Add `DistortionMlpTrainer.kt` — AdamW, binary cross-entropy loss per class, `trainStep(embedding, labels)` / `trainBatch(batch)` / `save(context)`
 
 **Integration**
-- [ ] Add `distortionMlp: DistortionMlp? = null` to `ReframingLoop` constructor
-- [ ] In `runStage2DiagnosisOfThought`: use MLP when non-null; fall back to LLM path when absent (preserves existing behaviour for devices without a trained head)
-- [ ] Wire `DistortionMlp` through `LatticeApplication` alongside `AffectiveMlp`
+- [x] Add `distortionMlp: DistortionMlp? = null` to `ReframingLoop` constructor
+- [x] In `runStage2DiagnosisOfThought`: use MLP when non-null; fall back to LLM path when absent (preserves existing behaviour for devices without a trained head)
+- [x] Wire `DistortionMlp` through `LatticeApplication` alongside `AffectiveMlp`
 
 **Evaluation**
 - [ ] 80/20 held-out split per class; log per-class precision, recall, F1 at training completion

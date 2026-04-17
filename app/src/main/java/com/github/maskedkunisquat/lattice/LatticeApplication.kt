@@ -7,7 +7,10 @@ import androidx.room.Room
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.KeyProvider
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveMlp
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveMlpInitializer
 import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifestStore
+import com.github.maskedkunisquat.lattice.core.logic.DistortionMlp
 import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
 import com.github.maskedkunisquat.lattice.core.logic.DownloadDependencies
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
@@ -133,8 +136,17 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
         )
     }
 
+    val affectiveMlpInitializer by lazy { AffectiveMlpInitializer() }
+
     val reframingLoop by lazy {
-        ReframingLoop(llmOrchestrator, database.activityHierarchyDao(), searchRepository)
+        ReframingLoop(
+            orchestrator         = llmOrchestrator,
+            activityHierarchyDao = database.activityHierarchyDao(),
+            searchRepository     = searchRepository,
+            embeddingProvider    = embeddingProvider,
+            affectiveMlp         = AffectiveMlp.load(this),
+            distortionMlp        = DistortionMlp.load(this),
+        )
     }
 
     val llmOrchestrator by lazy {
@@ -161,6 +173,16 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
 
         embeddingProvider.initialize(this)
         Thread { localFallbackProvider.initialize() }.start()
+
+        // Warm-start the affective head from the GoEmotions base layer on first launch.
+        // No-op on subsequent launches (guarded by SharedPreferences). Once trained,
+        // hot-swaps the live reference in reframingLoop so Stage 1 starts using the MLP.
+        affectiveMlpInitializer.maybeInitialize(
+            context   = this,
+            mlp       = reframingLoop.affectiveMlp ?: AffectiveMlp(),
+            scope     = applicationScope,
+            onTrained = { trained -> reframingLoop.affectiveMlp = trained },
+        )
 
         // Schedule periodic MLP refinement (no-op if already enqueued) and observe
         // the personalization toggle so the job is cancelled/re-enqueued reactively.
