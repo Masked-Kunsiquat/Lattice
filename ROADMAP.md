@@ -185,6 +185,73 @@ HuggingFace dataset (`masked-kunsiquat/clinical-personas`) at any time.
 
 ---
 
+## M10 · Distortion MLP Head
+
+**Goal:** replace the Stage 2 LLM call (Diagnosis of Thought) with a deterministic
+multi-label MLP classifier. Eliminates hallucination risk, drops Stage 2 latency to
+<5 ms, and makes distortion detection reliable regardless of which LLM backend is
+active. The MLP reuses the 384-dim Arctic Embed XS embedding already computed in
+Stage 1 — no second embedding pass needed when `AffectiveMlp` is active.
+
+### Architecture
+
+`384 → 128 → 12` with independent sigmoid outputs (one logit per `CognitiveDistortion`).
+Multi-label: each class is thresholded independently. Threshold tuned per-class on a
+held-out validation split — default 0.5 is likely too aggressive for rare classes.
+
+### Training data
+
+Two-source strategy to avoid the self-referential loop of using Gemma to label
+its own replacement's training data:
+
+| Source | Classes covered | Notes |
+|---|---|---|
+| Shreevastava et al. corpus | 10 (all except `DISQUALIFYING_POSITIVE`, `BLAME`) | Human-annotated therapy forum posts; dominant + optional secondary label per row |
+| Claude-labeled synthetic | `DISQUALIFYING_POSITIVE`, `BLAME` | ~200 examples per class — labeled by Claude, **not** Gemma |
+
+**Corpus label mapping:**
+
+| Corpus label | `CognitiveDistortion` enum |
+|---|---|
+| All-or-nothing thinking | `ALL_OR_NOTHING` |
+| Overgeneralization | `OVERGENERALIZATION` |
+| Mental filter | `MENTAL_FILTER` |
+| Should statements | `SHOULD_STATEMENTS` |
+| Labeling | `LABELING` |
+| Personalization | `PERSONALIZATION` |
+| Magnification | `CATASTROPHIZING` |
+| Emotional Reasoning | `EMOTIONAL_REASONING` |
+| Mind Reading | `MIND_READING` |
+| Fortune-telling | `FORTUNE_TELLING` |
+
+`No Distortion` rows map to the all-zeros label vector — keep them, they train the
+model to output an empty set rather than always firing something.
+
+### Tasks
+
+**Data pipeline**
+- [ ] Download Shreevastava et al. corpus; extract `(text, dominant, secondary)` rows into a local CSV
+- [ ] Write `DistortionCorpusMapper` — maps corpus label strings to `CognitiveDistortion`; logs and drops unmapped labels
+- [ ] Generate ~200 synthetic examples for `DISQUALIFYING_POSITIVE` via Claude; save as `distortion_synth_dqp.jsonl` (masked text + label array)
+- [ ] Generate ~200 synthetic examples for `BLAME` via Claude; save as `distortion_synth_blame.jsonl`
+- [ ] Embed all rows via `EmbeddingProvider` (Arctic Embed XS); serialize dataset as `(FloatArray, BooleanArray(12))` pairs
+
+**Model**
+- [ ] Add `DistortionMlp.kt` — `forward(embedding: FloatArray): BooleanArray`; per-class sigmoid thresholds; weights loaded from `distortion_mlp.bin` in `filesDir`
+- [ ] Add `DistortionManifest.kt` — version, per-class threshold array, training sample counts; serialized alongside weights
+- [ ] Add `DistortionMlpTrainer.kt` — AdamW, binary cross-entropy loss per class, `trainStep(embedding, labels)` / `trainBatch(batch)` / `save(context)`
+
+**Integration**
+- [ ] Add `distortionMlp: DistortionMlp? = null` to `ReframingLoop` constructor
+- [ ] In `runStage2DiagnosisOfThought`: use MLP when non-null; fall back to LLM path when absent (preserves existing behaviour for devices without a trained head)
+- [ ] Wire `DistortionMlp` through `LatticeApplication` alongside `AffectiveMlp`
+
+**Evaluation**
+- [ ] 80/20 held-out split per class; log per-class precision, recall, F1 at training completion
+- [ ] Per-class threshold sweep on validation set; write chosen thresholds into `DistortionManifest`
+
+---
+
 ## Deferred / Not Yet Scoped
 
 - **Option A embedding fine-tuning** — Arctic projection fine-tuning deferred until ~200 labeled entries exist.
