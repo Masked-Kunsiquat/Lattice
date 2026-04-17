@@ -205,11 +205,12 @@ class ReframingLoop(
         "Text: $maskedText"
 
     internal fun buildDotPrompt(maskedText: String): String =
-        "Which cognitive distortions are present in the text below?\n" +
+        "Identify any cognitive distortions in the text below.\n" +
         "Only use names from this list: ${CognitiveDistortion.promptList}\n\n" +
-        "Output exactly one line — no explanation, no markdown:\n" +
-        "DISTORTIONS: <comma-separated names, or NONE>\n\n" +
-        "Text: $maskedText"
+        "Respond with only this line (no explanation, no markdown):\n" +
+        "DISTORTIONS: <comma-separated names from the list, or NONE>\n\n" +
+        "Text: $maskedText\n\n" +
+        "DISTORTIONS:"
 
 
     internal fun buildInterventionPrompt(
@@ -286,34 +287,51 @@ class ReframingLoop(
     }
 
     /**
-     * Finds the last `DISTORTIONS:` sentinel line in [raw] (the model may reason
-     * aloud and repeat itself before settling), splits the CSV, and resolves each
-     * token to a [CognitiveDistortion]. Unrecognised tokens are silently dropped.
+     * Finds the last `DISTORTIONS:` sentinel line in [raw], splits the CSV, and resolves
+     * each token to a [CognitiveDistortion]. Unrecognised tokens are silently dropped.
+     *
+     * Fallback: if the model omits the sentinel prefix (e.g. outputs bare names like
+     * "Mind Reading" or "Should Statements  Mental Filter"), the raw output is scanned
+     * directly for known distortion labels before giving up.
      */
     internal fun parseDotOutput(raw: String): DiagnosisResult {
         val sentinelLine = raw.lines()
             .lastOrNull { it.contains("DISTORTIONS:", ignoreCase = true) }
-            ?: throw IllegalStateException(
-                "No DISTORTIONS: sentinel in model output: \"$raw\""
-            )
 
-        val colonIdx = sentinelLine.indexOf("DISTORTIONS:", ignoreCase = true)
-        val csv = sentinelLine.substring(colonIdx + "DISTORTIONS:".length).trim()
+        val csv: String = if (sentinelLine != null) {
+            val colonIdx = sentinelLine.indexOf("DISTORTIONS:", ignoreCase = true)
+            sentinelLine.substring(colonIdx + "DISTORTIONS:".length).trim()
+        } else {
+            // Sentinel omitted — treat the entire output as the candidate string.
+            Log.d(TAG, "parseDotOutput: no sentinel, attempting bare-text fallback on \"$raw\"")
+            raw.trim()
+        }
 
         if (csv.equals("NONE", ignoreCase = true) || csv.isEmpty()) {
             return DiagnosisResult(distortions = emptyList(), reasoning = raw)
         }
 
-        val recognized = mutableListOf<CognitiveDistortion>()
-        val unrecognized = mutableListOf<String>()
-        for (label in csv.split(",")) {
-            val distortion = CognitiveDistortion.fromLabel(label)
-            if (distortion != null) recognized.add(distortion)
-            else unrecognized.add(label.trim())
+        // Prefer comma-splitting (the expected format). If that yields nothing, fall back
+        // to greedy label scanning — necessary when the model omits the sentinel and outputs
+        // multi-word names separated by whitespace (e.g. "Mind Reading  Should Statements").
+        val commaTokens = csv.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val fromCommas = commaTokens.mapNotNull { CognitiveDistortion.fromLabel(it) }
+
+        val recognized = if (fromCommas.isNotEmpty()) {
+            val unrecognized = commaTokens.filter { CognitiveDistortion.fromLabel(it) == null }
+            if (unrecognized.isNotEmpty()) {
+                Log.d(TAG, "parseDotOutput: unrecognized tokens $unrecognized in csv=\"$csv\"")
+            }
+            fromCommas
+        } else {
+            // Greedy scan: find every known label that appears verbatim in the output.
+            val found = CognitiveDistortion.entries.filter { d ->
+                csv.contains(d.label, ignoreCase = true)
+            }
+            Log.d(TAG, "parseDotOutput: greedy fallback found $found in csv=\"$csv\"")
+            found
         }
-        if (unrecognized.isNotEmpty()) {
-            Log.d(TAG, "parseDotOutput: unrecognized labels $unrecognized in csv=\"$csv\"")
-        }
+
         return DiagnosisResult(distortions = recognized, reasoning = raw)
     }
 
