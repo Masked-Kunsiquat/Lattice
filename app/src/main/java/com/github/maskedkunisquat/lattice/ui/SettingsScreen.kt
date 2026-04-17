@@ -141,6 +141,7 @@ fun SettingsScreen(
                 LocalModelSection(
                     modelLoadState = modelLoadState,
                     copyProgress = copyProgress,
+                    onDownload = viewModel::downloadModel,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -235,15 +236,16 @@ fun SettingsScreen(
 private fun LocalModelSection(
     modelLoadState: ModelLoadState,
     copyProgress: Float,
+    onDownload: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val statusText = when (modelLoadState) {
             ModelLoadState.IDLE            -> "Not started"
-            ModelLoadState.COPYING_SHARDS  -> "Copying model shards… ${(copyProgress * 100).toInt()}%"
+            ModelLoadState.COPYING_SHARDS  -> "Downloading/Copying model… ${(copyProgress * 100).toInt()}%"
             ModelLoadState.LOADING_SESSION -> "Loading model session…"
             ModelLoadState.READY           -> "Ready"
-            ModelLoadState.ERROR           -> "Failed to load"
+            ModelLoadState.ERROR           -> "Not found / Failed to load"
         }
         val statusColor = when (modelLoadState) {
             ModelLoadState.READY  -> Color(0xFF2E7D32)
@@ -256,8 +258,17 @@ private fun LocalModelSection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Llama 3.2 3B (local fallback)", style = MaterialTheme.typography.bodyLarge)
+                Text("Gemma 3 1B (local fallback)", style = MaterialTheme.typography.bodyLarge)
                 Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
+            }
+            if (modelLoadState == ModelLoadState.ERROR || modelLoadState == ModelLoadState.IDLE) {
+                Button(
+                    onClick = onDownload,
+                    modifier = Modifier.padding(start = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                ) {
+                    Text("Download", style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
         when (modelLoadState) {
@@ -267,7 +278,7 @@ private fun LocalModelSection(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "First launch only — model is ~3.4 GB and copies to device storage.",
+                    "Downloading ~700 MB to device storage. Please stay on this screen.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -275,9 +286,16 @@ private fun LocalModelSection(
             ModelLoadState.LOADING_SESSION -> {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
-                    "Compiling ONNX graph for your hardware. First launch may take several minutes.",
+                    "Optimizing model for your hardware. This may take a minute.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            ModelLoadState.ERROR -> {
+                Text(
+                    "The model file is missing or corrupted. You can download it now (689MB) or push it via ADB.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
             else -> Unit

@@ -13,6 +13,7 @@ import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
 import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
+import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 import com.github.maskedkunisquat.lattice.core.logic.toAffectiveManifest
@@ -36,6 +37,7 @@ class SettingsViewModel(
     private val cloudCredentialStore: CloudCredentialStore,
     val modelLoadState: StateFlow<ModelLoadState>,
     val copyProgress: StateFlow<Float>,
+    private val localFallbackProvider: LocalFallbackProvider,
     private val manifestDao: TrainingManifestDao,
     // 3.6-f: injected singleton instead of constructing ad-hoc in resetPersonalization
     private val trainingCoordinator: TrainingCoordinator,
@@ -154,6 +156,10 @@ class SettingsViewModel(
         }
     }
 
+    fun downloadModel() {
+        localFallbackProvider.downloadModel()
+    }
+
     fun exportJournal() {
         viewModelScope.launch {
             try {
@@ -181,6 +187,7 @@ class SettingsViewModel(
                     copyProgress = app.localFallbackProvider.copyProgress,
                     manifestDao = app.database.trainingManifestDao(),
                     trainingCoordinator = app.trainingCoordinator,
+                    localFallbackProvider = app.localFallbackProvider,
                     applicationScope = app.applicationScope,
                 ) as T
         }

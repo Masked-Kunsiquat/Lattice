@@ -145,6 +145,7 @@ reliably formatted on the first pass (fewer malformed outputs to handle).
 - [x] Add MediaPipe Tasks dependency (`com.google.mediapipe:tasks-genai`) to `:core-logic`
 - [x] Add Gemma 3 1B hardware tiers to `downloadModels` Gradle task — ADB-detected board selects elite/ultra/universal; `-PdownloadTier` override (source: HuggingFace `masked-kunsiquat/gemma-3-1b-it-litert`)
 - [x] Rewrite `LocalFallbackProvider` against `LlmInference` API — streaming via `LlmInference.generateAsync()`, `ModelLoadState` flow preserved
+- [x] **Add in-app model downloader** — Hugging Face streaming download (689MB) with progress tracking in Settings screen; resolves `FileNotFoundException` for non-bundled builds.
 - [x] Remove Llama shard copy logic (`copyAssetsToFilesDir`, `ASSET_FILES`) — MediaPipe handles model loading from a single file path
 - [x] Remove `LlamaTokenizer`, `LlamaTokenizerTest` — MediaPipe tokenizes internally
 - [x] Remove ORT KV-cache forward-pass loop (`runForwardPass`, `nativeBytesAt`, `nativeFloatsAt`, `greedySample`) — all replaced by the MediaPipe session
