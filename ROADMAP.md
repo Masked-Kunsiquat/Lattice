@@ -72,26 +72,26 @@ Add a fourth tab between History and Settings:
 [ Journal ]  [ History ]  [ People ]  [ Settings ]
 ```
 
-- [ ] Add `BottomNavDest.People` (`route = "people"`, icon `Icons.Filled.Group`) in `AppNavHost`
-- [ ] Register `composable("people")` and `composable("people/{personId}")` routes
+- [x] Add `BottomNavDest.People` (`route = "people"`, icon `Icons.Filled.Group`) in `AppNavHost`
+- [x] Register `composable("people")` and `composable("people/{personId}")` routes
 
 ### PeopleListScreen
 
-- [ ] `PeopleListScreen` + `PeopleListViewModel` — collect `PeopleRepository.getPeople()` flow
-- [ ] `PersonCard` — display name (nickname ?? firstName lastName), `RelationshipType` chip, vibeScore indicator (green > 0.3 / gray -0.3–0.3 / amber < -0.3), favorite star
-- [ ] Sort order: favorites first, then by `|vibeScore|` descending
-- [ ] Empty state — "No people yet. Mention someone with @name while journaling."
-- [ ] FAB (`Icons.Filled.PersonAdd`) opens add-person bottom sheet (firstName, lastName, nickname, relationshipType). No phone numbers at creation — those live in the detail screen.
+- [x] `PeopleListScreen` + `PeopleListViewModel` — collect `PeopleRepository.getPeople()` flow
+- [x] `PersonCard` — display name (nickname ?? firstName lastName), `RelationshipType` chip, vibeScore indicator (green > 0.3 / gray -0.3–0.3 / amber < -0.3), favorite star
+- [x] Sort order: favorites first, then by `|vibeScore|` descending
+- [x] Empty state — "No people yet. Mention someone with @name while journaling."
+- [x] FAB (`Icons.Filled.PersonAdd`) opens add-person bottom sheet (firstName, lastName, nickname, relationshipType). No phone numbers at creation — those live in the detail screen.
 
 ### PersonDetailScreen — route `people/{personId}`
 
-- [ ] `PersonDetailViewModel` — combine three flows: `peopleRepository.getPeople()` (filter to this person), `mentionDao.getMentionsForPerson(personId)`, `journalDao.getEntries()` (filter client-side to entries whose masked content contains `[PERSON_<personId>]`)
-- [ ] Vibe score card — large arc indicator spanning -1 to +1, label ("Based on N entries")
-- [ ] Relationship type chip + favorite toggle
-- [ ] Phone numbers section — list of `rawNumber` rows, [+ Add number] action, swipe-to-delete
-- [ ] Journal entries section — reuse `EntryCard` from `JournalHistoryScreen`; tap → `EntryDetailScreen`
-- [ ] Edit action in TopAppBar — bottom sheet with all `Person` fields + phone number CRUD; persists via `PeopleRepository.savePerson()`
-- [ ] Delete action with confirmation dialog — deletes person + cascades mentions via FK
+- [x] `PersonDetailViewModel` — combine three flows: `peopleRepository.getPeople()` (filter to this person), `mentionDao.getMentionsForPerson(personId)`, `journalRepository.getEntries()` (filter client-side by mention entryIds)
+- [x] Vibe score card — large arc indicator spanning -1 to +1, label ("Based on N entries")
+- [x] Relationship type chip + favorite toggle
+- [x] Phone numbers section — list of `rawNumber` rows, [+ Add number] action, swipe-to-delete
+- [x] Journal entries section — entry rows with mood + snippet; tap → `EntryDetailScreen`
+- [x] Edit action in TopAppBar — bottom sheet with all `Person` fields + phone number CRUD; persists via `PeopleRepository.savePerson()`
+- [x] Delete action with confirmation dialog — deletes person + cascades mentions via FK
 
 ---
 

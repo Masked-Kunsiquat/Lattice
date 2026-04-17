@@ -68,4 +68,8 @@ class PeopleRepository(
     suspend fun insertPerson(person: Person) {
         personDao.insertPerson(person)
     }
+
+    suspend fun deletePerson(personId: UUID) {
+        personDao.deletePersonById(personId)
+    }
 }

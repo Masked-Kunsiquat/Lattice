@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -36,12 +37,14 @@ private sealed class BottomNavDest(
 ) {
     object Editor   : BottomNavDest("editor",   "Journal",  Icons.Filled.Edit)
     object History  : BottomNavDest("history",  "History",  Icons.Filled.History)
+    object People   : BottomNavDest("people",   "People",   Icons.Filled.Group)
     object Settings : BottomNavDest("settings", "Settings", Icons.Filled.Settings)
 }
 
 private val bottomNavDests = listOf(
     BottomNavDest.Editor,
     BottomNavDest.History,
+    BottomNavDest.People,
     BottomNavDest.Settings,
 )
 
@@ -103,6 +106,9 @@ fun AppNavHost(app: LatticeApplication) {
                         onOpenEntry = { entryId ->
                             navController.navigate("history/$entryId")
                         },
+                        onOpenPerson = { personId ->
+                            navController.navigate("people/$personId")
+                        },
                     )
                 }
             }
@@ -118,6 +124,38 @@ fun AppNavHost(app: LatticeApplication) {
                     EntryDetailScreen(
                         viewModel = vm,
                         onBack = { navController.popBackStack() },
+                    )
+                }
+            }
+
+            composable("people") {
+                val vm: PeopleListViewModel = viewModel(
+                    factory = PeopleListViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:people")) {
+                    PeopleListScreen(
+                        viewModel = vm,
+                        onOpenPerson = { personId ->
+                            navController.navigate("people/$personId")
+                        },
+                    )
+                }
+            }
+
+            composable("people/{personId}") { backStackEntry ->
+                val personId = backStackEntry.arguments?.getString("personId")
+                    ?.let { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
+                    ?: return@composable
+                val vm: PersonDetailViewModel = viewModel(
+                    factory = PersonDetailViewModel.factory(app, personId),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:person-detail")) {
+                    PersonDetailScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                        onOpenEntry = { entryId ->
+                            navController.navigate("history/$entryId")
+                        },
                     )
                 }
             }
