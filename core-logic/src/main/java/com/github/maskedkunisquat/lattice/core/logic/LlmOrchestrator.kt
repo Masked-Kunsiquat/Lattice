@@ -67,12 +67,14 @@ class LlmOrchestrator(
     /**
      * Routes [prompt] to the best available provider and streams the result.
      *
-     * @param prompt     The (PII-masked) text to process.
-     * @param operationType Label for the audit log (e.g. "reframe", "summarize").
+     * @param prompt            The (PII-masked) user message — plain text, no chat tokens.
+     * @param operationType     Label for the audit log (e.g. "reframe", "summarize").
+     * @param systemInstruction Optional system-level instruction forwarded to the provider.
      */
     fun process(
         prompt: String,
-        operationType: String = "reframe"
+        operationType: String = "reframe",
+        systemInstruction: String? = null,
     ): Flow<LlmResult> = flow {
         val provider = selectProvider()
         val piiDetected = provider === cloudProvider && runCatching { piiDetector?.invoke(prompt) ?: false }.getOrDefault(true)
@@ -88,7 +90,7 @@ class LlmOrchestrator(
             return@flow
         }
         applyPrivacyState(provider, operationType)
-        emitAll(provider.process(prompt))
+        emitAll(provider.process(prompt, systemInstruction))
     }
 
     private suspend fun selectProvider(): LlmProvider {

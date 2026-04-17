@@ -75,7 +75,11 @@ class ReframingLoop(
 
                 mlpResult ?: run {
                     val raw = collectTokens(
-                        orchestrator.process(buildAffectivePrompt(maskedText), "affective_map")
+                        orchestrator.process(
+                            buildAffectivePrompt(maskedText),
+                            "affective_map",
+                            AFFECTIVE_SYSTEM,
+                        )
                     )
                     Log.d(TAG, "Stage1: source=regex")
                     parseAffectiveCoords(raw)
@@ -87,12 +91,12 @@ class ReframingLoop(
     // ── Stage 2 ──────────────────────────────────────────────────────────────
 
     /**
-     * Diagnosis of Thought: runs a chain-of-thought facts-vs-beliefs analysis then
-     * identifies which of the 12 CBT [CognitiveDistortion]s are present.
+     * Diagnosis of Thought: classifies which of the 12 CBT [CognitiveDistortion]s are
+     * present in the journal text.
      *
-     * The model is asked to reason aloud (chain-of-thought) before emitting a final
-     * `DISTORTIONS:` sentinel line. The full reasoning is preserved in
-     * [DiagnosisResult.reasoning] for optional display or debugging.
+     * The model is asked to output only the `DISTORTIONS:` sentinel line — no chain-of-
+     * thought reasoning. This keeps latency low on small models (Gemma 3 1B) that tend
+     * to produce verbose, poorly-formatted reasoning when given multi-step instructions.
      *
      * @param maskedText PII-masked journal text.
      * @return [Result.success] with [DiagnosisResult], or [Result.failure] on model
@@ -102,7 +106,7 @@ class ReframingLoop(
         withContext(dispatcher) {
             runCatching {
                 val raw = collectTokens(
-                    orchestrator.process(buildDotPrompt(maskedText), "dot_diagnosis")
+                    orchestrator.process(buildDotPrompt(maskedText), "dot_diagnosis", DOT_SYSTEM)
                 )
                 parseDotOutput(raw)
             }
@@ -153,7 +157,8 @@ class ReframingLoop(
                     buildInterventionPrompt(
                         maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
-                    "intervention"
+                    "intervention",
+                    INTERVENTION_SYSTEM,
                 )
             )
             if (reframe.isBlank()) throw IllegalStateException("Model returned an empty reframe.")
@@ -192,36 +197,19 @@ class ReframingLoop(
     // ── Prompt builders ──────────────────────────────────────────────────────
 
     internal fun buildAffectivePrompt(maskedText: String): String =
-        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
-        "You are an affective computing assistant. " +
-        "Analyze text and output emotional coordinates only. " +
-        "Never include explanations or additional text." +
-        "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
         "Analyze the emotional content of the following text.\n" +
         "Output ONLY one line in this exact format: v=<number> a=<number>\n" +
         "  v = valence  : -1.0 (very negative) to 1.0 (very positive)\n" +
         "  a = arousal  : -1.0 (calm / passive) to 1.0 (excited / active)\n" +
         "Numbers must be between -1.0 and 1.0. No other text.\n\n" +
-        "Text: $maskedText" +
-        "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        "Text: $maskedText"
 
     internal fun buildDotPrompt(maskedText: String): String =
-        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
-        "You are a CBT therapist applying the Diagnosis of Thought (DoT) method. " +
-        "Reason step by step, then conclude with a DISTORTIONS line." +
-        "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
-        "Analyze the following text using the three-step Diagnosis of Thought:\n\n" +
-        "Step 1 — Facts vs. Beliefs:\n" +
-        "Separate what is objectively stated (facts) from what is interpreted, " +
-        "assumed, or felt (beliefs/thoughts).\n\n" +
-        "Step 2 — Contrastive Analysis:\n" +
-        "For each belief, identify the cognitive distortion from this list:\n" +
-        "${CognitiveDistortion.promptList}\n\n" +
-        "Step 3 — Final diagnosis:\n" +
-        "On the last line output ONLY:\n" +
-        "DISTORTIONS: <comma-separated distortion names, or NONE if none found>\n\n" +
-        "Text: $maskedText" +
-        "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        "Which cognitive distortions are present in the text below?\n" +
+        "Only use names from this list: ${CognitiveDistortion.promptList}\n\n" +
+        "Output exactly one line — no explanation, no markdown:\n" +
+        "DISTORTIONS: <comma-separated names, or NONE>\n\n" +
+        "Text: $maskedText"
 
 
     internal fun buildInterventionPrompt(
@@ -231,65 +219,53 @@ class ReframingLoop(
         baActivity: ActivityHierarchy? = null,
         evidenceEntries: List<JournalEntry> = emptyList(),
     ): String {
-        val distortionContext = if (distortions.isEmpty())
-            "No specific cognitive distortions were identified."
-        else
-            "Identified cognitive distortions: ${distortions.joinToString(", ") { it.label }}"
-
-        val techniqueBlock = when (strategy) {
-            ReframeStrategy.SOCRATIC_REALITY_TESTING ->
-                "Use Socratic Reality Testing (probability calibration): write a 2–3 sentence " +
-                "reframe in the writer's own voice that:\n" +
-                "1. Names the core fear or assumption driving the thought.\n" +
-                "2. Questions its certainty — what is the actual probability this belief is true?\n" +
-                "3. Lands on a more balanced, realistic interpretation."
-
-            ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
-                val stepTwo = if (evidenceEntries.isNotEmpty())
-                    "2. Counters the belief with a specific past experience contrary to it " +
-                    "(draw from the Evidence for the Contrary provided above).\n"
-                else
-                    "2. Offers a realistic counterthought contrary to the belief — " +
-                    "acknowledge difficulty without inventing past journal evidence.\n"
-                val stepThree = if (baActivity != null)
-                    "3. Ends with one small concrete step: \"${baActivity.taskName}\" (value area: ${baActivity.valueCategory})."
-                else
-                    "3. Ends with one small concrete action to restore a sense of agency."
-                "Use Behavioral Activation: write a 2–3 sentence reframe in the writer's own voice that:\n" +
-                "1. Acknowledges the difficulty without catastrophising.\n" +
-                stepTwo +
-                stepThree
-            }
-
-            ReframeStrategy.STRENGTHS_AFFIRMATION ->
-                "Write a 2–3 sentence reframe in the writer's own voice that:\n" +
-                "1. Names the strength or effort the entry reveals.\n" +
-                "2. Connects it to a broader pattern or value.\n" +
-                "3. Anchors what made this moment meaningful."
-        }
+        val distortionLine = if (distortions.isEmpty()) ""
+        else "Distortions present: ${distortions.joinToString(", ") { it.label }}\n"
 
         val evidenceBullets = evidenceEntries.mapNotNull { entry ->
             val snippet = entry.content?.takeIf { it.isNotBlank() }?.let {
-                if (it.length > 200) it.take(200) + "…" else it
+                if (it.length > 150) it.take(150) + "…" else it
             } ?: return@mapNotNull null
             "- $snippet"
         }
         val evidenceBlock = if (evidenceBullets.isNotEmpty()) {
-            "\n\nEvidence for the Contrary (past journal moments that contradict this belief):\n" +
-                evidenceBullets.joinToString("\n")
+            "Past evidence that contradicts this belief:\n${evidenceBullets.joinToString("\n")}\n\n"
         } else ""
 
-        return "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
-            "You are a CBT journaling assistant. Rewrite the journal entry as a concise " +
-            "first-person thought record — the writer challenging their own thought. " +
-            "Write in the writer's voice. No preamble, no advice, no therapist language. " +
-            "Output only the reframed thought." +
-            "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
-            "Journal entry:\n\"$maskedText\"\n\n" +
-            "$distortionContext" +
-            "$evidenceBlock\n\n" +
-            "$techniqueBlock" +
-            "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        val techniqueBlock = when (strategy) {
+            ReframeStrategy.SOCRATIC_REALITY_TESTING ->
+                "Write exactly 2-3 sentences in first person that:\n" +
+                "1. Question whether the fear or assumption is definitely true.\n" +
+                "2. Offer a more balanced, realistic interpretation.\n" +
+                "3. Land on what you actually know."
+
+            ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
+                val evidenceStep = if (evidenceEntries.isNotEmpty())
+                    "2. Challenge the thought using one of the past moments listed above."
+                else
+                    "2. Offer one realistic, forward-looking thought — not invented evidence."
+                val actionStep = if (baActivity != null)
+                    "3. Name this one small step you can take now: \"${baActivity.taskName}\"."
+                else
+                    "3. Name one small, concrete step to take now."
+                "Write exactly 2-3 sentences in first person that:\n" +
+                "1. Name what is hard without dwelling on it.\n" +
+                "$evidenceStep\n" +
+                actionStep
+            }
+
+            ReframeStrategy.STRENGTHS_AFFIRMATION ->
+                "Write exactly 2-3 sentences in first person that:\n" +
+                "1. Name the strength or effort this entry shows.\n" +
+                "2. Connect it to a value or pattern that matters to you.\n" +
+                "3. Anchor what made this moment meaningful."
+        }
+
+        return "Journal entry: \"$maskedText\"\n\n" +
+            distortionLine +
+            evidenceBlock +
+            "$techniqueBlock\n\n" +
+            "Output only the reframe. No markdown, no asterisks, no ellipses."
     }
 
     // ── Parsers ──────────────────────────────────────────────────────────────
@@ -371,7 +347,8 @@ class ReframingLoop(
                     buildInterventionPrompt(
                         maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
-                    "intervention"
+                    "intervention",
+                    INTERVENTION_SYSTEM,
                 )
                 Pair(strategy, flow)
             }
@@ -453,6 +430,20 @@ class ReframingLoop(
         private const val TAG = "ReframingLoop"
         /** Maximum activity difficulty included in the BA suggestion lookup (0–10 scale). */
         internal const val BA_MAX_DIFFICULTY = 5
+
+        internal const val AFFECTIVE_SYSTEM =
+            "You are an affective computing assistant. " +
+            "Analyze text and output emotional coordinates only. " +
+            "Never include explanations or additional text."
+
+        internal const val DOT_SYSTEM =
+            "You are a CBT thought classifier. Identify cognitive distortions concisely. " +
+            "Output only the DISTORTIONS line. No explanation, no markdown."
+
+        internal const val INTERVENTION_SYSTEM =
+            "You are a CBT journaling assistant. Write a brief, grounded first-person reframe. " +
+            "Do NOT repeat or amplify the negative thought — challenge it. " +
+            "No markdown, no asterisks, no ellipses, no therapist language."
 
         /**
          * Selects the intervention strategy based on circumplex quadrant.

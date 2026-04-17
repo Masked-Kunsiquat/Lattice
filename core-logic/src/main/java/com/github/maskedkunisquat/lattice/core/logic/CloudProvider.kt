@@ -61,7 +61,7 @@ class CloudProvider(
     override suspend fun isAvailable(): Boolean =
         credentialStore?.hasApiKey(id) ?: true
 
-    override fun process(prompt: String): Flow<LlmResult> = flow {
+    override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flow {
         val apiKey = credentialStore?.getApiKey(id)
         if (apiKey == null) {
             emit(LlmResult.Error(IllegalStateException("No API key stored for provider '$id'")))
@@ -70,7 +70,7 @@ class CloudProvider(
 
         var attempt = 0
         while (true) {
-            val result = runCatching { streamOnce(prompt, apiKey) { emit(it) } }
+            val result = runCatching { streamOnce(prompt, systemInstruction, apiKey) { emit(it) } }
             val error = result.exceptionOrNull()
 
             if (error is CancellationException) throw error
@@ -103,6 +103,7 @@ class CloudProvider(
      */
     private suspend fun streamOnce(
         prompt: String,
+        systemInstruction: String?,
         apiKey: String,
         onResult: suspend (LlmResult) -> Unit,
     ) {
@@ -110,6 +111,7 @@ class CloudProvider(
             .put("model", MODEL)
             .put("max_tokens", MAX_TOKENS)
             .put("stream", true)
+            .apply { if (systemInstruction != null) put("system", systemInstruction) }
             .put("messages", JSONArray().apply {
                 put(JSONObject().put("role", "user").put("content", prompt))
             })

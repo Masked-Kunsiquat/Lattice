@@ -28,7 +28,7 @@ class NanoProvider(private val context: Context) : LlmProvider {
         return context.packageManager.hasSystemFeature(AICORE_FEATURE)
     }
 
-    override fun process(prompt: String): Flow<LlmResult> = flow {
+    override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flow {
         // Stub — replaced once SmallLanguageModel API is stable and device has model weights.
         emit(
             LlmResult.Error(

@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import java.io.File
@@ -196,14 +198,23 @@ class LocalFallbackProvider(
      * The OpenCL error fires before any tokens are emitted, so no partial output
      * is lost.
      */
-    override fun process(prompt: String): Flow<LlmResult> =
-        processInternal(prompt, allowOpenClRetry = true)
+    override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> =
+        processInternal(prompt, systemInstruction, allowOpenClRetry = true)
 
-    private fun processInternal(prompt: String, allowOpenClRetry: Boolean): Flow<LlmResult> = flow {
+    private fun processInternal(
+        prompt: String,
+        systemInstruction: String?,
+        allowOpenClRetry: Boolean,
+    ): Flow<LlmResult> = flow {
         val eng = engine ?: throw IllegalStateException(
             "Model not loaded. ${initFailureReason ?: "Call initialize() first."}"
         )
-        eng.createConversation().use { conversation ->
+        val config = if (systemInstruction != null) {
+            ConversationConfig(systemInstruction = Contents.of(systemInstruction))
+        } else {
+            ConversationConfig()
+        }
+        eng.createConversation(config).use { conversation ->
             conversation.sendMessageAsync(prompt).collect { message ->
                 val text = message.toString()
                 if (text.isNotEmpty()) emit(LlmResult.Token(text))
@@ -216,7 +227,7 @@ class LocalFallbackProvider(
             Log.w(TAG, "GPU inference failed — OpenCL unavailable on this device, switching to CPU")
             openClFailed = true
             withContext(dispatcher) { switchToCpu() }
-            emitAll(processInternal(prompt, allowOpenClRetry = false))
+            emitAll(processInternal(prompt, systemInstruction, allowOpenClRetry = false))
         } else {
             emit(LlmResult.Error(e))
         }
@@ -245,16 +256,25 @@ class LocalFallbackProvider(
      * [Backend.GPU] (OpenCL JIT) and [Backend.CPU].
      *
      * [openClFailed] skips GPU on subsequent calls after a runtime OpenCL error.
+     *
+     * NPU requires the LiteRT dispatch runtime (`libpenguin.so`) to be extracted into
+     * the APK's native library directory. If it is absent, LiteRT calls abort() —
+     * not a catchable exception — so we must guard the NPU path before attempting init.
      */
     private fun selectModelAndBackends(): Pair<String, List<Backend>> {
         val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
+        val dispatchLibAvailable = java.io.File(nativeLibDir, "libpenguin.so").exists()
+        if (!dispatchLibAvailable) {
+            Log.w(TAG, "libpenguin.so not found in $nativeLibDir — NPU backend unavailable, using int4 model")
+        }
         return when {
-            // SM8750 (S25 Ultra / Pixel 9 Pro) — NPU-compiled elite model
-            board == "sun" || board.startsWith("sm8750") ->
+            // SM8750 (S25 Ultra / Pixel 9 Pro) — NPU-compiled elite model.
+            // libpenguin.so must be present in nativeLibDir; if absent LiteRT aborts (SIGABRT).
+            (board == "sun" || board.startsWith("sm8750")) && dispatchLibAvailable ->
                 MODEL_FILE_ELITE to listOf(Backend.NPU(nativeLibraryDir = nativeLibDir))
-            // SM8650 (S24 Ultra) — NPU-compiled ultra model
-            board == "kalama" || board.startsWith("sm8650") ->
+            // SM8650 (S24 Ultra) — NPU-compiled ultra model.
+            (board == "kalama" || board.startsWith("sm8650")) && dispatchLibAvailable ->
                 MODEL_FILE_ULTRA to listOf(Backend.NPU(nativeLibraryDir = nativeLibDir))
             // Other Qualcomm — int4 model with GPU→CPU
             isQualcommDevice() -> {
