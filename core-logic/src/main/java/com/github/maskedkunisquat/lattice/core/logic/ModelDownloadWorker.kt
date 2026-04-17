@@ -129,6 +129,7 @@ class ModelDownloadWorker(
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, progress, false)
             .setOngoing(true)
+            .setRequestPromotedOngoing(true)
             .build()
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
