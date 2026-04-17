@@ -143,9 +143,15 @@ class ModelDownloadWorker(
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Model Downloads",
-                NotificationManager.IMPORTANCE_LOW,
+                // IMPORTANCE_DEFAULT so the status bar icon is visible on OEM skins (e.g. OneUI 7).
+                // IMPORTANCE_LOW hides the icon on Samsung devices while keeping the notification in
+                // the shade. Sound is disabled explicitly so this behaves like IMPORTANCE_LOW in
+                // terms of audio while keeping the icon visible.
+                NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
-                description = "Status of large model file downloads"
+                description = "Progress of large model file downloads"
+                setSound(null, null)
+                enableVibration(false)
             }
             val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(channel)
@@ -154,7 +160,7 @@ class ModelDownloadWorker(
 
     companion object {
         private const val TAG = "ModelDownloadWorker"
-        const val CHANNEL_ID = "lattice_downloads"
+        const val CHANNEL_ID = "lattice_model_download_v2"
         private const val NOTIFICATION_ID = 8001
         
         const val KEY_MODEL_ASSET = "model_asset"

@@ -137,6 +137,17 @@ class LocalFallbackProvider(
                 _modelLoadState.value = ModelLoadState.ERROR
                 initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed", e)
+                // If MediaPipe rejected the model (signature mismatch / format incompatibility),
+                // delete the file so the next "Download" tap fetches a fresh, compatible copy.
+                // Don't delete on transient errors (OOM, interrupted IO) — only on hard init failures.
+                if (e is IllegalStateException && e.message?.contains("Failed to initialize engine") == true) {
+                    try {
+                        val staleFile = File(context.filesDir, resolveModelName())
+                        if (staleFile.delete()) {
+                            Log.w(TAG, "Deleted incompatible model file: ${staleFile.name} — re-download required")
+                        }
+                    } catch (_: Exception) { /* resolveModelName() itself can't throw, but be safe */ }
+                }
             }
         }
     }
