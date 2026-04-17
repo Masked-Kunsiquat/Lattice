@@ -89,11 +89,21 @@ Idle → Loading → Streaming(partial) → Done(text)
 | Model | Role | Format |
 |---|---|---|
 | Snowflake Arctic Embed XS | Semantic embeddings | ONNX, int8, 384-dim |
-| Gemma 3 1B Instruct | All three reframing stages | LiteRT task bundle (INT4) |
+| Gemma 3 1B Instruct | All three reframing stages | LiteRT INT4 — three hardware tiers |
 
-`gemma3-1b-it-s25.litertlm` is staged to `context.filesDir` on first run — MediaPipe requires a real filesystem path. Backend selection is automatic: GPU (Adreno 750 on S25 Ultra targets 35–50 tok/s) with CPU fallback. Generation is capped at 512 new tokens.
+Three model variants are available. `LocalFallbackProvider` selects at runtime via
+`Build.BOARD`; `./gradlew downloadModels` downloads the right one via ADB:
 
-> **Model files are not committed to this repository.** Place them in `app/src/main/assets/` before building. See `assets/snowflake-arctic-embed-xs.onnx.placeholder` for the expected filenames.
+| Tier | File | Target | Latency |
+|---|---|---|---|
+| Elite | `gemma3-1b-it-elite.litertlm` | SM8750 S25 Ultra | ~10 s reframe |
+| Ultra | `gemma3-1b-it-ultra.litertlm` | SM8650 S24 Ultra | ~15 s reframe |
+| Universal | `gemma3-1b-it-universal.task` | Any ARM64 | fallback |
+
+The selected file is staged to `context.filesDir` on first run (MediaPipe requires a
+filesystem path). Context window is 1,280 tokens (`ekv1280`).
+
+> **Model files are not committed to this repository.** Run `./gradlew downloadModels` before building.
 
 ---
 

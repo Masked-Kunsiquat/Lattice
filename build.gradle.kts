@@ -9,45 +9,82 @@ plugins {
 
 // ── Model download ────────────────────────────────────────────────────────────
 //
-// Gemma 3 1B Instruct (LiteRT / MediaPipe task bundle) is not committed to git.
-// Run once before building:
+// Gemma 3 1B Instruct (LiteRT) is not committed to git. Run once before building:
 //   ./gradlew downloadModels
 //
-// The file lands in app/src/main/assets/ (gitignored). Existing file is skipped.
-// Source: https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert
+// The correct hardware tier is selected by querying the connected device via ADB.
+// Override with -PdownloadTier=elite|ultra|universal if no device is attached.
 //
-// NOTE: The model requires accepting Google's Gemma Terms of Use on HuggingFace.
-// Authenticate with `huggingface-cli login` (or set HF_TOKEN env var) before running.
+//   elite     gemma3-1b-it-elite.litertlm   SM8750 (S25 Ultra) — Adreno 830 AOT kernels
+//   ultra     gemma3-1b-it-ultra.litertlm   SM8650 (S24 Ultra) — Adreno 750 AOT kernels
+//   universal gemma3-1b-it-universal.task   Any ARM64           — JIT / OpenCL fallback
+//
+// Source: https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert
+// NOTE: Requires accepting Google's Gemma Terms of Use. Authenticate with
+//       `huggingface-cli login` (or set HF_TOKEN) before running.
 
 private val HF_GEMMA = "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
-private val gemmaFiles = listOf(
-    "gemma3-1b-it-s25.litertlm",
-)
-
 tasks.register("downloadModels") {
     group = "lattice"
-    description = "Downloads Gemma 3 1B LiteRT task bundle from HuggingFace into app/src/main/assets/."
+    description = "Downloads the Gemma 3 1B LiteRT model tier for the connected device into app/src/main/assets/."
     doLast {
         val assetDir = file("app/src/main/assets")
-        gemmaFiles.forEach { name ->
-            val dest = assetDir.resolve(name)
-            if (dest.exists()) {
-                logger.lifecycle("  ✓  $name  (already present)")
-                return@forEach
+
+        // ── Tier selection ────────────────────────────────────────────────────
+        // Priority: -PdownloadTier CLI property > ADB device query > universal fallback
+        val tier: String = run {
+            val propOverride = findProperty("downloadTier") as String?
+            if (propOverride != null) {
+                logger.lifecycle("  ℹ  Using -PdownloadTier=$propOverride")
+                return@run propOverride
             }
-            logger.lifecycle("  ↓  $name …")
-            val tmp = assetDir.resolve("$name.tmp")
             try {
-                hfDownload("$HF_GEMMA/$name", tmp, logger)
+                val proc = Runtime.getRuntime().exec("adb shell getprop ro.product.board")
+                val board = proc.inputStream.bufferedReader().readText().trim()
+                proc.waitFor()
+                logger.lifecycle("  ℹ  Detected ro.product.board=$board")
+                when (board.lowercase()) {
+                    "kailua" -> "elite"   // Snapdragon 8 Elite (SM8750)
+                    "kalama" -> "ultra"   // Snapdragon 8 Gen 3 (SM8650)
+                    else -> {
+                        if (board.isNotEmpty())
+                            logger.lifecycle("  ℹ  Unknown board '$board' — falling back to universal tier")
+                        "universal"
+                    }
+                }
+            } catch (e: Exception) {
+                logger.lifecycle(
+                    "  ℹ  ADB unavailable (${e.message}) — using universal tier. " +
+                    "Connect a device or pass -PdownloadTier=elite|ultra|universal."
+                )
+                "universal"
+            }
+        }
+
+        val modelFile = when (tier) {
+            "elite" -> "gemma3-1b-it-elite.litertlm"
+            "ultra" -> "gemma3-1b-it-ultra.litertlm"
+            else    -> "gemma3-1b-it-universal.task"
+        }
+
+        // ── Download ──────────────────────────────────────────────────────────
+        val dest = assetDir.resolve(modelFile)
+        if (dest.exists()) {
+            logger.lifecycle("  ✓  $modelFile  (already present)")
+        } else {
+            logger.lifecycle("  ↓  $modelFile …")
+            val tmp = assetDir.resolve("$modelFile.tmp")
+            try {
+                hfDownload("$HF_GEMMA/$modelFile", tmp, logger)
                 if (!tmp.renameTo(dest)) tmp.copyTo(dest, overwrite = true).also { tmp.delete() }
-                logger.lifecycle("  ✓  $name  (${dest.length().toHuman()})")
+                logger.lifecycle("  ✓  $modelFile  (${dest.length().toHuman()})")
             } catch (e: Exception) {
                 tmp.delete()
                 throw e
             }
         }
-        logger.lifecycle("downloadModels complete — all assets present.")
+        logger.lifecycle("downloadModels complete — $modelFile ready in app/src/main/assets/.")
     }
 }
 

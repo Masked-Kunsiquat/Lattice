@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.io.File
@@ -24,22 +25,25 @@ enum class ModelLoadState { IDLE, COPYING_SHARDS, LOADING_SESSION, READY, ERROR 
  * This is the primary fallback when Gemini Nano (AICore) is unavailable. The model
  * runs entirely on-device via MediaPipe Tasks GenAI — no data leaves the device.
  *
- * ## Asset setup
- * Place the following file in app/src/main/assets/:
- *   gemma3-1b-it-s25.litertlm   — Gemma 3 1B Instruct LiteRT model (S25-optimised)
+ * ## Hardware tiers
+ * Three variants are available. The asset is selected at [initialize] time based on
+ * [Build.BOARD]:
  *
- * Run `./gradlew downloadModels` to fetch from HuggingFace.
+ * | Tier | File | Target SoC | Backend |
+ * |---|---|---|---|
+ * | Elite | `gemma3-1b-it-elite.litertlm` | SM8750 (S25 Ultra) | Adreno 830 AOT kernels |
+ * | Ultra | `gemma3-1b-it-ultra.litertlm` | SM8650 (S24 Ultra) | Adreno 750 AOT kernels |
+ * | Universal | `gemma3-1b-it-universal.task` | Any ARM64 | JIT / OpenCL fallback |
+ *
+ * Run `./gradlew downloadModels` to fetch the correct variant for the connected device.
+ * Override with `-PdownloadTier=elite|ultra|universal`.
  *
  * ## Inference
- * Uses MediaPipe's [LlmInference] session. On Adreno 700-series GPUs (e.g. the S25
- * Ultra's Snapdragon 8 Elite) this runs at 35–50 tok/s vs ~8 tok/s for the prior
- * Llama 3.2-3B on CPU+NNAPI. Backend selection is automatic — GPU when available,
- * CPU fallback otherwise.
+ * Uses MediaPipe's [LlmInference] session with a 1,280-token KV-cache context (`ekv1280`).
  *
  * ## Model lifecycle
- * The .task file is copied from assets to internal storage on first [initialize] call.
- * Subsequent launches skip the copy if the file is already present. MediaPipe loads
- * the session directly from the filesystem path.
+ * The selected file is copied from assets to [Context.filesDir] on first [initialize]
+ * call. Subsequent launches skip the copy if the file is already present.
  */
 class LocalFallbackProvider(
     private val context: Context,
@@ -62,10 +66,10 @@ class LocalFallbackProvider(
     val copyProgress: StateFlow<Float> = _copyProgress.asStateFlow()
 
     /**
-     * Copies the model file from assets to internal storage (if needed) then opens
-     * a [LlmInference] session via MediaPipe. Safe to call multiple times; subsequent
-     * calls are no-ops. Silent on failure — [isAvailable] returns false and the
-     * orchestrator handles the fallback.
+     * Selects the hardware tier, copies the model file to internal storage (if needed),
+     * then opens a [LlmInference] session via MediaPipe. Safe to call multiple times;
+     * subsequent calls are no-ops. Silent on failure — [isAvailable] returns false and
+     * the orchestrator handles the fallback.
      */
     fun initialize() {
         if (initAttempted) return
@@ -73,17 +77,19 @@ class LocalFallbackProvider(
             if (initAttempted) return
             initAttempted = true
             try {
+                val modelAsset = selectModelAsset()
+                Log.i(TAG, "Selected model tier: $modelAsset (board=${Build.BOARD})")
                 _modelLoadState.value = ModelLoadState.COPYING_SHARDS
-                copyModelIfNeeded()
+                copyModelIfNeeded(modelAsset)
                 _modelLoadState.value = ModelLoadState.LOADING_SESSION
-                val modelPath = File(context.filesDir, MODEL_ASSET).absolutePath
+                val modelPath = File(context.filesDir, modelAsset).absolutePath
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelPath)
-                    .setMaxTokens(MAX_NEW_TOKENS)
+                    .setMaxTokens(MAX_TOKENS)
                     .build()
                 llmInference = LlmInference.createFromOptions(context, options)
                 _modelLoadState.value = ModelLoadState.READY
-                Log.i(TAG, "MediaPipe LlmInference session ready — model=$MODEL_ASSET")
+                Log.i(TAG, "MediaPipe LlmInference session ready — model=$modelAsset")
             } catch (e: Exception) {
                 _copyProgress.value = 0f
                 _modelLoadState.value = ModelLoadState.ERROR
@@ -109,7 +115,7 @@ class LocalFallbackProvider(
         if (inference == null) {
             val reason = initFailureReason
                 ?.let { " Init failed with: $it" }
-                ?: " Ensure $MODEL_ASSET is in app/src/main/assets/" +
+                ?: " Ensure the correct model tier is in app/src/main/assets/" +
                    " and call LocalFallbackProvider.initialize() at app startup."
             send(LlmResult.Error(IllegalStateException("Gemma 3 1B model not loaded.$reason")))
             close()
@@ -133,23 +139,37 @@ class LocalFallbackProvider(
         awaitClose { /* MediaPipe does not expose a per-request cancellation API */ }
     }.flowOn(dispatcher)
 
-    // ── Internals ─────────────────────────────────────────────────────────────
+    // ── Tier selection ────────────────────────────────────────────────────────
 
     /**
-     * Copies [MODEL_ASSET] from assets to [Context.filesDir] if not already present.
+     * Returns the model asset filename for the current device based on [Build.BOARD]:
+     * - `kailua` → [MODEL_ELITE]  (SM8750 — Snapdragon 8 Elite)
+     * - `kalama` → [MODEL_ULTRA]  (SM8650 — Snapdragon 8 Gen 3)
+     * - Anything else → [MODEL_UNIVERSAL]
+     */
+    private fun selectModelAsset(): String = when (Build.BOARD.lowercase()) {
+        "kailua" -> MODEL_ELITE
+        "kalama" -> MODEL_ULTRA
+        else     -> MODEL_UNIVERSAL
+    }
+
+    // ── Model copy ────────────────────────────────────────────────────────────
+
+    /**
+     * Copies [modelAsset] from assets to [Context.filesDir] if not already present.
      * Uses a .tmp intermediary and atomic rename so a partial copy is never visible
      * as a complete file.
      */
-    private fun copyModelIfNeeded() {
-        val dest = File(context.filesDir, MODEL_ASSET)
-        val tmp  = File(context.filesDir, "$MODEL_ASSET.tmp")
+    private fun copyModelIfNeeded(modelAsset: String) {
+        val dest = File(context.filesDir, modelAsset)
+        val tmp  = File(context.filesDir, "$modelAsset.tmp")
         if (tmp.exists()) tmp.delete()
         if (dest.exists()) {
             _copyProgress.value = 1f
             return
         }
         try {
-            context.assets.open(MODEL_ASSET).use { src ->
+            context.assets.open(modelAsset).use { src ->
                 tmp.outputStream().use { dst ->
                     val buf = ByteArray(2 * 1024 * 1024) // 2 MB chunks
                     var copied = 0L
@@ -173,8 +193,16 @@ class LocalFallbackProvider(
 
     companion object {
         private const val TAG = "LocalFallbackProvider"
-        private const val MODEL_ASSET = "gemma3-1b-it-s25.litertlm"
-        private const val MAX_NEW_TOKENS = 512
-        private const val APPROX_MODEL_BYTES = 1_500_000_000L
+
+        // Hardware-optimised tiers — selected by selectModelAsset() at runtime.
+        private const val MODEL_ELITE     = "gemma3-1b-it-elite.litertlm"   // SM8750 / Adreno 830
+        private const val MODEL_ULTRA     = "gemma3-1b-it-ultra.litertlm"   // SM8650 / Adreno 750
+        private const val MODEL_UNIVERSAL = "gemma3-1b-it-universal.task"   // ARM64 fallback
+
+        // Matches the model's ekv1280 KV-cache context window.
+        private const val MAX_TOKENS = 1280
+
+        // Approximate compressed model size — used for copy-progress estimate.
+        private const val APPROX_MODEL_BYTES = 800_000_000L
     }
 }

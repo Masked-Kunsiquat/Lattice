@@ -169,18 +169,26 @@ Seed JSON files contain real 384-dim embeddings generated from the masked entry 
 
 ## Assets
 
-**Gemma 3 1B model file** in `app/src/main/assets/` is gitignored. Fetch it once with:
+**Gemma 3 1B model files** in `app/src/main/assets/` are gitignored. Three hardware tiers
+are available; `downloadModels` fetches the right one automatically via ADB. Override with
+`-PdownloadTier=elite|ultra|universal` if no device is attached.
 
 ```bash
-./gradlew downloadModels
+./gradlew downloadModels                        # auto-detect connected device
+./gradlew downloadModels -PdownloadTier=elite   # force Elite tier
 ```
 
 Requires accepting Google's Gemma Terms of Use on HuggingFace. Authenticate with
 `huggingface-cli login` (or set `HF_TOKEN`) before running.
 
-| File | Size | Source |
-|---|---|---|
-| `gemma3-1b-it-s25.litertlm` | ~1.5 GB | HuggingFace (Gemma repo) |
+| File | Tier | Target | Size |
+|---|---|---|---|
+| `gemma3-1b-it-elite.litertlm` | Elite | SM8750 (S25 Ultra) — Adreno 830 AOT kernels | ~800 MB |
+| `gemma3-1b-it-ultra.litertlm` | Ultra | SM8650 (S24 Ultra) — Adreno 750 AOT kernels | ~800 MB |
+| `gemma3-1b-it-universal.task` | Universal | Any ARM64 — JIT / OpenCL fallback | ~800 MB |
+
+`LocalFallbackProvider` selects the tier at runtime via `Build.BOARD`: `kailua` → Elite,
+`kalama` → Ultra, anything else → Universal.
 
 HuggingFace repos:
 - **Gemma model**: `https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert`
