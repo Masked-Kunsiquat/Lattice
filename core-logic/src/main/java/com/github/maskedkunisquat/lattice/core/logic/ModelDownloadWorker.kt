@@ -43,11 +43,18 @@ class ModelDownloadWorker(
         val dest = File(applicationContext.filesDir, modelAsset)
         val tmp = File(applicationContext.filesDir, "$modelAsset.tmp")
 
-        // If file exists, check if it's at least 100MB to avoid "success" on 404/interrupted files
+        // If a large-enough file exists, try initialising it before skipping the download.
+        // If init fails (stale/incompatible file), initialize() deletes the file and we fall
+        // through to re-download. Only skip if the engine actually becomes READY.
         if (dest.exists() && dest.length() > 100_000_000L) {
-            Log.i(TAG, "Valid model file already exists, skipping download.")
+            Log.i(TAG, "Model file exists (${dest.length()} bytes), validating…")
             withContext(Dispatchers.IO) { localFallbackProvider.initialize() }
-            return Result.success()
+            if (localFallbackProvider.modelLoadState.value == ModelLoadState.READY) {
+                Log.i(TAG, "Existing model file is valid, skipping download.")
+                return Result.success()
+            }
+            Log.w(TAG, "Existing model file failed validation, re-downloading.")
+            // initialize() already deleted the file; fall through to download.
         }
 
         setForeground(buildForegroundInfo(0))

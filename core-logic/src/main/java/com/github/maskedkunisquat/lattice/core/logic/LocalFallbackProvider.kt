@@ -244,15 +244,19 @@ class LocalFallbackProvider(
     companion object {
         private const val TAG = "LocalFallbackProvider"
 
-        // Files sourced from https://huggingface.co/litert-community/Gemma3-1B-IT
-        // These are AOT-compiled with Adreno GPU kernels for each SoC tier.
-        // The universal model is CPU-only (q4 quantised, any ARM64).
+        // Files hosted at masked-kunsiquat/gemma-3-1b-it-litert on HuggingFace (public, no auth).
+        // Source: litert-community/Gemma3-1B-IT — AOT-compiled with Adreno GPU kernels per SoC.
+        // Universal is CPU-only (q4 quantised, any ARM64).
+        //
+        // To add SM8550 support: upload Gemma3-1B-IT_q4_ekv1280_sm8550.litertlm from
+        // litert-community renamed to gemma3-1b-it-prime.litertlm, then promote MODEL_SM8550
+        // from MODEL_UNIVERSAL to its own constant.
         private const val HF_BASE_URL =
-            "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main"
+            "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
-        private const val MODEL_SM8750   = "Gemma3-1B-IT_q4_ekv1280_sm8750.litertlm" // 689 MB — Snapdragon 8 Elite
-        private const val MODEL_SM8650   = "Gemma3-1B-IT_q4_ekv1280_sm8650.litertlm" // 690 MB — Snapdragon 8 Gen 3
-        private const val MODEL_SM8550   = "Gemma3-1B-IT_q4_ekv1280_sm8550.litertlm" // 690 MB — Snapdragon 8 Gen 2
-        private const val MODEL_UNIVERSAL = "Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm" // 584 MB — any ARM64
+        private const val MODEL_SM8750   = "gemma3-1b-it-elite.litertlm"     // 689 MB — SM8750 Snapdragon 8 Elite
+        private const val MODEL_SM8650   = "gemma3-1b-it-ultra.litertlm"     // 690 MB — SM8650 Snapdragon 8 Gen 3
+        private const val MODEL_SM8550   = "gemma3-1b-it-universal.litertlm" // SM8550 not uploaded yet → CPU fallback
+        private const val MODEL_UNIVERSAL = "gemma3-1b-it-universal.litertlm" // 584 MB — any ARM64
     }
 }
