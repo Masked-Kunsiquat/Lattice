@@ -108,13 +108,12 @@ class LocalFallbackProvider(
     /**
      * Selects the hardware tier, copies the model file to internal storage (if needed),
      * then opens a [LlmInference] session via MediaPipe. Safe to call multiple times;
-     * subsequent calls are no-ops. Silent on failure — [isAvailable] returns false and
-     * the orchestrator handles the fallback.
+     * subsequent calls are no-ops if successful.
      */
     fun initialize() {
-        if (initAttempted) return
+        if (llmInference != null) return
         synchronized(initLock) {
-            if (initAttempted) return
+            if (llmInference != null) return
             initAttempted = true
             try {
                 val modelAsset = resolveModelName()
@@ -129,12 +128,6 @@ class LocalFallbackProvider(
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelPath)
                     .setMaxTokens(MAX_TOKENS)
-                    .setResultListener { partial, done -> 
-                        currentPartialResultListener?.invoke(partial, done)
-                    }
-                    .setErrorListener { error ->
-                        currentErrorListener?.invoke(error)
-                    }
                     .build()
                 
                 llmInference = LlmInference.createFromOptions(context, options)
@@ -184,7 +177,9 @@ class LocalFallbackProvider(
         }
 
         try {
-            inference.generateResponseAsync(prompt)
+            inference.generateResponseAsync(prompt) { partial, done ->
+                currentPartialResultListener?.invoke(partial, done)
+            }
         } catch (e: Exception) {
             close(e)
         }

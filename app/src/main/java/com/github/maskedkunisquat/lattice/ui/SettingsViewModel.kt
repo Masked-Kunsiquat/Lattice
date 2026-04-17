@@ -84,6 +84,9 @@ class SettingsViewModel(
 
     val downloadProgress: StateFlow<Float> = downloadWorkInfo
         .map { info ->
+            if (info?.state == WorkInfo.State.SUCCEEDED) {
+                viewModelScope.launch { localFallbackProvider.initialize() }
+            }
             info?.progress?.getFloat(ModelDownloadWorker.KEY_PROGRESS, 0f) ?: 0f
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)

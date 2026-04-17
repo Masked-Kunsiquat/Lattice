@@ -15,6 +15,7 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.runBlocking
 
 /**
  * WorkManager worker that downloads the Gemma 3 1B model tier from Hugging Face.
@@ -93,14 +94,10 @@ class ModelDownloadWorker(
                         output.write(buffer, 0, bytesRead)
                         totalRead += bytesRead
                         
-                        // Throttled progress updates to avoid notification churn
                         val now = System.currentTimeMillis()
                         if (total > 0 && now - lastUpdate > 500) {
-                            val progress = totalRead.toFloat() / total
-                            // We can't use suspend functions easily here without wrapping
-                            // but WorkManager provides setProgressAsync
-                            setProgressAsync(workDataOf(KEY_PROGRESS to progress))
-                            setForegroundAsync(buildForegroundInfo((progress * 100).toInt()))
+                            val progressValue = totalRead.toFloat() / total
+                            runBlocking { onProgress(progressValue) }
                             lastUpdate = now
                         }
                     }
@@ -119,7 +116,6 @@ class ModelDownloadWorker(
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, progress, false)
             .setOngoing(true)
-            .setSilent(true)
             .build()
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

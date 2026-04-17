@@ -42,7 +42,7 @@ material = "1.13.0"
 onnxruntimeAndroid = "1.20.0"
 benchmarkJunit4 = "1.3.4"
 workManager = "2.10.1"
-mediapipeTasksGenai = "0.10.14"
+mediapipeTasksGenai = "0.10.33"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
