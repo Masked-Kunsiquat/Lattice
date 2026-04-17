@@ -163,6 +163,10 @@ class ModelDownloadWorker(
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, progress, false)
             .setOngoing(true)
+            // Show immediately — without FOREGROUND_SERVICE_IMMEDIATE Android suppresses
+            // foreground service notifications for 10 seconds, which is longer than the
+            // worker runs when a valid model file already exists.
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setRequestPromotedOngoing(true)
             .build()
 
