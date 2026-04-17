@@ -28,7 +28,7 @@ class ReframingLoopTest {
         private val results: List<LlmResult>
     ) : LlmProvider {
         override suspend fun isAvailable() = true
-        override fun process(prompt: String): Flow<LlmResult> = results.asFlow()
+        override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = results.asFlow()
     }
 
     private class FakeTransitEventDao : TransitEventDao {
@@ -45,7 +45,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -61,7 +61,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = FakeProvider("local", listOf(LlmResult.Complete)),
             transitEventDao = FakeTransitEventDao(),
@@ -156,7 +156,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -205,7 +205,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = FakeProvider("local", listOf(LlmResult.Complete)),
             transitEventDao = FakeTransitEventDao(),
@@ -241,7 +241,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = FakeProvider("local", errorResults),
             transitEventDao = FakeTransitEventDao(),
@@ -285,7 +285,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = FakeProvider("local", results),
             transitEventDao = FakeTransitEventDao(),
@@ -422,7 +422,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -553,7 +553,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -596,7 +596,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),

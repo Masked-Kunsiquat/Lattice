@@ -55,6 +55,7 @@ class SearchRepositoryTest {
                 entries.filter { it.valence > minValence }.sortedByDescending { it.valence }
             override suspend fun getLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): List<JournalEntry> = emptyList()
             override suspend fun countLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): Int = 0
+            override fun getEntriesForPerson(personId: UUID): Flow<List<JournalEntry>> = flowOf(emptyList())
         }
         return SearchRepository(
             journalDao = dao,
