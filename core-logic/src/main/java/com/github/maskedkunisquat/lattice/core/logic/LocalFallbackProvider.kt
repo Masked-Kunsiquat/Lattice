@@ -64,6 +64,9 @@ class LocalFallbackProvider(
 
     @Volatile private var initAttempted = false
     @Volatile private var initFailureReason: String? = null
+    // Set to true the first time a GPU inference call fails due to missing OpenCL.
+    // Subsequent initialize() calls will skip GPU entirely.
+    @Volatile private var openClFailed = false
     private val initLock = Any()
 
     private val _modelLoadState = MutableStateFlow(ModelLoadState.IDLE)
@@ -125,7 +128,7 @@ class LocalFallbackProvider(
             _modelLoadState.value = ModelLoadState.LOADING_SESSION
 
             val backendsToTry: List<Backend> =
-                if (isQualcommDevice()) listOf(Backend.GPU(), Backend.CPU())
+                if (!openClFailed && isQualcommDevice()) listOf(Backend.GPU(), Backend.CPU())
                 else listOf(Backend.CPU())
 
             var lastException: Exception? = null
@@ -174,8 +177,17 @@ class LocalFallbackProvider(
      *
      * Emits [LlmResult.Token] for each streamed chunk, then [LlmResult.Complete] on
      * finish, or [LlmResult.Error] on failure.
+     *
+     * If the GPU engine fails at inference time due to missing OpenCL (e.g. Samsung
+     * restricts libOpenCL.so for third-party apps), the engine is torn down and
+     * reinitialised with CPU, then the same prompt is retried transparently.
+     * The OpenCL error fires before any tokens are emitted, so no partial output
+     * is lost.
      */
-    override fun process(prompt: String): Flow<LlmResult> = flow {
+    override fun process(prompt: String): Flow<LlmResult> =
+        processInternal(prompt, allowOpenClRetry = true)
+
+    private fun processInternal(prompt: String, allowOpenClRetry: Boolean): Flow<LlmResult> = flow {
         val eng = engine ?: throw IllegalStateException(
             "Model not loaded. ${initFailureReason ?: "Call initialize() first."}"
         )
@@ -187,8 +199,31 @@ class LocalFallbackProvider(
             emit(LlmResult.Complete)
         }
     }.catch { e ->
-        emit(LlmResult.Error(e))
+        if (allowOpenClRetry && !openClFailed &&
+            e.message?.contains("OpenCL", ignoreCase = true) == true) {
+            Log.w(TAG, "GPU inference failed — OpenCL unavailable on this device, switching to CPU")
+            openClFailed = true
+            withContext(dispatcher) { switchToCpu() }
+            emitAll(processInternal(prompt, allowOpenClRetry = false))
+        } else {
+            emit(LlmResult.Error(e))
+        }
     }.flowOn(dispatcher)
+
+    /**
+     * Tears down the current engine (releasing native GPU resources if possible)
+     * and reinitialises with CPU only. Called when OpenCL inference fails at runtime.
+     */
+    private fun switchToCpu() {
+        synchronized(initLock) {
+            (engine as? AutoCloseable)?.runCatching { close() }
+            engine = null
+            initAttempted = false
+            initFailureReason = null
+            _modelLoadState.value = ModelLoadState.IDLE
+        }
+        initialize() // openClFailed = true, so backends = [CPU]
+    }
 
     private fun isQualcommDevice(): Boolean {
         val hardware = Build.HARDWARE.lowercase(java.util.Locale.ROOT)
