@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.androidx.room.ktx)
     implementation(libs.mediapipe.tasks.genai)
+    implementation(libs.onnxruntime.android)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.okhttp)
     testImplementation(libs.junit)

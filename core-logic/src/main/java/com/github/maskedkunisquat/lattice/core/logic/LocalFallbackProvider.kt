@@ -53,6 +53,11 @@ class LocalFallbackProvider(
     override val id = "gemma3_1b_mediapipe"
 
     @Volatile private var llmInference: LlmInference? = null
+    
+    // Bridging callbacks for the singleton LlmInference session. 
+    // Set per-request in process().
+    private var currentPartialResultListener: ((String, Boolean) -> Unit)? = null
+    private var currentErrorListener: ((Throwable) -> Unit)? = null
 
     @Volatile private var initAttempted = false
     @Volatile private var initFailureReason: String? = null
@@ -79,14 +84,24 @@ class LocalFallbackProvider(
             try {
                 val modelAsset = selectModelAsset()
                 Log.i(TAG, "Selected model tier: $modelAsset (board=${Build.BOARD})")
+                
                 _modelLoadState.value = ModelLoadState.COPYING_SHARDS
                 copyModelIfNeeded(modelAsset)
+                
                 _modelLoadState.value = ModelLoadState.LOADING_SESSION
                 val modelPath = File(context.filesDir, modelAsset).absolutePath
+                
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(modelPath)
                     .setMaxTokens(MAX_TOKENS)
+                    .setResultListener { partial, done -> 
+                        currentPartialResultListener?.invoke(partial, done)
+                    }
+                    .setErrorListener { error ->
+                        currentErrorListener?.invoke(error)
+                    }
                     .build()
+                
                 llmInference = LlmInference.createFromOptions(context, options)
                 _modelLoadState.value = ModelLoadState.READY
                 Log.i(TAG, "MediaPipe LlmInference session ready — model=$modelAsset")
@@ -94,7 +109,7 @@ class LocalFallbackProvider(
                 _copyProgress.value = 0f
                 _modelLoadState.value = ModelLoadState.ERROR
                 initFailureReason = "${e::class.simpleName}: ${e.message}"
-                Log.w(TAG, "LocalFallbackProvider init failed — provider unavailable", e)
+                Log.w(TAG, "LocalFallbackProvider init failed", e)
             }
         }
     }
@@ -113,30 +128,37 @@ class LocalFallbackProvider(
     override fun process(prompt: String): Flow<LlmResult> = callbackFlow {
         val inference = llmInference
         if (inference == null) {
-            val reason = initFailureReason
-                ?.let { " Init failed with: $it" }
-                ?: " Ensure the correct model tier is in app/src/main/assets/" +
-                   " and call LocalFallbackProvider.initialize() at app startup."
-            send(LlmResult.Error(IllegalStateException("Gemma 3 1B model not loaded.$reason")))
+            val reason = initFailureReason ?: "Call LocalFallbackProvider.initialize() first."
+            send(LlmResult.Error(IllegalStateException("Model not loaded. $reason")))
             close()
             return@callbackFlow
         }
 
-        try {
-            inference.generateAsync(prompt) { partialResult, done ->
-                if (!partialResult.isNullOrEmpty()) {
-                    trySend(LlmResult.Token(partialResult))
-                }
-                if (done) {
-                    trySend(LlmResult.Complete)
-                    close()
-                }
+        // Setup bridging for this specific flow collection
+        currentPartialResultListener = { partial, done ->
+            if (partial.isNotEmpty()) {
+                trySend(LlmResult.Token(partial))
             }
+            if (done) {
+                trySend(LlmResult.Complete)
+                close()
+            }
+        }
+        
+        currentErrorListener = { error ->
+            close(error)
+        }
+
+        try {
+            inference.generateResponseAsync(prompt)
         } catch (e: Exception) {
             close(e)
         }
 
-        awaitClose { /* MediaPipe does not expose a per-request cancellation API */ }
+        awaitClose {
+            currentPartialResultListener = null
+            currentErrorListener = null
+        }
     }.flowOn(dispatcher)
 
     // ── Tier selection ────────────────────────────────────────────────────────
@@ -163,7 +185,6 @@ class LocalFallbackProvider(
     private fun copyModelIfNeeded(modelAsset: String) {
         val dest = File(context.filesDir, modelAsset)
         val tmp  = File(context.filesDir, "$modelAsset.tmp")
-        if (tmp.exists()) tmp.delete()
         if (dest.exists()) {
             _copyProgress.value = 1f
             return
@@ -171,7 +192,7 @@ class LocalFallbackProvider(
         try {
             context.assets.open(modelAsset).use { src ->
                 tmp.outputStream().use { dst ->
-                    val buf = ByteArray(2 * 1024 * 1024) // 2 MB chunks
+                    val buf = ByteArray(2 * 1024 * 1024)
                     var copied = 0L
                     var n: Int
                     while (src.read(buf).also { n = it } != -1) {
@@ -182,7 +203,7 @@ class LocalFallbackProvider(
                 }
             }
             if (!tmp.renameTo(dest)) {
-                throw IOException("Failed to rename $tmp to $dest")
+                 throw IOException("Failed to rename $tmp to $dest")
             }
             _copyProgress.value = 1f
         } catch (e: Exception) {
@@ -195,9 +216,9 @@ class LocalFallbackProvider(
         private const val TAG = "LocalFallbackProvider"
 
         // Hardware-optimised tiers — selected by selectModelAsset() at runtime.
-        private const val MODEL_ELITE     = "gemma3-1b-it-elite.litertlm"   // SM8750 / Adreno 830
-        private const val MODEL_ULTRA     = "gemma3-1b-it-ultra.litertlm"   // SM8650 / Adreno 750
-        private const val MODEL_UNIVERSAL = "gemma3-1b-it-universal.task"   // ARM64 fallback
+        private const val MODEL_ELITE     = "gemma3-1b-it-elite.litertlm"
+        private const val MODEL_ULTRA     = "gemma3-1b-it-ultra.litertlm"
+        private const val MODEL_UNIVERSAL = "gemma3-1b-it-universal.task"
 
         // Matches the model's ekv1280 KV-cache context window.
         private const val MAX_TOKENS = 1280
