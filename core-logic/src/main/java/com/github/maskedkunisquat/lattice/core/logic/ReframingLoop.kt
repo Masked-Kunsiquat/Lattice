@@ -242,15 +242,16 @@ class ReframingLoop(
 
             ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
                 val evidenceStep = if (evidenceEntries.isNotEmpty())
-                    "2. Challenge the thought using one of the past moments listed above."
+                    "2. Challenge the avoidance using one of the past moments listed above."
                 else
-                    "2. Offer one realistic, forward-looking thought — not invented evidence."
+                    "2. Reframe the gap between intention and action as inertia, not a character flaw."
                 val actionStep = if (baActivity != null)
-                    "3. Name this one small step you can take now: \"${baActivity.taskName}\"."
+                    "3. End with this one concrete next step: \"${baActivity.taskName}\"."
                 else
-                    "3. Name one small, concrete step to take now."
-                "Write exactly 2-3 sentences in first person that:\n" +
-                "1. Name what is hard without dwelling on it.\n" +
+                    "3. End with one specific, minimal next step drawn from the entry itself."
+                "Write exactly 2-3 sentences in first person.\n" +
+                "No motivational phrases. No invented details.\n" +
+                "1. Name the pattern (avoidance, low energy) as a temporary state, not a fixed trait.\n" +
                 "$evidenceStep\n" +
                 actionStep
             }
@@ -460,7 +461,9 @@ class ReframingLoop(
 
         internal const val INTERVENTION_SYSTEM =
             "You are a CBT journaling assistant. Write a brief, grounded first-person reframe. " +
-            "Do NOT repeat or amplify the negative thought — challenge it. " +
+            "Stay close to the exact words in the entry — do not invent details or examples not present in the text. " +
+            "Do NOT repeat or amplify the negative thought — reframe it. " +
+            "No motivational cheerleading (no 'I can do this', 'I've got this', 'I believe in myself'). " +
             "No markdown, no asterisks, no ellipses, no therapist language."
 
         /**
