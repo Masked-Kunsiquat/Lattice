@@ -28,6 +28,18 @@ class PeopleRepository(
      * Returns a reactive stream of all people with their associated phone numbers.
      * Fulfills Directive 1.2 (Local-First Persistence).
      */
+    /**
+     * Returns a reactive stream for a single person with their phone numbers.
+     * Emits null when the person does not exist (e.g., after deletion).
+     */
+    fun getPersonWithPhones(personId: UUID): Flow<PersonWithPhones?> =
+        combine(
+            personDao.getPersonById(personId),
+            phoneNumberDao.getPhoneNumbersForPerson(personId),
+        ) { person, phones ->
+            person?.let { PersonWithPhones(it, phones) }
+        }
+
     fun getPeople(): Flow<List<PersonWithPhones>> {
         // We combine the flows to create the aggregate reactive model
         return combine(

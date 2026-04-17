@@ -39,6 +39,7 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -139,7 +140,10 @@ private fun PersonListItem(
     val person = pwp.person
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) { onDelete(); true } else false
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+                false  // don't commit — wait for AlertDialog confirmation
+            } else false
         },
     )
 
@@ -164,7 +168,7 @@ private fun PersonListItem(
     ) {
         val vibeColor = when {
             person.vibeScore > 0.3f -> MaterialTheme.colorScheme.tertiary
-            person.vibeScore < -0.3f -> MaterialTheme.colorScheme.error
+            person.vibeScore < -0.3f -> MaterialTheme.colorScheme.secondary
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
         val displayName = person.nickname
@@ -254,7 +258,7 @@ private fun AddPersonSheet(
                     readOnly = true,
                     label = { Text("Relationship") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                 )
                 ExposedDropdownMenu(
                     expanded = dropdownExpanded,

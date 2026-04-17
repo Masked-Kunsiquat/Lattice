@@ -66,8 +66,12 @@ class WorkManagerTrainingScheduler(private val context: Context) : TrainingSched
      * Cancels any in-flight [EmbeddingTrainingWorker] run and suspends until it is no longer
      * RUNNING or ENQUEUED (up to 5 s).
      *
-     * Uses [await] (work-runtime-ktx) instead of the blocking [java.util.concurrent.Future.get]
-     * so this function remains non-blocking and cancellable throughout the wait loop.
+     * Uses two mechanisms:
+     * - [cancelUniqueWork(...).await()][await] (work-runtime-ktx coroutine extension) for the
+     *   initial cancellation — non-blocking and cancellable.
+     * - [java.util.concurrent.Future.get] inside [withContext(Dispatchers.IO)][kotlinx.coroutines.withContext]
+     *   for both the polling loop and the post-timeout verification — blocking I/O offloaded to
+     *   the IO dispatcher so the main dispatcher is never blocked.
      *
      * After the loop, re-checks work infos and throws [IllegalStateException] if the work
      * has still not quiesced — this prevents file deletion from racing a worker that is

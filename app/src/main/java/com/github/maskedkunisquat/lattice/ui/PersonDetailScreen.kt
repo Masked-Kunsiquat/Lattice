@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -75,6 +76,11 @@ import java.util.UUID
 import kotlin.math.cos
 import kotlin.math.sin
 
+private fun RelationshipType.displayLabel(): String =
+    name.split('_').joinToString(" ") { word ->
+        word.lowercase().replaceFirstChar { it.uppercase() }
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonDetailScreen(
@@ -86,10 +92,6 @@ fun PersonDetailScreen(
 
     LaunchedEffect(Unit) {
         viewModel.deletedEvent.collect { onBack() }
-    }
-
-    LaunchedEffect(state) {
-        if (state is PersonDetailState.NotFound) onBack()
     }
 
     when (val s = state) {
@@ -156,8 +158,11 @@ private fun PersonDetailContent(
         )
     }
 
-    val displayName = person.nickname
-        ?: listOfNotNull(person.firstName, person.lastName).joinToString(" ")
+    val displayName = person.nickname?.takeIf { it.isNotBlank() }
+        ?: listOfNotNull(
+            person.firstName?.takeIf { it.isNotBlank() },
+            person.lastName?.takeIf { it.isNotBlank() },
+        ).joinToString(" ").ifBlank { "Unnamed" }
 
     Scaffold(
         topBar = {
@@ -207,10 +212,7 @@ private fun PersonDetailContent(
                 SuggestionChip(
                     onClick = {},
                     label = {
-                        Text(
-                            person.relationshipType.name.lowercase()
-                                .replaceFirstChar { it.uppercase() },
-                        )
+                        Text(person.relationshipType.displayLabel())
                     },
                 )
                 IconButton(onClick = onToggleFavorite) {
@@ -384,12 +386,12 @@ private fun EditPersonSheet(
     onSave: (Person, List<PhoneNumber>) -> Unit,
 ) {
     val person = personWithPhones.person
-    var firstName by remember { mutableStateOf(person.firstName) }
-    var lastName by remember { mutableStateOf(person.lastName ?: "") }
-    var nickname by remember { mutableStateOf(person.nickname ?: "") }
-    var relationship by remember { mutableStateOf(person.relationshipType) }
+    var firstName by remember(personWithPhones) { mutableStateOf(person.firstName) }
+    var lastName by remember(personWithPhones) { mutableStateOf(person.lastName ?: "") }
+    var nickname by remember(personWithPhones) { mutableStateOf(person.nickname ?: "") }
+    var relationship by remember(personWithPhones) { mutableStateOf(person.relationshipType) }
     var dropdownExpanded by remember { mutableStateOf(false) }
-    var phones by remember { mutableStateOf(personWithPhones.phoneNumbers) }
+    var phones by remember(personWithPhones) { mutableStateOf(personWithPhones.phoneNumbers.toMutableList() as List<PhoneNumber>) }
     var newPhoneNumber by remember { mutableStateOf("") }
 
     ModalBottomSheet(
@@ -434,12 +436,12 @@ private fun EditPersonSheet(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 OutlinedTextField(
-                    value = relationship.name.lowercase().replaceFirstChar { it.uppercase() },
+                    value = relationship.displayLabel(),
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Relationship") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                 )
                 ExposedDropdownMenu(
                     expanded = dropdownExpanded,
@@ -447,7 +449,7 @@ private fun EditPersonSheet(
                 ) {
                     RelationshipType.entries.forEach { type ->
                         DropdownMenuItem(
-                            text = { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                            text = { Text(type.displayLabel()) },
                             onClick = { relationship = type; dropdownExpanded = false },
                         )
                     }

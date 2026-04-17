@@ -30,7 +30,7 @@ using the `expanded` overlay for multi-category results.
 
 Inside expanded content, a `TabRow` with four tabs:
 
-```
+```text
 [  Entries  |  People  |  Places  |  Tags  ]
 ```
 
@@ -68,7 +68,7 @@ nothing needs to change in `:core-data` or `:core-logic`.
 
 Add a fourth tab between History and Settings:
 
-```
+```text
 [ Journal ]  [ History ]  [ People ]  [ Settings ]
 ```
 

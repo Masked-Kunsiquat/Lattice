@@ -176,11 +176,13 @@ fun JournalHistoryScreen(
                         isLoading = searchState.isLoading,
                         query = searchState.query,
                         onOpenEntry = onOpenEntry,
+                        onCollapse = { searchViewModel.onExpandedChange(false) },
                     )
                     SearchTab.PEOPLE -> SearchPeopleResults(
                         results = searchState.peopleResults,
                         query = searchState.query,
                         onOpenPerson = onOpenPerson,
+                        onCollapse = { searchViewModel.onExpandedChange(false) },
                     )
                     SearchTab.PLACES -> SearchPlaceResults(
                         results = searchState.placeResults,
@@ -234,6 +236,7 @@ private fun SearchEntryResults(
     isLoading: Boolean,
     query: String,
     onOpenEntry: (UUID) -> Unit,
+    onCollapse: () -> Unit,
 ) {
     when {
         query.isBlank() -> SearchEmptyHint("Start typing to search entries")
@@ -255,7 +258,10 @@ private fun SearchEntryResults(
                             overflow = TextOverflow.Ellipsis,
                         )
                     },
-                    modifier = Modifier.clickable { onOpenEntry(entry.id) },
+                    modifier = Modifier.clickable {
+                        onCollapse()
+                        onOpenEntry(entry.id)
+                    },
                 )
             }
         }
@@ -267,6 +273,7 @@ private fun SearchPeopleResults(
     results: List<Person>,
     query: String,
     onOpenPerson: (UUID) -> Unit,
+    onCollapse: () -> Unit,
 ) {
     when {
         query.isBlank() -> SearchEmptyHint("Start typing to search people")
@@ -277,7 +284,7 @@ private fun SearchPeopleResults(
                     ?: listOfNotNull(person.firstName, person.lastName).joinToString(" ")
                 val vibeColor = when {
                     person.vibeScore > 0.3f -> MaterialTheme.colorScheme.tertiary
-                    person.vibeScore < -0.3f -> MaterialTheme.colorScheme.error
+                    person.vibeScore < -0.3f -> MaterialTheme.colorScheme.secondary
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 ListItem(
@@ -297,7 +304,10 @@ private fun SearchPeopleResults(
                                 .background(vibeColor, CircleShape),
                         )
                     },
-                    modifier = Modifier.clickable { onOpenPerson(person.id) },
+                    modifier = Modifier.clickable {
+                        onCollapse()
+                        onOpenPerson(person.id)
+                    },
                 )
             }
         }
@@ -515,6 +525,7 @@ private fun PreviewSearchPersonRow() {
             ),
             query = "holmes",
             onOpenPerson = {},
+            onCollapse = {},
         )
     }
 }

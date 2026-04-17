@@ -11,6 +11,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
 import com.github.maskedkunisquat.lattice.core.logic.PersonWithPhones
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,12 +38,11 @@ class PersonDetailViewModel(
 ) : ViewModel() {
 
     val state: StateFlow<PersonDetailState> = combine(
-        peopleRepository.getPeople(),
+        peopleRepository.getPersonWithPhones(personId),
         mentionDao.getMentionsForPerson(personId),
         journalRepository.getEntries(),
-    ) { people, mentions, allEntries ->
-        val pwp = people.find { it.person.id == personId }
-            ?: return@combine PersonDetailState.NotFound
+    ) { pwp, mentions, allEntries ->
+        pwp ?: return@combine PersonDetailState.NotFound
         val entryIds = mentions.map { it.entryId }.toSet()
         val filteredEntries = allEntries
             .filter { it.id in entryIds }
@@ -50,7 +50,11 @@ class PersonDetailViewModel(
         PersonDetailState.Found(personWithPhones = pwp, entries = filteredEntries)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PersonDetailState.Loading)
 
-    private val _deletedEvent = MutableSharedFlow<Unit>()
+    private val _deletedEvent = MutableSharedFlow<Unit>(
+        replay = 0,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
     val deletedEvent = _deletedEvent.asSharedFlow()
 
     fun deletePerson() {

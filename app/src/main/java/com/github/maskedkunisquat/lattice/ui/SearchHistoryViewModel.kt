@@ -16,9 +16,10 @@ import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -35,8 +36,11 @@ data class SearchUiState(
     val peopleResults: List<Person> = emptyList(),
     val placeResults: List<PlaceResult> = emptyList(),
     val tagResults: List<TagResult> = emptyList(),
-    val isLoading: Boolean = false,
-)
+    val isSemanticLoading: Boolean = false,
+    val isLikeLoading: Boolean = false,
+) {
+    val isLoading: Boolean get() = isSemanticLoading || isLikeLoading
+}
 
 class SearchHistoryViewModel(
     private val searchRepository: SearchRepository,
@@ -48,6 +52,10 @@ class SearchHistoryViewModel(
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    // Cached snapshot of all entries — reused across searches instead of cold-fetching each time.
+    private val allEntriesState = journalRepository.getEntries()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private var semanticJob: Job? = null
     private var likeJob: Job? = null
@@ -83,7 +91,8 @@ class SearchHistoryViewModel(
                 peopleResults = emptyList(),
                 placeResults = emptyList(),
                 tagResults = emptyList(),
-                isLoading = false,
+                isSemanticLoading = false,
+                isLikeLoading = false,
             )
         }
     }
@@ -99,41 +108,52 @@ class SearchHistoryViewModel(
                     peopleResults = emptyList(),
                     placeResults = emptyList(),
                     tagResults = emptyList(),
-                    isLoading = false,
+                    isSemanticLoading = false,
+                    isLikeLoading = false,
                 )
             }
             return
         }
 
-        _uiState.update { it.copy(isLoading = true) }
+        _uiState.update { it.copy(isSemanticLoading = true, isLikeLoading = true) }
 
-        // Semantic entry search — re-launched (and previous cancelled) on each keystroke.
+        // Semantic entry search — debounced 300 ms, re-launched (and previous cancelled) on each keystroke.
         semanticJob = viewModelScope.launch {
-            val results = searchRepository.findSimilarEntries(query, limit = 20)
-            _uiState.update { it.copy(entryResults = results, isLoading = false) }
+            try {
+                delay(300)
+                val results = searchRepository.findSimilarEntries(query, limit = 20)
+                _uiState.update { it.copy(entryResults = results, isSemanticLoading = false) }
+            } finally {
+                _uiState.update { it.copy(isSemanticLoading = false) }
+            }
         }
 
         // LIKE searches for people / places / tags — debounced 150 ms.
         likeJob = viewModelScope.launch {
-            delay(150)
-            val people = peopleRepository.searchByName(query)
-            val places = placeRepository.searchPlaces(query)
-            val tags = tagRepository.searchTags(query)
+            try {
+                delay(150)
+                val people = peopleRepository.searchByName(query)
+                val places = placeRepository.searchPlaces(query)
+                val tags = tagRepository.searchTags(query)
 
-            // Entry counts computed client-side from the current entries snapshot.
-            val allEntries = journalRepository.getEntries().first()
-            val placeResults = places.map { place ->
-                PlaceResult(place, allEntries.count { place.id in it.placeIds })
-            }
-            val tagResults = tags.map { tag ->
-                TagResult(tag, allEntries.count { tag.id in it.tagIds })
-            }
-            _uiState.update {
-                it.copy(
-                    peopleResults = people,
-                    placeResults = placeResults,
-                    tagResults = tagResults,
-                )
+                // Entry counts from cached in-memory snapshot; avoids a cold Flow fetch per keystroke.
+                val allEntries = allEntriesState.value
+                val placeResults = places.map { place ->
+                    PlaceResult(place, allEntries.count { place.id in it.placeIds })
+                }
+                val tagResults = tags.map { tag ->
+                    TagResult(tag, allEntries.count { tag.id in it.tagIds })
+                }
+                _uiState.update {
+                    it.copy(
+                        peopleResults = people,
+                        placeResults = placeResults,
+                        tagResults = tagResults,
+                        isLikeLoading = false,
+                    )
+                }
+            } finally {
+                _uiState.update { it.copy(isLikeLoading = false) }
             }
         }
     }
