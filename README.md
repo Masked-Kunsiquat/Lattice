@@ -91,7 +91,7 @@ Idle → Loading → Streaming(partial) → Done(text)
 | Snowflake Arctic Embed XS | Semantic embeddings | ONNX, int8, 384-dim |
 | Gemma 3 1B Instruct | All three reframing stages | LiteRT task bundle (INT4) |
 
-`gemma3_1b_it.task` is staged to `context.filesDir` on first run — MediaPipe requires a real filesystem path. Backend selection is automatic: GPU (Adreno 700-series on Snapdragon 8 Elite targets 35–50 tok/s) with CPU fallback. Generation is capped at 512 new tokens.
+`gemma3-1b-it-s25.litertlm` is staged to `context.filesDir` on first run — MediaPipe requires a real filesystem path. Backend selection is automatic: GPU (Adreno 750 on S25 Ultra targets 35–50 tok/s) with CPU fallback. Generation is capped at 512 new tokens.
 
 > **Model files are not committed to this repository.** Place them in `app/src/main/assets/` before building. See `assets/snowflake-arctic-embed-xs.onnx.placeholder` for the expected filenames.
 

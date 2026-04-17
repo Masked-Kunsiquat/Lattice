@@ -180,7 +180,7 @@ Requires accepting Google's Gemma Terms of Use on HuggingFace. Authenticate with
 
 | File | Size | Source |
 |---|---|---|
-| `gemma3_1b_it.task` | ~1.5 GB | HuggingFace (Gemma repo) |
+| `gemma3-1b-it-s25.litertlm` | ~1.5 GB | HuggingFace (Gemma repo) |
 
 HuggingFace repos:
 - **Gemma model**: `https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert`

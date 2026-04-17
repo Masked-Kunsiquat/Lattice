@@ -22,7 +22,7 @@ plugins {
 private val HF_GEMMA = "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
 private val gemmaFiles = listOf(
-    "gemma3_1b_it.task",
+    "gemma3-1b-it-s25.litertlm",
 )
 
 tasks.register("downloadModels") {

@@ -26,7 +26,7 @@ enum class ModelLoadState { IDLE, COPYING_SHARDS, LOADING_SESSION, READY, ERROR 
  *
  * ## Asset setup
  * Place the following file in app/src/main/assets/:
- *   gemma3_1b_it.task   — Gemma 3 1B Instruct LiteRT task bundle (INT4)
+ *   gemma3-1b-it-s25.litertlm   — Gemma 3 1B Instruct LiteRT model (S25-optimised)
  *
  * Run `./gradlew downloadModels` to fetch from HuggingFace.
  *
@@ -173,7 +173,7 @@ class LocalFallbackProvider(
 
     companion object {
         private const val TAG = "LocalFallbackProvider"
-        private const val MODEL_ASSET = "gemma3_1b_it.task"
+        private const val MODEL_ASSET = "gemma3-1b-it-s25.litertlm"
         private const val MAX_NEW_TOKENS = 512
         private const val APPROX_MODEL_BYTES = 1_500_000_000L
     }

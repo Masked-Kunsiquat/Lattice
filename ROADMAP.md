@@ -143,7 +143,7 @@ reliably formatted on the first pass (fewer malformed outputs to handle).
 **Tasks:**
 
 - [x] Add MediaPipe Tasks dependency (`com.google.mediapipe:tasks-genai`) to `:core-logic`
-- [x] Add Gemma 3 1B `.task` model to `downloadModels` Gradle task (source: Kaggle / HuggingFace `google/gemma-3-1b-it-litert-preview`)
+- [x] Add Gemma 3 1B `.litertlm` model to `downloadModels` Gradle task (source: HuggingFace `masked-kunsiquat/gemma-3-1b-it-litert`)
 - [x] Rewrite `LocalFallbackProvider` against `LlmInference` API — streaming via `LlmInference.generateAsync()`, `ModelLoadState` flow preserved
 - [x] Remove Llama shard copy logic (`copyAssetsToFilesDir`, `ASSET_FILES`) — MediaPipe handles model loading from a single file path
 - [x] Remove `LlamaTokenizer`, `LlamaTokenizerTest` — MediaPipe tokenizes internally

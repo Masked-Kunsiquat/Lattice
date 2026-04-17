@@ -48,7 +48,7 @@ private const val TAG_SETUP    = "Lattice:Benchmark:Setup"
  * - Stage 3 strategy matches the expected quadrant strategy.
  * - Werther Stage 2 flags [CognitiveDistortion.EMOTIONAL_REASONING].
  *
- * The model file (gemma3_1b_it.task) is not committed to VCS. The benchmark does NOT
+ * The model file (gemma3-1b-it-s25.litertlm) is not committed to VCS. The benchmark does NOT
  * call [LocalFallbackProvider.initialize] in setUp — loading a ~1.5 GB model
  * synchronously would OOM the test process. Instead, [modelLoaded] reflects whatever
  * state [LatticeApplication]'s background init thread has reached by the time the
@@ -56,7 +56,7 @@ private const val TAG_SETUP    = "Lattice:Benchmark:Setup"
  * gracefully and only the deterministic assertions execute.
  *
  * To enable full inference benchmarking:
- *   1. Run `./gradlew downloadModels` to fetch gemma3_1b_it.task into app/src/main/assets/.
+ *   1. Run `./gradlew downloadModels` to fetch gemma3-1b-it-s25.litertlm into app/src/main/assets/.
  *   2. Re-run the benchmark. LatticeApplication will load the model in its background
  *      thread; [modelLoaded] will be true before the inference block is reached
  *      (provided setUp and seed ingestion give the thread enough lead time).
@@ -347,7 +347,7 @@ class PersonaBenchmarkTest {
                 TAG_BENCHMARK,
                 "$persona — Gemma 3 1B model not loaded (modelLoadState=${localFallbackProvider.modelLoadState.value}); " +
                 "inference stages skipped. Run ./gradlew downloadModels to fetch " +
-                "gemma3_1b_it.task into app/src/main/assets/ and re-run to enable full benchmark execution."
+                "gemma3-1b-it-s25.litertlm into app/src/main/assets/ and re-run to enable full benchmark execution."
             )
         }
 

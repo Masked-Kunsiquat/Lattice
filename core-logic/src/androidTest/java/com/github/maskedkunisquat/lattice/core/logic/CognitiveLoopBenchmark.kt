@@ -27,8 +27,8 @@ import org.junit.runner.RunWith
  * End-to-end performance benchmarks for the three-stage CBT reframing pipeline.
  *
  * ## Device requirement
- * Requires the Gemma 3 1B LiteRT model file (`gemma3_1b_it.task`) to be present
- * in the test APK's assets. The file is gitignored — fetch it with
+ * Requires the Gemma 3 1B LiteRT model file (`gemma3-1b-it-s25.litertlm`) to be
+ * present in the test APK's assets. The file is gitignored — fetch it with
  * `./gradlew downloadModels`. The entire class is skipped via [assumeTrue] when
  * the model is absent, so it runs cleanly on emulators and CI without modification.
  *
@@ -99,7 +99,7 @@ class CognitiveLoopBenchmark {
         assumeTrue(
             "Gemma 3 1B model not loaded " +
             "(state=${provider.modelLoadState.value}). " +
-            "Run ./gradlew downloadModels to fetch gemma3_1b_it.task into app/src/main/assets/.",
+            "Run ./gradlew downloadModels to fetch gemma3-1b-it-s25.litertlm into app/src/main/assets/.",
             provider.modelLoadState.value == ModelLoadState.READY
         )
 
