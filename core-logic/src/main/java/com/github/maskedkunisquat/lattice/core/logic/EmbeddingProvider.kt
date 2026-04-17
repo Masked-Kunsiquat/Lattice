@@ -3,12 +3,14 @@ package com.github.maskedkunisquat.lattice.core.logic
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.providers.NNAPIFlags
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.LongBuffer
+import java.util.EnumSet
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -40,7 +42,14 @@ open class EmbeddingProvider(
             val vocabLines = context.assets.open(VOCAB_ASSET).bufferedReader().readLines()
             tokenizer = WordPieceTokenizer(vocabLines)
             val modelBytes = context.assets.open(MODEL_ASSET).readBytes()
-            ortSession = env.createSession(modelBytes, OrtSession.SessionOptions())
+            ortSession = OrtSession.SessionOptions().use { opts ->
+                try {
+                    opts.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16))
+                } catch (_: Exception) {
+                    Log.d(TAG, "NNAPI unavailable for embedding model — CPU only")
+                }
+                env.createSession(modelBytes, opts)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to initialize embedding model: ${e.message}")
             // Model or vocab not yet available — generateEmbedding will return zero-vectors.
