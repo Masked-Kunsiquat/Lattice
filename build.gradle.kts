@@ -40,9 +40,15 @@ tasks.register("downloadModels") {
                 return@run propOverride
             }
             try {
-                val proc = Runtime.getRuntime().exec("adb shell getprop ro.product.board")
-                val board = proc.inputStream.bufferedReader().readText().trim()
-                proc.waitFor()
+                val pb = ProcessBuilder("adb", "shell", "getprop", "ro.product.board")
+                val proc = pb.start()
+                val board = proc.inputStream.bufferedReader().use { it.readText() }.trim()
+                val exited = proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+                if (!exited) {
+                    proc.destroyForcibly()
+                    logger.lifecycle("  ℹ  ADB timed out — using universal tier.")
+                    return@run "universal"
+                }
                 logger.lifecycle("  ℹ  Detected ro.product.board=$board")
                 when (board.lowercase()) {
                     "kailua" -> "elite"   // Snapdragon 8 Elite (SM8750)
@@ -92,6 +98,10 @@ tasks.register("downloadModels") {
 fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
     dest.parentFile.mkdirs()
     var location = url
+
+    val hfToken = System.getenv("HF_TOKEN")
+        ?: file("${System.getProperty("user.home")}/.cache/huggingface/token").let { if (it.exists()) it.readText().trim() else null }
+
     repeat(10) { attempt ->
         val conn = java.net.URI(location).toURL()
             .openConnection() as java.net.HttpURLConnection
@@ -99,6 +109,10 @@ fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
         conn.connectTimeout = 30_000
         conn.readTimeout    = 60_000
         conn.setRequestProperty("User-Agent", "Gradle/Lattice-downloadModels")
+        if (hfToken != null) {
+            conn.setRequestProperty("Authorization", "Bearer $hfToken")
+        }
+
         try {
             conn.connect()
             when (val code = conn.responseCode) {
@@ -131,12 +145,19 @@ fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
                     // result before following it (guards against open-redirect exploitation).
                     val resolved = java.net.URI(location).resolve(raw)
                     val originalHost = java.net.URI(url).host
-                    if (resolved.scheme != "https" || resolved.host != originalHost) {
+                    if (resolved.scheme != "https" || (resolved.host != originalHost && resolved.host?.endsWith(".huggingface.co") != true)) {
                         throw GradleException(
-                            "Redirect to untrusted location '${resolved}' rejected (expected https://$originalHost)"
+                            "Redirect to untrusted location '${resolved}' rejected (expected https://$originalHost or *.huggingface.co)"
                         )
                     }
                     location = resolved.toString()
+                }
+                401, 403 -> {
+                    throw GradleException(
+                        "HTTP $code: HuggingFace access denied. Please ensure you have accepted the Gemma license " +
+                        "at https://huggingface.co/google/gemma-3-1b-it and are authenticated. " +
+                        "Run `huggingface-cli login` or set the HF_TOKEN environment variable."
+                    )
                 }
                 else -> throw GradleException("HTTP $code downloading $url")
             }

@@ -78,7 +78,7 @@ import kotlin.math.sin
 
 private fun RelationshipType.displayLabel(): String =
     name.split('_').joinToString(" ") { word ->
-        word.lowercase().replaceFirstChar { it.uppercase() }
+        word.lowercase(Locale.ROOT).replaceFirstChar { it.titlecase(Locale.ROOT) }
     }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -210,7 +210,7 @@ private fun PersonDetailContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 SuggestionChip(
-                    onClick = {},
+                    onClick = { showEditSheet = true },
                     label = {
                         Text(person.relationshipType.displayLabel())
                     },
@@ -360,7 +360,7 @@ private fun MentionedEntryRow(
     ListItem(
         overlineContent = {
             Text(
-                "${fmt.format(Date(entry.timestamp))} · ${entry.moodLabel.lowercase().replaceFirstChar { it.uppercase() }}",
+                "${fmt.format(Date(entry.timestamp))} · ${entry.moodLabel.lowercase(Locale.ROOT).replaceFirstChar { it.titlecase(Locale.ROOT) }}",
                 style = MaterialTheme.typography.labelSmall,
             )
         },
@@ -391,7 +391,7 @@ private fun EditPersonSheet(
     var nickname by remember(personWithPhones) { mutableStateOf(person.nickname ?: "") }
     var relationship by remember(personWithPhones) { mutableStateOf(person.relationshipType) }
     var dropdownExpanded by remember { mutableStateOf(false) }
-    var phones by remember(personWithPhones) { mutableStateOf(personWithPhones.phoneNumbers.toMutableList() as List<PhoneNumber>) }
+    var phones by remember(personWithPhones) { mutableStateOf(personWithPhones.phoneNumbers.toList()) }
     var newPhoneNumber by remember { mutableStateOf("") }
 
     ModalBottomSheet(

@@ -24,6 +24,14 @@ interface JournalDao {
     @Query("SELECT * FROM journal_entries ORDER BY timestamp DESC")
     fun getEntries(): Flow<List<JournalEntry>>
 
+    @Query("""
+        SELECT je.* FROM journal_entries je
+        INNER JOIN mentions m ON je.id = m.entryId
+        WHERE m.personId = :personId
+        ORDER BY je.timestamp DESC
+    """)
+    fun getEntriesForPerson(personId: UUID): Flow<List<JournalEntry>>
+
     @Query("SELECT * FROM journal_entries WHERE id = :id")
     fun getEntryById(id: UUID): Flow<JournalEntry?>
 

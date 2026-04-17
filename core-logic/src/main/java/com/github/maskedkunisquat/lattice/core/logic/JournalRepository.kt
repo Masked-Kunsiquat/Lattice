@@ -36,6 +36,19 @@ class JournalRepository(
     }
 
     /**
+     * Returns a flow of journal entries for a specific person, unmasked.
+     */
+    fun getEntriesForPerson(personId: UUID): Flow<List<JournalEntry>> {
+        return combine(
+            journalDao.getEntriesForPerson(personId),
+            personDao.getPersons(),
+            placeDao.getAll(),
+        ) { entries, people, places ->
+            entries.map { it.copy(content = it.content?.let { c -> PiiShield.unmask(c, people, places) }) }
+        }
+    }
+
+    /**
      * Returns a single journal entry by ID, unmasked.
      */
     fun getEntryById(id: UUID): Flow<JournalEntry?> {

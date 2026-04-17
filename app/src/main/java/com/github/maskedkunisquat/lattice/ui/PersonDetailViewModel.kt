@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.lattice.LatticeApplication
-import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
@@ -17,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -33,21 +33,15 @@ sealed class PersonDetailState {
 class PersonDetailViewModel(
     private val personId: UUID,
     private val peopleRepository: PeopleRepository,
-    private val mentionDao: MentionDao,
     private val journalRepository: JournalRepository,
 ) : ViewModel() {
 
     val state: StateFlow<PersonDetailState> = combine(
         peopleRepository.getPersonWithPhones(personId),
-        mentionDao.getMentionsForPerson(personId),
-        journalRepository.getEntries(),
-    ) { pwp, mentions, allEntries ->
+        journalRepository.getEntriesForPerson(personId),
+    ) { pwp, entries ->
         pwp ?: return@combine PersonDetailState.NotFound
-        val entryIds = mentions.map { it.entryId }.toSet()
-        val filteredEntries = allEntries
-            .filter { it.id in entryIds }
-            .sortedByDescending { it.timestamp }
-        PersonDetailState.Found(personWithPhones = pwp, entries = filteredEntries)
+        PersonDetailState.Found(personWithPhones = pwp, entries = entries)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PersonDetailState.Loading)
 
     private val _deletedEvent = MutableSharedFlow<Unit>(
@@ -71,12 +65,14 @@ class PersonDetailViewModel(
     }
 
     fun toggleFavorite() {
-        val found = state.value as? PersonDetailState.Found ?: return
         viewModelScope.launch {
-            peopleRepository.savePerson(
-                found.personWithPhones.person.copy(isFavorite = !found.personWithPhones.person.isFavorite),
-                found.personWithPhones.phoneNumbers,
-            )
+            val currentPwp = peopleRepository.getPersonWithPhones(personId).first()
+            if (currentPwp != null) {
+                peopleRepository.savePerson(
+                    currentPwp.person.copy(isFavorite = !currentPwp.person.isFavorite),
+                    currentPwp.phoneNumbers,
+                )
+            }
         }
     }
 
@@ -87,7 +83,6 @@ class PersonDetailViewModel(
                 PersonDetailViewModel(
                     personId = personId,
                     peopleRepository = app.peopleRepository,
-                    mentionDao = app.database.mentionDao(),
                     journalRepository = app.journalRepository,
                 ) as T
         }

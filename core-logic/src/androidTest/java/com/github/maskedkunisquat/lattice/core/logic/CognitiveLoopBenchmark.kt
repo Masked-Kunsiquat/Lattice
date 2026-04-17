@@ -93,9 +93,9 @@ class CognitiveLoopBenchmark {
         val provider = LocalFallbackProvider(context)
         provider.initialize()
 
-        // Gate: skip the entire class when Llama shards are absent.
-        // Shards live in app/src/main/assets/ (gitignored). Symlink or copy them to
-        // core-logic/src/androidTest/assets/ to enable this benchmark locally.
+        // Gate: skip the entire class when Gemma model is absent.
+        // Assets are exposed via sourceSets.androidTest.assets.srcDirs("../app/src/main/assets")
+        // and model files are managed by Gemma.downloadModels (run via ./gradlew downloadModels).
         assumeTrue(
             "Gemma 3 1B model not loaded " +
             "(state=${provider.modelLoadState.value}). " +

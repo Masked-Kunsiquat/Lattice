@@ -44,7 +44,7 @@ class WordPieceTokenizer(vocabLines: List<String>) {
         basicTokenize(text).flatMap { wordPiece(it) }
 
     private fun basicTokenize(text: String): List<String> {
-        val lower = text.lowercase()
+        val lower = text.lowercase(java.util.Locale.ROOT)
         val buf = StringBuilder(lower.length * 2)
         var i = 0
         while (i < lower.length) {

@@ -99,7 +99,7 @@ fun JournalEditorScreen(
         )
 
         AnimatedVisibility(
-            visible = modelLoadState == ModelLoadState.COPYING_SHARDS
+            visible = modelLoadState == ModelLoadState.COPYING_MODEL
                    || modelLoadState == ModelLoadState.LOADING_SESSION,
             enter = fadeIn(),
             exit = fadeOut(),
@@ -109,7 +109,7 @@ fun JournalEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (modelLoadState == ModelLoadState.COPYING_SHARDS) {
+                if (modelLoadState == ModelLoadState.COPYING_MODEL) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -118,7 +118,7 @@ fun JournalEditorScreen(
                 }
                 Text(
                     text = when (modelLoadState) {
-                        ModelLoadState.COPYING_SHARDS ->
+                        ModelLoadState.COPYING_MODEL ->
                             "Preparing local model…"
                         else ->
                             "Loading model session… (first launch may take a few minutes)"

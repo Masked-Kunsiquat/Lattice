@@ -159,7 +159,7 @@ fun JournalHistoryScreen(
                             selected = tab == searchState.activeTab,
                             onClick = { searchViewModel.onTabChange(tab) },
                             text = {
-                                Text(tab.name.lowercase().replaceFirstChar { it.uppercase() })
+                                Text(tab.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) })
                             },
                         )
                     }
@@ -246,7 +246,7 @@ private fun SearchEntryResults(
                 ListItem(
                     overlineContent = {
                         Text(
-                            entry.moodLabel.lowercase().replaceFirstChar { it.uppercase() },
+                            entry.moodLabel.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -291,8 +291,8 @@ private fun SearchPeopleResults(
                     headlineContent = { Text(displayName) },
                     supportingContent = {
                         Text(
-                            person.relationshipType.name.lowercase()
-                                .replaceFirstChar { it.uppercase() },
+                            person.relationshipType.name.lowercase(Locale.ROOT)
+                                .replaceFirstChar { it.uppercase(Locale.ROOT) },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -421,7 +421,7 @@ private fun EntryCard(
             ListItem(
                 overlineContent = {
                     Text(
-                        "${fmt.format(Date(entry.timestamp))}  ·  ${entry.moodLabel.lowercase().replaceFirstChar { it.uppercase() }}",
+                        "${fmt.format(Date(entry.timestamp))}  ·  ${entry.moodLabel.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) }}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

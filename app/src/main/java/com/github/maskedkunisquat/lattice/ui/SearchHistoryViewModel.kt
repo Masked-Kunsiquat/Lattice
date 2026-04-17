@@ -55,7 +55,7 @@ class SearchHistoryViewModel(
 
     // Cached snapshot of all entries — reused across searches instead of cold-fetching each time.
     private val allEntriesState = journalRepository.getEntries()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var semanticJob: Job? = null
     private var likeJob: Job? = null
@@ -115,16 +115,16 @@ class SearchHistoryViewModel(
             return
         }
 
-        _uiState.update { it.copy(isSemanticLoading = true, isLikeLoading = true) }
-
         // Semantic entry search — debounced 300 ms, re-launched (and previous cancelled) on each keystroke.
         semanticJob = viewModelScope.launch {
             try {
                 delay(300)
+                _uiState.update { it.copy(isSemanticLoading = true) }
                 val results = searchRepository.findSimilarEntries(query, limit = 20)
                 _uiState.update { it.copy(entryResults = results, isSemanticLoading = false) }
-            } finally {
+            } catch (e: Exception) {
                 _uiState.update { it.copy(isSemanticLoading = false) }
+                if (e is kotlinx.coroutines.CancellationException) throw e
             }
         }
 
@@ -132,6 +132,7 @@ class SearchHistoryViewModel(
         likeJob = viewModelScope.launch {
             try {
                 delay(150)
+                _uiState.update { it.copy(isLikeLoading = true) }
                 val people = peopleRepository.searchByName(query)
                 val places = placeRepository.searchPlaces(query)
                 val tags = tagRepository.searchTags(query)
@@ -152,8 +153,9 @@ class SearchHistoryViewModel(
                         isLikeLoading = false,
                     )
                 }
-            } finally {
+            } catch (e: Exception) {
                 _uiState.update { it.copy(isLikeLoading = false) }
+                if (e is kotlinx.coroutines.CancellationException) throw e
             }
         }
     }

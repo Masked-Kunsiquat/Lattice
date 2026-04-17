@@ -251,7 +251,7 @@ private fun LocalModelSection(
         val statusText = when {
             isDownloading -> "Downloading model… ${(downloadProgress * 100).toInt()}%"
             modelLoadState == ModelLoadState.IDLE -> "Not started"
-            modelLoadState == ModelLoadState.COPYING_SHARDS -> "Copying model shards…"
+            modelLoadState == ModelLoadState.COPYING_MODEL -> "Copying model…"
             modelLoadState == ModelLoadState.LOADING_SESSION -> "Loading model session…"
             modelLoadState == ModelLoadState.READY -> "Ready"
             modelLoadState == ModelLoadState.ERROR -> "Not found / Failed to load"
@@ -293,7 +293,7 @@ private fun LocalModelSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            modelLoadState == ModelLoadState.COPYING_SHARDS -> {
+            modelLoadState == ModelLoadState.COPYING_MODEL -> {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
                 )

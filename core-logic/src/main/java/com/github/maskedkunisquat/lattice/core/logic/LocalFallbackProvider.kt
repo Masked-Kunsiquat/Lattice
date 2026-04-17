@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class ModelLoadState { IDLE, COPYING_SHARDS, LOADING_SESSION, READY, ERROR }
+enum class ModelLoadState { IDLE, COPYING_MODEL, LOADING_SESSION, READY, ERROR }
 
 /**
  * LLM provider backed by the locally-bundled Gemma 3 1B Instruct LiteRT model.
@@ -120,7 +120,7 @@ class LocalFallbackProvider(
                 val modelAsset = resolveModelName()
                 Log.i(TAG, "Selected model tier: $modelAsset (board=${Build.BOARD}, hardware=${Build.HARDWARE})")
                 
-                _modelLoadState.value = ModelLoadState.COPYING_SHARDS
+                _modelLoadState.value = ModelLoadState.COPYING_MODEL
                 copyModelIfNeeded(modelAsset)
                 
                 _modelLoadState.value = ModelLoadState.LOADING_SESSION
@@ -203,8 +203,8 @@ class LocalFallbackProvider(
      * for Ultra tier.
      */
     private fun resolveModelName(): String {
-        val board = Build.BOARD.lowercase()
-        val hardware = Build.HARDWARE.lowercase()
+        val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
+        val hardware = Build.HARDWARE.lowercase(java.util.Locale.ROOT)
         
         return when {
             // "sun" and "kailua" are codenames for SM8750 (S25 Series / Snapdragon 8 Elite)

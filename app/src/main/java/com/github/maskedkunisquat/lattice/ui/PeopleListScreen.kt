@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
 import com.github.maskedkunisquat.lattice.core.logic.PersonWithPhones
+import java.util.Locale
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -178,8 +179,8 @@ private fun PersonListItem(
             headlineContent = { Text(displayName) },
             supportingContent = {
                 Text(
-                    person.relationshipType.name.lowercase()
-                        .replaceFirstChar { it.uppercase() },
+                    person.relationshipType.name.lowercase(Locale.ROOT)
+                        .replaceFirstChar { it.uppercase(Locale.ROOT) },
                     style = MaterialTheme.typography.labelMedium,
                 )
             },
@@ -253,7 +254,7 @@ private fun AddPersonSheet(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 OutlinedTextField(
-                    value = relationship.name.lowercase().replaceFirstChar { it.uppercase() },
+                    value = relationship.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) },
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Relationship") },
@@ -266,7 +267,7 @@ private fun AddPersonSheet(
                 ) {
                     RelationshipType.entries.forEach { type ->
                         DropdownMenuItem(
-                            text = { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                            text = { Text(type.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) }) },
                             onClick = { relationship = type; dropdownExpanded = false },
                         )
                     }
