@@ -34,22 +34,23 @@ enum class ModelLoadState { IDLE, COPYING_MODEL, LOADING_SESSION, READY, ERROR }
  * runs entirely on-device via the [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM)
  * runtime — no data leaves the device.
  *
- * ## Hardware tiers
- * Three variants are hosted at `masked-kunsiquat/gemma-3-1b-it-litert` on HuggingFace
- * (sourced from [litert-community/Gemma3-1B-IT](https://huggingface.co/litert-community/Gemma3-1B-IT)).
- * The model file is selected at [initialize] time based on [Build.BOARD]:
+ * ## Model file
+ * A single file ([MODEL_FILE]) covers all devices. It is a standard LiteRT-LM
+ * int4-quantised model that supports both CPU and GPU execution via OpenCL JIT.
+ * Hosted at `masked-kunsiquat/gemma-3-1b-it-litert` on HuggingFace (public, no auth).
+ * Source: `gemma3-1b-it-int4.litertlm` from `litert-community/Gemma3-1B-IT`.
  *
- * | Tier | File | Target SoC | Backend |
- * |---|---|---|---|
- * | Elite | `gemma3-1b-it-elite.litertlm` | SM8750 (S25 Ultra) | Adreno 830 AOT → GPU |
- * | Ultra | `gemma3-1b-it-ultra.litertlm` | SM8650 (S24 Ultra) | Adreno 750 AOT → GPU |
- * | Universal | `gemma3-1b-it-universal.litertlm` | Any ARM64 | CPU |
+ * Note: the hardware-specific `_sm8750` / `_sm8650` files from litert-community are
+ * **NPU/QNN (Qualcomm Hexagon) compiled** — they contain no CPU or Adreno GPU tensors
+ * and cannot be loaded via [Backend.GPU] or [Backend.CPU]. Do not use them here.
  *
- * Run `./gradlew downloadModels` to fetch the correct variant for the connected device.
+ * ## Backend selection
+ * [Backend.GPU] (OpenCL JIT) is attempted first on Qualcomm Snapdragon devices.
+ * If GPU init fails for any reason, [Backend.CPU] is used automatically.
  *
  * ## Model lifecycle
  * The [Engine] is a heavy singleton created in [initialize] and kept alive for the
- * lifetime of the provider. Each [process] call creates a fresh [Conversation] (no
+ * lifetime of the provider. Each [process] call creates a fresh Conversation (no
  * accumulated turn history — [ReframingLoop] manages all context externally).
  */
 class LocalFallbackProvider(
@@ -69,17 +70,16 @@ class LocalFallbackProvider(
     val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
 
     /**
-     * Triggers the [ModelDownloadWorker] to fetch the appropriate model tier.
+     * Triggers the [ModelDownloadWorker] to fetch [MODEL_FILE].
      * UI should observe [getDownloadWorkInfo] to track progress.
      */
     fun downloadModel() {
-        val modelAsset = resolveModelName()
         val workManager = WorkManager.getInstance(context)
 
         val downloadRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
             .setInputData(workDataOf(
-                ModelDownloadWorker.KEY_MODEL_ASSET to modelAsset,
-                ModelDownloadWorker.KEY_URL to "$HF_BASE_URL/$modelAsset"
+                ModelDownloadWorker.KEY_MODEL_ASSET to MODEL_FILE,
+                ModelDownloadWorker.KEY_URL to "$HF_BASE_URL/$MODEL_FILE"
             ))
             .addTag(ModelDownloadWorker.UNIQUE_WORK_NAME)
             .build()
@@ -99,14 +99,13 @@ class LocalFallbackProvider(
     }
 
     /**
-     * Creates the [Engine] for the selected hardware tier and marks the provider ready.
-     * Safe to call multiple times — subsequent calls are no-ops once the engine is loaded.
-     * Retry is automatic after a failure (e.g. after a fresh download replaces a corrupt file).
+     * Creates the [Engine] and marks the provider ready.
+     * Safe to call multiple times — no-op once engine is loaded.
+     * Automatically resets after a failure so callers can retry (e.g. after
+     * [ModelDownloadWorker] replaces a corrupt or incompatible file).
      *
-     * GPU is attempted first on Snapdragon devices. If the model file does not contain
-     * AOT-compiled Adreno kernels (i.e. it is a CPU-quantised community model), the runtime
-     * throws [LiteRtLmJniException] with "Input tensor not found". In that case we
-     * transparently retry with [Backend.CPU] so inference still works.
+     * Tries [Backend.GPU] first on Snapdragon devices; falls back to [Backend.CPU]
+     * if GPU init fails (e.g. device lacks OpenCL support).
      */
     fun initialize() {
         if (engine != null) return
@@ -114,38 +113,33 @@ class LocalFallbackProvider(
             if (engine != null) return
             initAttempted = true
 
-            val modelAsset = resolveModelName()
-            Log.i(TAG, "Selected model tier: $modelAsset (board=${Build.BOARD}, hardware=${Build.HARDWARE})")
+            val modelFile = File(context.filesDir, MODEL_FILE)
+            Log.i(TAG, "Initialising engine — file=${MODEL_FILE} board=${Build.BOARD} hardware=${Build.HARDWARE}")
 
-            val modelFile = File(context.filesDir, modelAsset)
             if (!modelFile.exists()) {
                 _modelLoadState.value = ModelLoadState.ERROR
-                initFailureReason = "Model not found: $modelAsset. Download it from Settings."
+                initFailureReason = "Model not found: $MODEL_FILE. Download it from Settings."
                 return
             }
 
             _modelLoadState.value = ModelLoadState.LOADING_SESSION
 
-            // Prefer GPU for Snapdragon tiers; fall back to CPU when the model file
-            // lacks AOT-compiled Adreno kernels (community quantised models).
-            val preferredBackend = resolveBackend()
             val backendsToTry: List<Backend> =
-                if (preferredBackend is Backend.GPU) listOf(preferredBackend, Backend.CPU())
+                if (isQualcommDevice()) listOf(Backend.GPU(), Backend.CPU())
                 else listOf(Backend.CPU())
 
             var lastException: Exception? = null
             for (backend in backendsToTry) {
                 try {
-                    val engineConfig = EngineConfig(
+                    val eng = Engine(EngineConfig(
                         modelPath = modelFile.absolutePath,
                         backend = backend,
                         cacheDir = context.cacheDir.path,
-                    )
-                    val eng = Engine(engineConfig)
+                    ))
                     eng.initialize()
                     engine = eng
                     _modelLoadState.value = ModelLoadState.READY
-                    Log.i(TAG, "LiteRT-LM engine ready — model=$modelAsset backend=${backend::class.simpleName}")
+                    Log.i(TAG, "LiteRT-LM engine ready — backend=${backend::class.simpleName}")
                     return
                 } catch (e: Exception) {
                     lastException = e
@@ -158,9 +152,7 @@ class LocalFallbackProvider(
             _modelLoadState.value = ModelLoadState.ERROR
             initFailureReason = "${e::class.simpleName}: ${e.message}"
             Log.w(TAG, "LocalFallbackProvider init failed", e)
-            // Delete the model file on any engine-creation failure so the next
-            // "Download" tap fetches a fresh copy. Covers format/signature mismatches
-            // (LiteRtLmJniException), truncated downloads, and version skew.
+            // Delete so the next "Download" tap fetches a fresh copy.
             try {
                 if (modelFile.exists() && modelFile.delete()) {
                     Log.w(TAG, "Deleted incompatible model file: ${modelFile.name} — re-download required")
@@ -175,9 +167,9 @@ class LocalFallbackProvider(
     }
 
     /**
-     * Streams inference results for [prompt] via a fresh LiteRT-LM [Conversation].
+     * Streams inference results for [prompt] via a fresh LiteRT-LM Conversation.
      *
-     * A new [Conversation] is created per call — [ReframingLoop] manages all multi-turn
+     * A new Conversation is created per call — [ReframingLoop] manages all multi-turn
      * context externally and passes a self-contained prompt each time.
      *
      * Emits [LlmResult.Token] for each streamed chunk, then [LlmResult.Complete] on
@@ -198,65 +190,24 @@ class LocalFallbackProvider(
         emit(LlmResult.Error(e))
     }.flowOn(dispatcher)
 
-    // ── Tier selection ────────────────────────────────────────────────────────
-
-    /**
-     * Returns the model asset filename for the current device based on [Build.BOARD]
-     * and [Build.HARDWARE].
-     *
-     * Board → SoC mapping:
-     * - "sun" / "kailua"   → SM8750 Snapdragon 8 Elite  (S25 series, Pixel 9 series)
-     * - "pineapple"        → SM8650 Snapdragon 8 Gen 3  (S24 series)
-     * - "kalama"           → SM8550 Snapdragon 8 Gen 2  (S23 series)
-     * - anything else      → universal CPU model
-     *
-     * Note: "kalama" is SM8550, NOT SM8650 — an earlier mapping was incorrect.
-     */
-    private fun resolveModelName(): String {
-        val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
+    private fun isQualcommDevice(): Boolean {
         val hardware = Build.HARDWARE.lowercase(java.util.Locale.ROOT)
-
-        return when {
-            board == "sun" || board == "kailua" || (hardware == "qcom" && board.contains("8750")) -> MODEL_SM8750
-            board == "pineapple" || board.contains("8650") -> MODEL_SM8650
-            board == "kalama" || board.contains("8550") -> MODEL_SM8550
-            else -> MODEL_UNIVERSAL
-        }
-    }
-
-    /**
-     * Returns [Backend.GPU] for Snapdragon tiers with AOT-compiled Adreno kernels,
-     * [Backend.CPU] for the universal model. [initialize] will fall back to CPU
-     * automatically if GPU init fails.
-     */
-    private fun resolveBackend(): Backend {
         val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
-        val hardware = Build.HARDWARE.lowercase(java.util.Locale.ROOT)
-
-        return when {
-            board == "sun" || board == "kailua" || (hardware == "qcom" && board.contains("8750")) -> Backend.GPU()
-            board == "pineapple" || board.contains("8650") -> Backend.GPU()
-            board == "kalama" || board.contains("8550") -> Backend.GPU()
-            else -> Backend.CPU()
-        }
+        return hardware == "qcom" || board.contains("sm8") || board.contains("sdm") ||
+                board == "sun" || board == "kailua" || board == "pineapple" || board == "kalama"
     }
 
     companion object {
         private const val TAG = "LocalFallbackProvider"
 
-        // Files hosted at masked-kunsiquat/gemma-3-1b-it-litert on HuggingFace (public, no auth).
-        // Source: litert-community/Gemma3-1B-IT — AOT-compiled with Adreno GPU kernels per SoC.
-        // Universal is CPU-only (q4 quantised, any ARM64).
-        //
-        // To add SM8550 support: upload Gemma3-1B-IT_q4_ekv1280_sm8550.litertlm from
-        // litert-community renamed to gemma3-1b-it-prime.litertlm, then promote MODEL_SM8550
-        // from MODEL_UNIVERSAL to its own constant.
+        // Single model file: gemma3-1b-it-int4.litertlm from litert-community/Gemma3-1B-IT.
+        // Supports both CPU and GPU (OpenCL JIT) via LiteRT-LM runtime.
+        // Must be hosted at masked-kunsiquat/gemma-3-1b-it-litert on HuggingFace (public).
+        // DO NOT use the _sm8750/_sm8650/_sm8550 litert-community files — those are
+        // NPU/QNN-compiled and will fail on both Backend.GPU and Backend.CPU.
         private const val HF_BASE_URL =
             "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
-        private const val MODEL_SM8750   = "gemma3-1b-it-elite.litertlm"     // 689 MB — SM8750 Snapdragon 8 Elite
-        private const val MODEL_SM8650   = "gemma3-1b-it-ultra.litertlm"     // 690 MB — SM8650 Snapdragon 8 Gen 3
-        private const val MODEL_SM8550   = "gemma3-1b-it-universal.litertlm" // SM8550 not uploaded yet → CPU fallback
-        private const val MODEL_UNIVERSAL = "gemma3-1b-it-universal.litertlm" // 584 MB — any ARM64
+        const val MODEL_FILE = "gemma3-1b-it-int4.litertlm" // 584 MB — all devices
     }
 }

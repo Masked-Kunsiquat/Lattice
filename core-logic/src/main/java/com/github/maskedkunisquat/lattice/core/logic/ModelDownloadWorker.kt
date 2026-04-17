@@ -15,18 +15,21 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * WorkManager worker that downloads the Gemma 3 1B model tier from Hugging Face.
+ * WorkManager worker that downloads [LocalFallbackProvider.MODEL_FILE] from HuggingFace.
  *
  * ## doWork() steps
- * 1. Resolve model name based on hardware.
- * 2. Start foreground notification with progress.
- * 3. Stream download to [Context.filesDir]/model.tmp.
- * 4. Rename to final destination.
- * 5. Update LocalFallbackProvider state.
+ * 1. If the file already exists: validate it by attempting [LocalFallbackProvider.initialize].
+ *    Skip the download only if the engine reaches [ModelLoadState.READY]; otherwise fall through.
+ * 2. Show foreground progress notification.
+ * 3. Stream download to [Context.filesDir]/<name>.tmp.
+ * 4. Verify SHA-256 if [KEY_SHA256] was supplied; reject if mismatch.
+ * 5. Rename .tmp → final destination.
+ * 6. Call [LocalFallbackProvider.initialize]; return [Result.retry] if it fails.
  */
 class ModelDownloadWorker(
     ctx: Context,
@@ -40,12 +43,13 @@ class ModelDownloadWorker(
     override suspend fun doWork(): Result {
         val modelAsset = inputData.getString(KEY_MODEL_ASSET) ?: return Result.failure()
         val url = inputData.getString(KEY_URL) ?: return Result.failure()
+        val expectedSha256 = inputData.getString(KEY_SHA256) // optional
         val dest = File(applicationContext.filesDir, modelAsset)
         val tmp = File(applicationContext.filesDir, "$modelAsset.tmp")
 
-        // If a large-enough file exists, try initialising it before skipping the download.
-        // If init fails (stale/incompatible file), initialize() deletes the file and we fall
-        // through to re-download. Only skip if the engine actually becomes READY.
+        // If a file already exists, validate it by attempting initialization.
+        // Only skip the download when the engine actually reaches READY.
+        // initialize() deletes the file on failure, so we fall through to re-download.
         if (dest.exists() && dest.length() > 100_000_000L) {
             Log.i(TAG, "Model file exists (${dest.length()} bytes), validating…")
             withContext(Dispatchers.IO) { localFallbackProvider.initialize() }
@@ -54,7 +58,7 @@ class ModelDownloadWorker(
                 return Result.success()
             }
             Log.w(TAG, "Existing model file failed validation, re-downloading.")
-            // initialize() already deleted the file; fall through to download.
+            // initialize() already deleted the file; fall through.
         }
 
         setForeground(buildForegroundInfo(0))
@@ -66,9 +70,16 @@ class ModelDownloadWorker(
                     setForegroundAsync(buildForegroundInfo((progress * 100).toInt()))
                 }
 
-                // Final validation: Ensure the downloaded file isn't suspiciously small
                 if (tmp.length() < 100_000_000L) {
-                    throw IOException("Downloaded file is too small (${tmp.length()} bytes). Likely a 404 page.")
+                    throw IOException("Downloaded file too small (${tmp.length()} bytes) — likely a 404 page.")
+                }
+
+                if (expectedSha256 != null) {
+                    val actual = sha256Hex(tmp)
+                    if (!actual.equals(expectedSha256, ignoreCase = true)) {
+                        throw IOException("SHA-256 mismatch — expected $expectedSha256 but got $actual")
+                    }
+                    Log.i(TAG, "SHA-256 verified: $actual")
                 }
 
                 if (!tmp.renameTo(dest)) {
@@ -76,8 +87,12 @@ class ModelDownloadWorker(
                     tmp.delete()
                 }
 
-                // Trigger initialization now that file is present
                 localFallbackProvider.initialize()
+
+                // initialize() swallows its own exception; propagate failure so WorkManager retries.
+                if (localFallbackProvider.modelLoadState.value != ModelLoadState.READY) {
+                    throw IOException("Engine init failed after download — ${localFallbackProvider.modelLoadState.value}")
+                }
             }
             Result.success()
         } catch (e: Exception) {
@@ -85,6 +100,18 @@ class ModelDownloadWorker(
             tmp.delete()
             Result.retry()
         }
+    }
+
+    private fun sha256Hex(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun downloadFile(url: String, dest: File, onProgress: (Float) -> Unit) {
@@ -173,6 +200,7 @@ class ModelDownloadWorker(
         
         const val KEY_MODEL_ASSET = "model_asset"
         const val KEY_URL = "url"
+        const val KEY_SHA256 = "sha256"   // optional — pass expected hex digest to verify integrity
         const val KEY_PROGRESS = "progress"
         const val UNIQUE_WORK_NAME = "model_download"
     }
