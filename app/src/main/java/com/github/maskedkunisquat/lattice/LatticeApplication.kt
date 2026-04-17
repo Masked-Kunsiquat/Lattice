@@ -9,6 +9,7 @@ import com.github.maskedkunisquat.lattice.core.data.KeyProvider
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifestStore
 import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
+import com.github.maskedkunisquat.lattice.core.logic.DownloadDependencies
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
 import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
@@ -40,7 +41,7 @@ private val Application.settingsDataStore by preferencesDataStore(name = "lattic
 private const val TAG = "LatticeApplication"
 private const val PREF_ENCRYPTION_DONE = "encryption_migration_done"
 
-class LatticeApplication : Application(), TrainingDependencies {
+class LatticeApplication : Application(), TrainingDependencies, DownloadDependencies {
 
     // TrainingDependencies — exposes DAOs to EmbeddingTrainingWorker via applicationContext cast
     override val journalDao get() = database.journalDao()
@@ -111,7 +112,7 @@ class LatticeApplication : Application(), TrainingDependencies {
 
     val embeddingProvider by lazy { EmbeddingProvider() }
 
-    val localFallbackProvider by lazy { LocalFallbackProvider(this) }
+    override val localFallbackProvider by lazy { LocalFallbackProvider(this) }
 
     val journalRepository by lazy {
         JournalRepository(

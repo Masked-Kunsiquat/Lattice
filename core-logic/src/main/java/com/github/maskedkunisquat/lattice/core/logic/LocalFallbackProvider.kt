@@ -6,9 +6,13 @@ import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.io.File
 import java.io.FileNotFoundException
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import java.io.IOException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
@@ -18,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -70,11 +75,35 @@ class LocalFallbackProvider(
     private val _modelLoadState = MutableStateFlow(ModelLoadState.IDLE)
     val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
 
-    /** 0.0–1.0 progress during [ModelLoadState.COPYING_SHARDS] or downloading; 0 otherwise. */
-    private val _copyProgress = MutableStateFlow(0f)
-    val copyProgress: StateFlow<Float> = _copyProgress.asStateFlow()
+    /**
+     * Triggers the [ModelDownloadWorker] to fetch the appropriate model tier.
+     * UI should observe [getDownloadWorkInfo] to track progress.
+     */
+    fun downloadModel() {
+        val modelAsset = resolveModelName()
+        val workManager = WorkManager.getInstance(context)
+        
+        val downloadRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
+            .setInputData(workDataOf(
+                ModelDownloadWorker.KEY_MODEL_ASSET to modelAsset,
+                ModelDownloadWorker.KEY_URL to "$HF_BASE_URL/$modelAsset"
+            ))
+            .addTag(ModelDownloadWorker.UNIQUE_WORK_NAME)
+            .build()
 
-    private var downloadJob: Job? = null
+        workManager.enqueueUniqueWork(
+            ModelDownloadWorker.UNIQUE_WORK_NAME,
+            ExistingWorkPolicy.KEEP, // Don't restart if already running
+            downloadRequest
+        )
+    }
+
+    /** Returns a Flow of WorkInfo to track download progress in the UI. */
+    fun getDownloadWorkInfo(): Flow<WorkInfo?> {
+        return WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWorkFlow(ModelDownloadWorker.UNIQUE_WORK_NAME)
+            .map { it.firstOrNull() }
+    }
 
     /**
      * Selects the hardware tier, copies the model file to internal storage (if needed),
@@ -112,7 +141,6 @@ class LocalFallbackProvider(
                 _modelLoadState.value = ModelLoadState.READY
                 Log.i(TAG, "MediaPipe LlmInference session ready — model=$modelAsset")
             } catch (e: Exception) {
-                _copyProgress.value = 0f
                 _modelLoadState.value = ModelLoadState.ERROR
                 initFailureReason = "${e::class.simpleName}: ${e.message}"
                 Log.w(TAG, "LocalFallbackProvider init failed", e)
@@ -202,7 +230,6 @@ class LocalFallbackProvider(
         val tmp  = File(context.filesDir, "$modelAsset.tmp")
         if (dest.exists()) {
             Log.d(TAG, "Model $modelAsset already exists in internal storage; skipping copy.")
-            _copyProgress.value = 1f
             return
         }
 
@@ -212,19 +239,15 @@ class LocalFallbackProvider(
             context.assets.open(modelAsset).use { src ->
                 tmp.outputStream().use { dst ->
                     val buf = ByteArray(2 * 1024 * 1024)
-                    var copied = 0L
                     var n: Int
                     while (src.read(buf).also { n = it } != -1) {
                         dst.write(buf, 0, n)
-                        copied += n
-                        _copyProgress.value = (copied.toFloat() / APPROX_MODEL_BYTES).coerceIn(0f, 1f)
                     }
                 }
             }
             if (!tmp.renameTo(dest)) {
                 throw IOException("Failed to rename $tmp to $dest")
             }
-            _copyProgress.value = 1f
         } catch (e: FileNotFoundException) {
             // If it's not in assets AND not in dest, then it's actually missing.
             Log.e(TAG, "Model $modelAsset not found in assets. It must be downloaded or side-loaded.")
@@ -233,85 +256,6 @@ class LocalFallbackProvider(
             tmp.delete()
             throw e
         }
-    }
-
-    /**
-     * Downloads the appropriate model tier for this device from Hugging Face.
-     * Updates [copyProgress] and [modelLoadState] during the process.
-     */
-    fun downloadModel() {
-        if (downloadJob?.isActive == true) return
-        
-        // Use the applicationScope or similar to ensure it survives config changes?
-        // For now, we'll just launch it in the provided dispatcher.
-        downloadJob = CoroutineScope(dispatcher).launch {
-            try {
-                val modelAsset = resolveModelName()
-                val dest = File(context.filesDir, modelAsset)
-                if (dest.exists()) {
-                    _copyProgress.value = 1f
-                    initialize()
-                    return@launch
-                }
-
-                _modelLoadState.value = ModelLoadState.COPYING_SHARDS // Reuse state for download
-                _copyProgress.value = 0f
-
-                val url = "$HF_BASE_URL/$modelAsset"
-                val tmp = File(context.filesDir, "$modelAsset.tmp")
-                
-                downloadFile(url, tmp)
-                
-                if (!tmp.renameTo(dest)) {
-                    tmp.copyTo(dest, overwrite = true)
-                    tmp.delete()
-                }
-                
-                _copyProgress.value = 1f
-                initialize()
-            } catch (e: Exception) {
-                Log.e(TAG, "Download failed", e)
-                _modelLoadState.value = ModelLoadState.ERROR
-                initFailureReason = "Download failed: ${e.message}"
-            }
-        }
-    }
-
-    private fun downloadFile(url: String, dest: File) {
-        var location = url
-        repeat(5) { // Follow up to 5 redirects
-            val conn = java.net.URL(location).openConnection() as java.net.HttpURLConnection
-            conn.instanceFollowRedirects = false
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 30_000
-            conn.setRequestProperty("User-Agent", "Lattice-Android-Downloader")
-            
-            val code = conn.responseCode
-            if (code in 300..399) {
-                location = conn.getHeaderField("Location") ?: throw IOException("Redirect without location")
-                return@repeat
-            }
-            
-            if (code != 200) throw IOException("HTTP $code from $location")
-            
-            val total = conn.contentLengthLong
-            conn.inputStream.use { input ->
-                dest.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var bytesRead: Int
-                    var totalRead = 0L
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalRead += bytesRead
-                        if (total > 0) {
-                            _copyProgress.value = totalRead.toFloat() / total
-                        }
-                    }
-                }
-            }
-            return
-        }
-        throw IOException("Too many redirects")
     }
 
     companion object {

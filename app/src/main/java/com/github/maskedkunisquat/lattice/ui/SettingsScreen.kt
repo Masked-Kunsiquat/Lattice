@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.lattice.ui
 
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +47,7 @@ import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.util.Log
+import androidx.work.WorkInfo
 import com.github.maskedkunisquat.lattice.BuildConfig
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,8 +87,9 @@ fun SettingsScreen(
     val showCloudDialog by viewModel.showCloudEnableDialog.collectAsStateWithLifecycle()
     val apiKeySaved by viewModel.apiKeySaved.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
-    val copyProgress by viewModel.copyProgress.collectAsStateWithLifecycle()
-    val manifest by viewModel.manifest.collectAsStateWithLifecycle()
+    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
+    val downloadWorkInfo by viewModel.downloadWorkInfo.collectAsStateWithLifecycle(null)
+    val manifestState: AffectiveManifest? by viewModel.manifest.collectAsStateWithLifecycle()
     val isResetting by viewModel.isResetting.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -140,7 +143,8 @@ fun SettingsScreen(
             item {
                 LocalModelSection(
                     modelLoadState = modelLoadState,
-                    copyProgress = copyProgress,
+                    downloadProgress = downloadProgress,
+                    downloadWorkInfo = downloadWorkInfo,
                     onDownload = viewModel::downloadModel,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
@@ -151,7 +155,7 @@ fun SettingsScreen(
             item {
                 PersonalizationSection(
                     personalizationEnabled = settings.personalizationEnabled,
-                    manifest = manifest,
+                    manifest = manifestState,
                     isResetting = isResetting,
                     onToggle = viewModel::setPersonalizationEnabled,
                     onReset = viewModel::resetPersonalization,
@@ -235,17 +239,23 @@ fun SettingsScreen(
 @Composable
 private fun LocalModelSection(
     modelLoadState: ModelLoadState,
-    copyProgress: Float,
+    downloadProgress: Float,
+    downloadWorkInfo: WorkInfo?,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isDownloading = downloadWorkInfo?.state == WorkInfo.State.RUNNING ||
+            downloadWorkInfo?.state == WorkInfo.State.ENQUEUED
+
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        val statusText = when (modelLoadState) {
-            ModelLoadState.IDLE            -> "Not started"
-            ModelLoadState.COPYING_SHARDS  -> "Downloading/Copying model… ${(copyProgress * 100).toInt()}%"
-            ModelLoadState.LOADING_SESSION -> "Loading model session…"
-            ModelLoadState.READY           -> "Ready"
-            ModelLoadState.ERROR           -> "Not found / Failed to load"
+        val statusText = when {
+            isDownloading -> "Downloading model… ${(downloadProgress * 100).toInt()}%"
+            modelLoadState == ModelLoadState.IDLE -> "Not started"
+            modelLoadState == ModelLoadState.COPYING_SHARDS -> "Copying model shards…"
+            modelLoadState == ModelLoadState.LOADING_SESSION -> "Loading model session…"
+            modelLoadState == ModelLoadState.READY -> "Ready"
+            modelLoadState == ModelLoadState.ERROR -> "Not found / Failed to load"
+            else -> "Not started"
         }
         val statusColor = when (modelLoadState) {
             ModelLoadState.READY  -> Color(0xFF2E7D32)
@@ -261,7 +271,7 @@ private fun LocalModelSection(
                 Text("Gemma 3 1B (local fallback)", style = MaterialTheme.typography.bodyLarge)
                 Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
             }
-            if (modelLoadState == ModelLoadState.ERROR || modelLoadState == ModelLoadState.IDLE) {
+            if ((modelLoadState == ModelLoadState.ERROR || modelLoadState == ModelLoadState.IDLE) && !isDownloading) {
                 Button(
                     onClick = onDownload,
                     modifier = Modifier.padding(start = 8.dp),
@@ -271,19 +281,29 @@ private fun LocalModelSection(
                 }
             }
         }
-        when (modelLoadState) {
-            ModelLoadState.COPYING_SHARDS -> {
+        when {
+            isDownloading -> {
                 LinearProgressIndicator(
-                    progress = { copyProgress },
+                    progress = { downloadProgress },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "Downloading ~700 MB to device storage. Please stay on this screen.",
+                    "Downloading ~700 MB to device storage. You can close the app.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            ModelLoadState.LOADING_SESSION -> {
+            modelLoadState == ModelLoadState.COPYING_SHARDS -> {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Preparing model files. Please wait.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            modelLoadState == ModelLoadState.LOADING_SESSION -> {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
                     "Optimizing model for your hardware. This may take a minute.",
@@ -291,7 +311,7 @@ private fun LocalModelSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            ModelLoadState.ERROR -> {
+            modelLoadState == ModelLoadState.ERROR -> {
                 Text(
                     "The model file is missing or corrupted. You can download it now (689MB) or push it via ADB.",
                     style = MaterialTheme.typography.bodySmall,

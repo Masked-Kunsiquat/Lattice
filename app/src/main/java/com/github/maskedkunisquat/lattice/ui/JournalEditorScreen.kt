@@ -76,7 +76,6 @@ fun JournalEditorScreen(
     val privacyState by viewModel.privacyState.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
-    val copyProgress by viewModel.copyProgress.collectAsStateWithLifecycle()
 
     Box(modifier = modifier.fillMaxSize()) {
         JournalEditorContent(
@@ -112,7 +111,6 @@ fun JournalEditorScreen(
             ) {
                 if (modelLoadState == ModelLoadState.COPYING_SHARDS) {
                     LinearProgressIndicator(
-                        progress = { copyProgress },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
@@ -121,7 +119,7 @@ fun JournalEditorScreen(
                 Text(
                     text = when (modelLoadState) {
                         ModelLoadState.COPYING_SHARDS ->
-                            "Preparing local model… ${(copyProgress * 100).toInt()}%"
+                            "Preparing local model…"
                         else ->
                             "Loading model session… (first launch may take a few minutes)"
                     },

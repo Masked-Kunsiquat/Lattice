@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
@@ -14,10 +15,12 @@ import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
 import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
 import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
+import com.github.maskedkunisquat.lattice.core.logic.ModelDownloadWorker
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 import com.github.maskedkunisquat.lattice.core.logic.toAffectiveManifest
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,7 +39,6 @@ class SettingsViewModel(
     private val exportManager: ExportManager,
     private val cloudCredentialStore: CloudCredentialStore,
     val modelLoadState: StateFlow<ModelLoadState>,
-    val copyProgress: StateFlow<Float>,
     private val localFallbackProvider: LocalFallbackProvider,
     private val manifestDao: TrainingManifestDao,
     // 3.6-f: injected singleton instead of constructing ad-hoc in resetPersonalization
@@ -76,6 +78,15 @@ class SettingsViewModel(
     val manifest: StateFlow<AffectiveManifest?> = manifestDao.getManifest()
         .map { it?.toAffectiveManifest() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialValue = null)
+
+    val downloadWorkInfo: StateFlow<WorkInfo?> = localFallbackProvider.getDownloadWorkInfo()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val downloadProgress: StateFlow<Float> = downloadWorkInfo
+        .map { info ->
+            info?.progress?.getFloat(ModelDownloadWorker.KEY_PROGRESS, 0f) ?: 0f
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)
 
     fun setApiKey(key: String) {
         val trimmed = key.trim()
@@ -184,7 +195,6 @@ class SettingsViewModel(
                     exportManager = app.exportManager,
                     cloudCredentialStore = app.cloudCredentialStore,
                     modelLoadState = app.localFallbackProvider.modelLoadState,
-                    copyProgress = app.localFallbackProvider.copyProgress,
                     manifestDao = app.database.trainingManifestDao(),
                     trainingCoordinator = app.trainingCoordinator,
                     localFallbackProvider = app.localFallbackProvider,
