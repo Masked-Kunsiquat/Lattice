@@ -115,6 +115,72 @@ Depends on M5 (SearchBar already in place).
 
 ---
 
+## M9 · On-Device Inference Upgrade (Gemma 3 1B + LiteRT)
+
+**Goal:** replace the ORT-based local inference stack with a hardware-accelerated
+one that runs at GPU speed on the S25 Ultra (and equivalent devices) — cutting
+reframe latency from ~60 s to ~10–15 s and eliminating ORT as a dependency.
+
+Two independent sub-tracks that can land separately but share a dependency review
+at the end: if both land, ORT is removed entirely from `:core-logic`.
+
+---
+
+### Track A — LocalFallbackProvider → Gemma 3 1B via MediaPipe
+
+**Why:** Llama 3.2-3B Q4 on ORT runs on CPU at ~8 tok/s. Gemma 3 1B via
+MediaPipe's GPU delegate runs at 35–50 tok/s on Adreno 700-series GPUs — 1B
+parameters fit in GPU SRAM, so DRAM bandwidth stops being the bottleneck.
+Instruction-following quality also improves, which directly helps DoT's
+`DISTORTIONS: <csv>` sentinel parsing and reduces prompt-mirroring artifacts.
+
+**DoT impact specifically:** Stage 2 (Diagnosis of Thought) generates the most
+tokens of the three stages — chain-of-thought over 12 Burns distortions before
+the sentinel line. It therefore gets the largest absolute latency saving, and
+the improved instruction adherence means the `DISTORTIONS:` line is more
+reliably formatted on the first pass (fewer malformed outputs to handle).
+
+**Tasks:**
+
+- [ ] Add MediaPipe Tasks dependency (`com.google.mediapipe:tasks-genai`) to `:core-logic`
+- [ ] Add Gemma 3 1B `.task` model to `downloadModels` Gradle task (source: Kaggle / HuggingFace `google/gemma-3-1b-it-litert-preview`)
+- [ ] Rewrite `LocalFallbackProvider` against `LlmInference` API — streaming via `LlmInference.generateAsync()`, `ModelLoadState` flow preserved
+- [ ] Remove Llama shard copy logic (`copyAssetsToFilesDir`, `ASSET_FILES`) — MediaPipe handles model loading from a single file path
+- [ ] Remove `LlamaTokenizer`, `LlamaTokenizerTest` — MediaPipe tokenizes internally
+- [ ] Remove ORT KV-cache forward-pass loop (`runForwardPass`, `nativeBytesAt`, `nativeFloatsAt`, `greedySample`) — all replaced by the MediaPipe session
+- [ ] Update `downloadModels` Gradle task to fetch Gemma 1B instead of (or alongside) Llama shards; update `CLAUDE.md` assets table
+- [ ] Update `LatticeApplication` wiring — `localFallbackProvider.initialize()` call stays, internals change
+- [ ] Smoke-test all three CBT stages through the new provider on device
+
+---
+
+### Track B — EmbeddingProvider → LiteRT
+
+**Why:** Arctic Embed XS already exists in TFLite format on HuggingFace
+(`snowflake-arctic-embed-xs-tflite` or equivalent). LiteRT's XNNPACK delegate
+has SIMD-optimized kernels for int8 BERT inference that outperform ORT+NNAPI
+for small models. Embedding runs on every save and every search query, so
+latency here is user-visible.
+
+**Tasks:**
+
+- [ ] Identify the canonical TFLite/LiteRT conversion of Arctic Embed XS on HuggingFace; verify output matches 384-dim float32 embeddings from current ORT model (cosine similarity check on seed entries)
+- [ ] Add LiteRT dependency to `:core-logic` (`org.tensorflow:tensorflow-lite` or `com.google.ai.edge.litert:litert`) — use the version bundled with MediaPipe if Track A has landed to avoid runtime conflicts
+- [ ] Rewrite `EmbeddingProvider.initialize()` to load the `.tflite` model via `Interpreter`; enable XNNPACK delegate
+- [ ] Rewrite `EmbeddingProvider.runInference()` — `Interpreter.run()` with `[1 × seq_len]` int64 input tensors; mean-pool output `[1 × seq_len × 384]` (pooling logic unchanged)
+- [ ] Verify `WordPieceTokenizer` output is compatible with the TFLite model's expected vocab (should be identical — same model lineage)
+- [ ] Run `EmbeddingBenchmark` and `SearchBenchmark` instrumented tests before and after; record tok/s improvement in commit message
+
+---
+
+### Milestone close
+
+- [ ] If both tracks land: remove `onnxruntime-android` from `:core-logic/build.gradle.kts` and verify build
+- [ ] Update `CLAUDE.md` Architecture section to reflect new inference stack
+- [ ] Update `CLAUDE.md` Assets table (Llama shards → Gemma 1B)
+
+---
+
 ## Deferred / Not Yet Scoped
 
 - **Option A embedding fine-tuning** — Arctic projection fine-tuning deferred until ~200 labeled entries exist.
