@@ -248,7 +248,7 @@ class ReframingLoop(
                 val actionStep = if (baActivity != null)
                     "3. End with this one concrete next step: \"${baActivity.taskName}\"."
                 else
-                    "3. End with one specific, minimal next step drawn from the entry itself."
+                    "3. End with one specific, minimal action that addresses what the entry actually describes — not a generic outdoor or mindfulness suggestion."
                 "Write exactly 2-3 sentences in first person.\n" +
                 "No motivational phrases. No invented details.\n" +
                 "1. Name the pattern (avoidance, low energy) as a temporary state, not a fixed trait.\n" +
@@ -461,9 +461,11 @@ class ReframingLoop(
 
         internal const val INTERVENTION_SYSTEM =
             "You are a CBT journaling assistant. Write a brief, grounded first-person reframe. " +
-            "Stay close to the exact words in the entry — do not invent details or examples not present in the text. " +
+            "Interpret the entry literally — do not contradict what it says or invent details not in the text. " +
             "Do NOT repeat or amplify the negative thought — reframe it. " +
             "No motivational cheerleading (no 'I can do this', 'I've got this', 'I believe in myself'). " +
+            "Write in first person singular only (I, me, my). Never use 'we', 'let's', or 'you'. " +
+            "No mindfulness or outdoor activity suggestions unless the entry itself mentions them. " +
             "No markdown, no asterisks, no ellipses, no therapist language."
 
         /**
