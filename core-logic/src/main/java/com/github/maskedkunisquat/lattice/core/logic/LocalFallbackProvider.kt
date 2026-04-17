@@ -7,7 +7,6 @@ import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import java.io.File
-import java.io.IOException
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
@@ -20,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -34,19 +34,32 @@ enum class ModelLoadState { IDLE, COPYING_MODEL, LOADING_SESSION, READY, ERROR }
  * runs entirely on-device via the [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM)
  * runtime — no data leaves the device.
  *
- * ## Model file
- * A single file ([MODEL_FILE]) covers all devices. It is a standard LiteRT-LM
- * int4-quantised model that supports both CPU and GPU execution via OpenCL JIT.
- * Hosted at `masked-kunsiquat/gemma-3-1b-it-litert` on HuggingFace (public, no auth).
- * Source: `gemma3-1b-it-int4.litertlm` from `litert-community/Gemma3-1B-IT`.
+ * ## Model tiers
+ * Three model files cover different SoC tiers:
  *
- * Note: the hardware-specific `_sm8750` / `_sm8650` files from litert-community are
- * **NPU/QNN (Qualcomm Hexagon) compiled** — they contain no CPU or Adreno GPU tensors
- * and cannot be loaded via [Backend.GPU] or [Backend.CPU]. Do not use them here.
+ * | File | Target | Backends |
+ * |---|---|---|
+ * | [MODEL_FILE_ELITE] | SM8750 (S25 Ultra) — NPU/QNN compiled | NPU only |
+ * | [MODEL_FILE_ULTRA] | SM8650 (S24 Ultra) — NPU/QNN compiled | NPU only |
+ * | [MODEL_FILE_INT4]  | All devices — standard int4 quantised | GPU (OpenCL JIT) + CPU |
+ *
+ * The NPU files contain Qualcomm Hexagon DSP bytecode compiled for their specific SoC.
+ * They have **no CPU or GPU tensors** — they cannot be loaded with [Backend.GPU] or
+ * [Backend.CPU]. NPU access is provided by `libcdsprpc.so` (Qualcomm CDK DSP RPC bridge)
+ * declared in the manifest via `<uses-native-library android:required="false">`.
  *
  * ## Backend selection
- * [Backend.GPU] (OpenCL JIT) is attempted first on Qualcomm Snapdragon devices.
- * If GPU init fails for any reason, [Backend.CPU] is used automatically.
+ * [selectModelAndBackends] picks the best file + backend chain for the running device:
+ * - SM8750 → elite model, backends: [NPU] (NPU-only compiled)
+ * - SM8650 → ultra model, backends: [NPU] (NPU-only compiled)
+ * - Other Qualcomm → int4 model, backends: [GPU, CPU] (OpenCL JIT, CPU fallback)
+ * - Everything else → int4 model, backends: [CPU]
+ *
+ * ## OpenCL fallback
+ * Samsung restricts `libOpenCL.so` for third-party apps. If GPU inference fails at
+ * decode time with an OpenCL error, [openClFailed] is set and the engine is transparently
+ * rebuilt with CPU-only via [switchToCpu]. The manifest's `<uses-native-library>` entry
+ * for `libOpenCL.so` grants access on compliant OEM builds.
  *
  * ## Model lifecycle
  * The [Engine] is a heavy singleton created in [initialize] and kept alive for the
@@ -73,16 +86,17 @@ class LocalFallbackProvider(
     val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
 
     /**
-     * Triggers the [ModelDownloadWorker] to fetch [MODEL_FILE].
+     * Triggers the [ModelDownloadWorker] to fetch the appropriate model file for this device.
      * UI should observe [getDownloadWorkInfo] to track progress.
      */
     fun downloadModel() {
         val workManager = WorkManager.getInstance(context)
+        val (modelFile, _) = selectModelAndBackends()
 
         val downloadRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
             .setInputData(workDataOf(
-                ModelDownloadWorker.KEY_MODEL_ASSET to MODEL_FILE,
-                ModelDownloadWorker.KEY_URL to "$HF_BASE_URL/$MODEL_FILE"
+                ModelDownloadWorker.KEY_MODEL_ASSET to modelFile,
+                ModelDownloadWorker.KEY_URL to "$HF_BASE_URL/$modelFile"
             ))
             .addTag(ModelDownloadWorker.UNIQUE_WORK_NAME)
             .build()
@@ -107,8 +121,9 @@ class LocalFallbackProvider(
      * Automatically resets after a failure so callers can retry (e.g. after
      * [ModelDownloadWorker] replaces a corrupt or incompatible file).
      *
-     * Tries [Backend.GPU] first on Snapdragon devices; falls back to [Backend.CPU]
-     * if GPU init fails (e.g. device lacks OpenCL support).
+     * Backend priority is determined by [selectModelAndBackends]:
+     * - NPU (Hexagon DSP) for Snapdragon 8 Gen 3 / 8 Gen 2 with their NPU-compiled models
+     * - GPU (OpenCL JIT) then CPU for all-device int4 model
      */
     fun initialize() {
         if (engine != null) return
@@ -116,20 +131,17 @@ class LocalFallbackProvider(
             if (engine != null) return
             initAttempted = true
 
-            val modelFile = File(context.filesDir, MODEL_FILE)
-            Log.i(TAG, "Initialising engine — file=${MODEL_FILE} board=${Build.BOARD} hardware=${Build.HARDWARE}")
+            val (modelFileName, backendsToTry) = selectModelAndBackends()
+            val modelFile = File(context.filesDir, modelFileName)
+            Log.i(TAG, "Initialising engine — file=$modelFileName board=${Build.BOARD} hardware=${Build.HARDWARE}")
 
             if (!modelFile.exists()) {
                 _modelLoadState.value = ModelLoadState.ERROR
-                initFailureReason = "Model not found: $MODEL_FILE. Download it from Settings."
+                initFailureReason = "Model not found: $modelFileName. Download it from Settings."
                 return
             }
 
             _modelLoadState.value = ModelLoadState.LOADING_SESSION
-
-            val backendsToTry: List<Backend> =
-                if (!openClFailed && isQualcommDevice()) listOf(Backend.GPU(), Backend.CPU())
-                else listOf(Backend.CPU())
 
             var lastException: Exception? = null
             for (backend in backendsToTry) {
@@ -142,7 +154,7 @@ class LocalFallbackProvider(
                     eng.initialize()
                     engine = eng
                     _modelLoadState.value = ModelLoadState.READY
-                    Log.i(TAG, "LiteRT-LM engine ready — backend=${backend::class.simpleName}")
+                    Log.i(TAG, "LiteRT-LM engine ready — backend=${backend::class.simpleName} file=$modelFileName")
                     return
                 } catch (e: Exception) {
                     lastException = e
@@ -225,6 +237,36 @@ class LocalFallbackProvider(
         initialize() // openClFailed = true, so backends = [CPU]
     }
 
+    /**
+     * Returns (modelFileName, backendsToTry) for the running device.
+     *
+     * NPU-compiled models (elite/ultra) are Hexagon DSP bytecode — they only work
+     * with [Backend.NPU] and have no CPU/GPU tensors. The int4 model supports both
+     * [Backend.GPU] (OpenCL JIT) and [Backend.CPU].
+     *
+     * [openClFailed] skips GPU on subsequent calls after a runtime OpenCL error.
+     */
+    private fun selectModelAndBackends(): Pair<String, List<Backend>> {
+        val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
+        val nativeLibDir = context.applicationInfo.nativeLibraryDir
+        return when {
+            // SM8750 (S25 Ultra / Pixel 9 Pro) — NPU-compiled elite model
+            board == "sun" || board.startsWith("sm8750") ->
+                MODEL_FILE_ELITE to listOf(Backend.NPU(nativeLibraryDir = nativeLibDir))
+            // SM8650 (S24 Ultra) — NPU-compiled ultra model
+            board == "kalama" || board.startsWith("sm8650") ->
+                MODEL_FILE_ULTRA to listOf(Backend.NPU(nativeLibraryDir = nativeLibDir))
+            // Other Qualcomm — int4 model with GPU→CPU
+            isQualcommDevice() -> {
+                val backends = if (!openClFailed) listOf(Backend.GPU(), Backend.CPU())
+                               else listOf(Backend.CPU())
+                MODEL_FILE_INT4 to backends
+            }
+            // Non-Qualcomm — int4 model, CPU only
+            else -> MODEL_FILE_INT4 to listOf(Backend.CPU())
+        }
+    }
+
     private fun isQualcommDevice(): Boolean {
         val hardware = Build.HARDWARE.lowercase(java.util.Locale.ROOT)
         val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
@@ -235,14 +277,20 @@ class LocalFallbackProvider(
     companion object {
         private const val TAG = "LocalFallbackProvider"
 
-        // Single model file: gemma3-1b-it-int4.litertlm from litert-community/Gemma3-1B-IT.
-        // Supports both CPU and GPU (OpenCL JIT) via LiteRT-LM runtime.
-        // Must be hosted at masked-kunsiquat/gemma-3-1b-it-litert on HuggingFace (public).
-        // DO NOT use the _sm8750/_sm8650/_sm8550 litert-community files — those are
-        // NPU/QNN-compiled and will fail on both Backend.GPU and Backend.CPU.
         private const val HF_BASE_URL =
             "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
-        const val MODEL_FILE = "gemma3-1b-it-int4.litertlm" // 584 MB — all devices
+        // NPU/QNN-compiled models — Hexagon DSP bytecode, Backend.NPU only.
+        // DO NOT load these with Backend.GPU or Backend.CPU — they have no CPU/GPU tensors.
+        const val MODEL_FILE_ELITE = "gemma3-1b-it-elite.litertlm"   // SM8750 (S25 Ultra)
+        const val MODEL_FILE_ULTRA = "gemma3-1b-it-ultra.litertlm"   // SM8650 (S24 Ultra)
+
+        // Standard int4-quantised model — CPU + GPU (OpenCL JIT) via LiteRT-LM runtime.
+        // For all other devices. ~584 MB.
+        const val MODEL_FILE_INT4  = "gemma3-1b-it-int4.litertlm"
+
+        // Convenience alias — the file this device will download/use.
+        // (Used by external callers that don't have a Context to call selectModelAndBackends.)
+        const val MODEL_FILE = MODEL_FILE_INT4
     }
 }
