@@ -156,20 +156,23 @@ reliably formatted on the first pass (fewer malformed outputs to handle).
 
 ### Track B — EmbeddingProvider → LiteRT
 
-**Why:** Arctic Embed XS already exists in TFLite format on HuggingFace
-(`snowflake-arctic-embed-xs-tflite` or equivalent). LiteRT's XNNPACK delegate
-has SIMD-optimized kernels for int8 BERT inference that outperform ORT+NNAPI
-for small models. Embedding runs on every save and every search query, so
-latency here is user-visible.
+**Why:** Primarily to eliminate ORT as a dependency once Track A lands — not for
+latency. Baseline benchmarks (`benchmarks/baseline.md`) show warm embedding
+inference at **1.58 ms** on the S25 Ultra; LiteRT/XNNPACK would halve that at
+best, which is imperceptible. The real value is a single runtime (LiteRT,
+already bundled with MediaPipe) instead of two.
+
+**Note on ODT:** No migration concern. App is debug-only with a single user;
+fresh install on migration. Seed embeddings can be regenerated from the
+HuggingFace dataset (`masked-kunsiquat/clinical-personas`) at any time.
 
 **Tasks:**
 
-- [ ] Identify the canonical TFLite/LiteRT conversion of Arctic Embed XS on HuggingFace; verify output matches 384-dim float32 embeddings from current ORT model (cosine similarity check on seed entries)
-- [ ] Add LiteRT dependency to `:core-logic` (`org.tensorflow:tensorflow-lite` or `com.google.ai.edge.litert:litert`) — use the version bundled with MediaPipe if Track A has landed to avoid runtime conflicts
-- [ ] Rewrite `EmbeddingProvider.initialize()` to load the `.tflite` model via `Interpreter`; enable XNNPACK delegate
+- [ ] Identify the canonical TFLite/LiteRT conversion of Arctic Embed XS on HuggingFace; run a correctness check against seed entries (cosine similarity ≥ 0.999 vs. ORT output confirms identical embedding space)
+- [ ] Rewrite `EmbeddingProvider.initialize()` to load the `.tflite` model via `Interpreter`; enable XNNPACK delegate — use the LiteRT runtime already bundled with MediaPipe, no separate dependency needed
 - [ ] Rewrite `EmbeddingProvider.runInference()` — `Interpreter.run()` with `[1 × seq_len]` int64 input tensors; mean-pool output `[1 × seq_len × 384]` (pooling logic unchanged)
-- [ ] Verify `WordPieceTokenizer` output is compatible with the TFLite model's expected vocab (should be identical — same model lineage)
-- [ ] Run `EmbeddingBenchmark` and `SearchBenchmark` instrumented tests before and after; record tok/s improvement in commit message
+- [ ] Verify `WordPieceTokenizer` vocab is compatible with the TFLite model (should be identical — same model lineage)
+- [ ] Run `EmbeddingBenchmark` before and after to confirm no regression
 
 ---
 
