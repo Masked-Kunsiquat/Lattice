@@ -234,7 +234,7 @@ model to output an empty set rather than always firing something.
 - [x] Write `DistortionCorpusMapper` — maps corpus label strings to `CognitiveDistortion`; logs and drops unmapped labels
 - [x] Generate ~200 synthetic examples for `DISQUALIFYING_POSITIVE` via Claude; save as `distortion_synth_dqp.jsonl` (307 examples)
 - [x] Generate ~200 synthetic examples for `BLAME` via Claude; save as `distortion_synth_blame.jsonl` (339 examples)
-- [ ] Embed all rows via `EmbeddingProvider` (Arctic Embed XS); serialize dataset as `(FloatArray, BooleanArray(12))` pairs
+- [x] Embed all rows via `EmbeddingProvider` (Arctic Embed XS); serialize dataset as `(FloatArray, BooleanArray(12))` pairs → `DistortionSample` + `DistortionDatasetLoader` (JSONL assets + binary cache in filesDir)
 
 **Model**
 - [ ] Add `DistortionMlp.kt` — `forward(embedding: FloatArray): BooleanArray`; per-class sigmoid thresholds; weights loaded from `distortion_mlp.bin` in `filesDir`
