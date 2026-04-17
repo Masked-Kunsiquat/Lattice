@@ -237,9 +237,9 @@ model to output an empty set rather than always firing something.
 - [x] Embed all rows via `EmbeddingProvider` (Arctic Embed XS); serialize dataset as `(FloatArray, BooleanArray(12))` pairs → `DistortionSample` + `DistortionDatasetLoader` (JSONL assets + binary cache in filesDir)
 
 **Model**
-- [ ] Add `DistortionMlp.kt` — `forward(embedding: FloatArray): BooleanArray`; per-class sigmoid thresholds; weights loaded from `distortion_mlp.bin` in `filesDir`
-- [ ] Add `DistortionManifest.kt` — version, per-class threshold array, training sample counts; serialized alongside weights
-- [ ] Add `DistortionMlpTrainer.kt` — AdamW, binary cross-entropy loss per class, `trainStep(embedding, labels)` / `trainBatch(batch)` / `save(context)`
+- [x] Add `DistortionMlp.kt` — `forward(embedding: FloatArray): BooleanArray`; per-class sigmoid thresholds; weights loaded from `distortion_mlp.bin` in `filesDir`
+- [x] Add `DistortionManifest.kt` — version, per-class threshold array, training sample counts; serialized alongside weights
+- [x] Add `DistortionMlpTrainer.kt` — AdamW, binary cross-entropy loss per class, `trainStep(embedding, labels)` / `trainBatch(batch)` / `save(context)`
 
 **Integration**
 - [ ] Add `distortionMlp: DistortionMlp? = null` to `ReframingLoop` constructor
