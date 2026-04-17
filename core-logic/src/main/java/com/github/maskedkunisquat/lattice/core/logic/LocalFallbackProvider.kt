@@ -102,46 +102,70 @@ class LocalFallbackProvider(
      * Creates the [Engine] for the selected hardware tier and marks the provider ready.
      * Safe to call multiple times — subsequent calls are no-ops once the engine is loaded.
      * Retry is automatic after a failure (e.g. after a fresh download replaces a corrupt file).
+     *
+     * GPU is attempted first on Snapdragon devices. If the model file does not contain
+     * AOT-compiled Adreno kernels (i.e. it is a CPU-quantised community model), the runtime
+     * throws [LiteRtLmJniException] with "Input tensor not found". In that case we
+     * transparently retry with [Backend.CPU] so inference still works.
      */
     fun initialize() {
         if (engine != null) return
         synchronized(initLock) {
             if (engine != null) return
             initAttempted = true
-            try {
-                val modelAsset = resolveModelName()
-                Log.i(TAG, "Selected model tier: $modelAsset (board=${Build.BOARD}, hardware=${Build.HARDWARE})")
 
-                val modelFile = File(context.filesDir, modelAsset)
-                if (!modelFile.exists()) {
-                    throw IOException("Model not found: $modelAsset. Download it from Settings.")
-                }
+            val modelAsset = resolveModelName()
+            Log.i(TAG, "Selected model tier: $modelAsset (board=${Build.BOARD}, hardware=${Build.HARDWARE})")
 
-                _modelLoadState.value = ModelLoadState.LOADING_SESSION
-                val engineConfig = EngineConfig(
-                    modelPath = modelFile.absolutePath,
-                    backend = resolveBackend(),
-                    cacheDir = context.cacheDir.path,
-                )
-                val eng = Engine(engineConfig)
-                eng.initialize()
-                engine = eng
-                _modelLoadState.value = ModelLoadState.READY
-                Log.i(TAG, "LiteRT-LM engine ready — model=$modelAsset")
-            } catch (e: Exception) {
+            val modelFile = File(context.filesDir, modelAsset)
+            if (!modelFile.exists()) {
                 _modelLoadState.value = ModelLoadState.ERROR
-                initFailureReason = "${e::class.simpleName}: ${e.message}"
-                Log.w(TAG, "LocalFallbackProvider init failed", e)
-                // If the engine rejected the model (format / signature mismatch), delete it
-                // so the next "Download" tap fetches a fresh, compatible copy.
-                if (e is IllegalStateException && e.message?.contains("Failed to initialize engine") == true) {
-                    try {
-                        val staleFile = File(context.filesDir, resolveModelName())
-                        if (staleFile.delete()) {
-                            Log.w(TAG, "Deleted incompatible model file: ${staleFile.name} — re-download required")
-                        }
-                    } catch (_: Exception) { }
+                initFailureReason = "Model not found: $modelAsset. Download it from Settings."
+                return
+            }
+
+            _modelLoadState.value = ModelLoadState.LOADING_SESSION
+
+            // Prefer GPU for Snapdragon tiers; fall back to CPU when the model file
+            // lacks AOT-compiled Adreno kernels (community quantised models).
+            val preferredBackend = resolveBackend()
+            val backendsToTry: List<Backend> =
+                if (preferredBackend is Backend.GPU) listOf(preferredBackend, Backend.CPU())
+                else listOf(Backend.CPU())
+
+            var lastException: Exception? = null
+            for (backend in backendsToTry) {
+                try {
+                    val engineConfig = EngineConfig(
+                        modelPath = modelFile.absolutePath,
+                        backend = backend,
+                        cacheDir = context.cacheDir.path,
+                    )
+                    val eng = Engine(engineConfig)
+                    eng.initialize()
+                    engine = eng
+                    _modelLoadState.value = ModelLoadState.READY
+                    Log.i(TAG, "LiteRT-LM engine ready — model=$modelAsset backend=${backend::class.simpleName}")
+                    return
+                } catch (e: Exception) {
+                    lastException = e
+                    Log.w(TAG, "Engine init failed with backend ${backend::class.simpleName} — ${e.message}")
                 }
+            }
+
+            // All backends exhausted.
+            val e = lastException!!
+            _modelLoadState.value = ModelLoadState.ERROR
+            initFailureReason = "${e::class.simpleName}: ${e.message}"
+            Log.w(TAG, "LocalFallbackProvider init failed", e)
+            // If the engine rejected the model (format / signature mismatch), delete it
+            // so the next "Download" tap fetches a fresh, compatible copy.
+            if (e is IllegalStateException && e.message?.contains("Failed to initialize engine") == true) {
+                try {
+                    if (modelFile.delete()) {
+                        Log.w(TAG, "Deleted incompatible model file: ${modelFile.name} — re-download required")
+                    }
+                } catch (_: Exception) { }
             }
         }
     }
