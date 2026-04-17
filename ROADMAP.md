@@ -230,10 +230,10 @@ model to output an empty set rather than always firing something.
 ### Tasks
 
 **Data pipeline**
-- [ ] Download Shreevastava et al. corpus; extract `(text, dominant, secondary)` rows into a local CSV
-- [ ] Write `DistortionCorpusMapper` — maps corpus label strings to `CognitiveDistortion`; logs and drops unmapped labels
-- [ ] Generate ~200 synthetic examples for `DISQUALIFYING_POSITIVE` via Claude; save as `distortion_synth_dqp.jsonl` (masked text + label array)
-- [ ] Generate ~200 synthetic examples for `BLAME` via Claude; save as `distortion_synth_blame.jsonl`
+- [x] Download Shreevastava et al. corpus; extract `(text, dominant, secondary)` rows into a local CSV → `distortion_corpus.jsonl` (2530 rows, 10 classes, 0 dropped)
+- [x] Write `DistortionCorpusMapper` — maps corpus label strings to `CognitiveDistortion`; logs and drops unmapped labels
+- [x] Generate ~200 synthetic examples for `DISQUALIFYING_POSITIVE` via Claude; save as `distortion_synth_dqp.jsonl` (307 examples)
+- [x] Generate ~200 synthetic examples for `BLAME` via Claude; save as `distortion_synth_blame.jsonl` (339 examples)
 - [ ] Embed all rows via `EmbeddingProvider` (Arctic Embed XS); serialize dataset as `(FloatArray, BooleanArray(12))` pairs
 
 **Model**
