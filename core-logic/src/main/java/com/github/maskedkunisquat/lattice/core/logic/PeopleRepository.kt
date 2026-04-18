@@ -68,6 +68,9 @@ class PeopleRepository(
         personDao.incrementVibeScore(personId, delta)
     }
 
+    suspend fun getAllPersons(): List<Person> =
+        personDao.getPersons().first()
+
     suspend fun searchByName(query: String): List<Person> =
         personDao.searchByName(query).first()
 

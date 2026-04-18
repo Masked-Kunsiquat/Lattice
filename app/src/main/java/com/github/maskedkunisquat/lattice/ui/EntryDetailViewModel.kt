@@ -108,8 +108,13 @@ class EntryDetailViewModel(
 
                 val affectiveMap = reframingLoop.runStage1AffectiveMap(maskedText).getOrThrow()
                 val diagnosis    = reframingLoop.runStage2DiagnosisOfThought(maskedText).getOrThrow()
+
+                // Build UUID → entity maps for Stage 3 display-name substitution.
+                val personById = personDao.getPersons().first().associateBy { it.id }
+                val placeById  = placeDao.getAll().first().associateBy { it.id }
+
                 val (_, tokenFlow) = reframingLoop
-                    .streamStage3Intervention(maskedText, affectiveMap, diagnosis)
+                    .streamStage3Intervention(maskedText, affectiveMap, diagnosis, personById, placeById)
                     .getOrThrow()
 
                 var partial = ""

@@ -3,6 +3,8 @@ package com.github.maskedkunisquat.lattice.core.logic
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -165,6 +167,8 @@ class ReframingLoop(
         maskedText: String,
         affectiveMap: AffectiveMapResult,
         diagnosis: DiagnosisResult,
+        personById: Map<java.util.UUID, Person> = emptyMap(),
+        placeById: Map<java.util.UUID, Place> = emptyMap(),
     ): Result<ReframeResult> = withContext(dispatcher) {
         runCatching {
             val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
@@ -181,10 +185,14 @@ class ReframingLoop(
                 fetchEvidenceEntries(maskedText)
             } else emptyList()
 
+            // Convert UUID placeholders to pseudonymous display names for the prompt only.
+            // Everything upstream (stages 1 & 2, evidence retrieval, storage) uses maskedText.
+            val displayText = buildDisplayText(maskedText, personById, placeById)
+
             val reframe = collectTokens(
                 orchestrator.process(
                     buildInterventionPrompt(
-                        maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -305,6 +313,35 @@ class ReframingLoop(
             "Output only the reframe. No markdown, no asterisks, no ellipses."
     }
 
+    /**
+     * Replaces UUID placeholders in [maskedText] with pseudonymous display names for use
+     * in Stage 3 prompts only. `[PERSON_uuid]` → `@{nickname ?: firstName}`,
+     * `[PLACE_uuid]` → `!{placeName}`. Tokens whose UUID is absent from the lookup maps
+     * are left unchanged so the model still sees a coherent (if opaque) token.
+     *
+     * This function must never be called for Stage 1/2 inputs, evidence retrieval, or storage.
+     */
+    internal fun buildDisplayText(
+        maskedText: String,
+        personById: Map<java.util.UUID, Person>,
+        placeById: Map<java.util.UUID, Place>,
+    ): String {
+        if (personById.isEmpty() && placeById.isEmpty()) return maskedText
+        var result = PLACEHOLDER_REGEX.replace(maskedText) { match ->
+            val uuidStr = match.value.removePrefix("[PERSON_").removeSuffix("]")
+            val uuid = runCatching { java.util.UUID.fromString(uuidStr) }.getOrNull()
+            val person = uuid?.let { personById[it] }
+            if (person != null) "@${person.nickname ?: person.firstName}" else match.value
+        }
+        result = PLACE_PLACEHOLDER_REGEX.replace(result) { match ->
+            val uuidStr = match.value.removePrefix("[PLACE_").removeSuffix("]")
+            val uuid = runCatching { java.util.UUID.fromString(uuidStr) }.getOrNull()
+            val place = uuid?.let { placeById[it] }
+            if (place != null) "!${place.name}" else match.value
+        }
+        return result
+    }
+
     // ── Parsers ──────────────────────────────────────────────────────────────
 
     internal fun parseAffectiveCoords(raw: String): AffectiveMapResult {
@@ -374,6 +411,8 @@ class ReframingLoop(
         maskedText: String,
         affectiveMap: AffectiveMapResult,
         diagnosis: DiagnosisResult,
+        personById: Map<java.util.UUID, Person> = emptyMap(),
+        placeById: Map<java.util.UUID, Place> = emptyMap(),
     ): Result<Pair<ReframeStrategy, kotlinx.coroutines.flow.Flow<LlmResult>>> =
         withContext(dispatcher) {
             runCatching {
@@ -384,9 +423,11 @@ class ReframingLoop(
                 val evidenceEntries = if (affectiveMap.valence < 0f) {
                     fetchEvidenceEntries(maskedText)
                 } else emptyList()
+                // Convert UUID placeholders to pseudonymous display names for the prompt only.
+                val displayText = buildDisplayText(maskedText, personById, placeById)
                 val flow = orchestrator.process(
                     buildInterventionPrompt(
-                        maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -526,5 +567,7 @@ class ReframingLoop(
         private val A_REGEX = Regex("""a\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
         /** Matches [PERSON_UUID] placeholders produced by PiiShield. */
         private val PLACEHOLDER_REGEX = Regex("""\[PERSON_[a-fA-F0-9\-]{36}\]""")
+        /** Matches [PLACE_UUID] placeholders produced by PiiShield. */
+        private val PLACE_PLACEHOLDER_REGEX = Regex("""\[PLACE_[a-fA-F0-9\-]{36}\]""")
     }
 }

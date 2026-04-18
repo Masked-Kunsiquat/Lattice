@@ -4,6 +4,9 @@ import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -599,6 +602,79 @@ class ReframingLoopTest {
         )
         // When distortions is empty, no distortion line is injected into the prompt.
         assertFalse(prompt.contains("Distortions present:"))
+    }
+
+    // ── buildDisplayText ─────────────────────────────────────────────────────
+
+    @Test
+    fun `buildDisplayText - replaces PERSON token with at-nickname when nickname present`() {
+        val personId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+        val person = Person(
+            id = personId,
+            firstName = "John",
+            lastName = "Smith",
+            nickname = "JJ",
+            relationshipType = RelationshipType.FRIEND,
+            vibeScore = 0f,
+            isFavorite = false,
+        )
+        val result = loop.buildDisplayText(
+            maskedText = "Hanging out with [PERSON_00000000-0000-0000-0000-000000000001] today.",
+            personById = mapOf(personId to person),
+            placeById  = emptyMap(),
+        )
+        assertEquals("Hanging out with @JJ today.", result)
+    }
+
+    @Test
+    fun `buildDisplayText - falls back to firstName when nickname is null`() {
+        val personId = UUID.fromString("00000000-0000-0000-0000-000000000002")
+        val person = Person(
+            id = personId,
+            firstName = "Alice",
+            lastName = null,
+            nickname = null,
+            relationshipType = RelationshipType.FRIEND,
+            vibeScore = 0f,
+            isFavorite = false,
+        )
+        val result = loop.buildDisplayText(
+            maskedText = "Saw [PERSON_00000000-0000-0000-0000-000000000002] at the event.",
+            personById = mapOf(personId to person),
+            placeById  = emptyMap(),
+        )
+        assertEquals("Saw @Alice at the event.", result)
+    }
+
+    @Test
+    fun `buildDisplayText - replaces PLACE token with bang-placeName`() {
+        val placeId = UUID.fromString("00000000-0000-0000-0000-000000000010")
+        val place = Place(
+            id = placeId,
+            name = "Central Park",
+        )
+        val result = loop.buildDisplayText(
+            maskedText = "Went to [PLACE_00000000-0000-0000-0000-000000000010] yesterday.",
+            personById = emptyMap(),
+            placeById  = mapOf(placeId to place),
+        )
+        assertEquals("Went to !Central Park yesterday.", result)
+    }
+
+    @Test
+    fun `buildDisplayText - unknown UUID tokens are left unchanged`() {
+        val result = loop.buildDisplayText(
+            maskedText = "Met [PERSON_00000000-0000-0000-0000-000000000099] at [PLACE_00000000-0000-0000-0000-000000000099].",
+            personById = emptyMap(),
+            placeById  = emptyMap(),
+        )
+        assertEquals("Met [PERSON_00000000-0000-0000-0000-000000000099] at [PLACE_00000000-0000-0000-0000-000000000099].", result)
+    }
+
+    @Test
+    fun `buildDisplayText - returns maskedText unchanged when both maps are empty`() {
+        val input = "Some text with [PERSON_00000000-0000-0000-0000-000000000001] inside."
+        assertEquals(input, loop.buildDisplayText(input, emptyMap(), emptyMap()))
     }
 
     // ── Stage 3: end-to-end flow ──────────────────────────────────────────────

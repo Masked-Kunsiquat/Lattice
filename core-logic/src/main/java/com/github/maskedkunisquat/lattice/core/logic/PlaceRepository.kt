@@ -7,6 +7,9 @@ import java.util.UUID
 
 class PlaceRepository(private val placeDao: PlaceDao) {
 
+    suspend fun getAllPlaces(): List<Place> =
+        placeDao.getAll().first()
+
     suspend fun searchPlaces(query: String): List<Place> =
         placeDao.searchByName(query).first()
 

@@ -444,9 +444,14 @@ class JournalEditorViewModel(
                     .runStage2DiagnosisOfThought(maskedText)
                     .getOrThrow()
 
+                // Build UUID → entity maps for Stage 3 display-name substitution.
+                // These are fetched once per reframe; they are not passed to stages 1 or 2.
+                val personById = peopleRepository.getAllPersons().associateBy { it.id }
+                val placeById  = placeRepository.getAllPlaces().associateBy { it.id }
+
                 // Stage 3 — Stream tokens into Streaming state, seal to Done on Complete
                 val (_, tokenFlow) = reframingLoop
-                    .streamStage3Intervention(maskedText, affectiveMap, diagnosis)
+                    .streamStage3Intervention(maskedText, affectiveMap, diagnosis, personById, placeById)
                     .getOrThrow()
 
                 var partial = ""
