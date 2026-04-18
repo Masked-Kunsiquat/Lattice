@@ -7,6 +7,9 @@ import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntryRef
+import com.github.maskedkunisquat.lattice.core.data.model.Mention
+import com.github.maskedkunisquat.lattice.core.data.model.MentionSource
+import com.github.maskedkunisquat.lattice.core.data.model.MentionStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -148,16 +151,28 @@ class JournalRepository(
 
         journalDao.insertEntry(entryToSave)
 
-        // Vibe Evolution: Update vibe scores for mentioned persons
-        // Extract UUIDs from [PERSON_UUID] placeholders
-        val mentions = maskedContent?.let { PERSON_PLACEHOLDER.findAll(it) }
-            ?.map { it.groupValues[1] }
+        // Extract unique person UUIDs from [PERSON_UUID] placeholders
+        val mentionedPersonIds = maskedContent?.let { PERSON_PLACEHOLDER.findAll(it) }
+            ?.map { UUID.fromString(it.groupValues[1]) }
             ?.distinct()
-            ?.map { UUID.fromString(it) }
-            ?: emptySequence()
+            ?.toList()
+            ?: emptyList()
 
+        // Persist Mention rows so PersonDetailViewModel can surface linked entries
+        mentionedPersonIds.forEach { personId ->
+            mentionDao.insertMention(
+                Mention(
+                    entryId  = entryToSave.id,
+                    personId = personId,
+                    source   = MentionSource.MANUAL,
+                    status   = MentionStatus.CONFIRMED,
+                )
+            )
+        }
+
+        // Vibe Evolution: update vibe scores for mentioned persons
         val delta = entry.valence * 0.1f
-        mentions.forEach { personId ->
+        mentionedPersonIds.forEach { personId ->
             personDao.incrementVibeScore(personId, delta)
         }
     }

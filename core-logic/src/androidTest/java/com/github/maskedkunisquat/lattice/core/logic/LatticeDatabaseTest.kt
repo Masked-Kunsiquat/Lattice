@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
+
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -37,6 +38,41 @@ class LatticeDatabaseTest {
     @Throws(IOException::class)
     fun closeDb() {
         db.close()
+    }
+
+    @Test
+    fun saveEntry_persistsMentionRows() = runBlocking {
+        val personId = UUID.randomUUID()
+        db.personDao().insertPerson(
+            Person(
+                id               = personId,
+                firstName        = "Alice",
+                lastName         = null,
+                nickname         = null,
+                relationshipType = RelationshipType.FRIEND,
+                vibeScore        = 0f,
+                isFavorite       = false,
+            )
+        )
+
+        val entry = JournalEntry(
+            id                   = UUID.randomUUID(),
+            timestamp            = System.currentTimeMillis(),
+            content              = "[PERSON_$personId] and I had coffee",
+            valence              = 0.5f,
+            arousal              = 0.3f,
+            moodLabel            = "CONTENT",
+            embedding            = FloatArray(384),
+            cognitiveDistortions = emptyList(),
+        )
+
+        // Pass already-masked content; PiiShield.mask() is a no-op when no raw names are present
+        repository.saveEntry(entry)
+
+        val mentions = db.mentionDao().getMentionsByEntry(entry.id)
+        assertEquals("Expected one Mention row for Alice", 1, mentions.size)
+        assertEquals(personId, mentions[0].personId)
+        assertEquals(entry.id, mentions[0].entryId)
     }
 
     @Test
