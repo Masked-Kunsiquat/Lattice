@@ -134,6 +134,7 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
         SearchRepository(
             journalDao = database.journalDao(),
             personDao = database.personDao(),
+            placeDao = database.placeDao(),
             embeddingProvider = embeddingProvider,
         )
     }

@@ -23,15 +23,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class SearchTab { ENTRIES, PEOPLE, PLACES, TAGS }
-
 data class PlaceResult(val place: Place, val entryCount: Int)
 data class TagResult(val tag: Tag, val entryCount: Int)
 
 data class SearchUiState(
     val query: String = "",
     val expanded: Boolean = false,
-    val activeTab: SearchTab = SearchTab.ENTRIES,
     val entryResults: List<JournalEntry> = emptyList(),
     val peopleResults: List<Person> = emptyList(),
     val placeResults: List<PlaceResult> = emptyList(),
@@ -69,10 +66,6 @@ class SearchHistoryViewModel(
     fun onExpandedChange(expanded: Boolean) {
         _uiState.update { it.copy(expanded = expanded) }
         if (!expanded) resetSearch()
-    }
-
-    fun onTabChange(tab: SearchTab) {
-        _uiState.update { it.copy(activeTab = tab) }
     }
 
     /** Collapses and clears all search state. */

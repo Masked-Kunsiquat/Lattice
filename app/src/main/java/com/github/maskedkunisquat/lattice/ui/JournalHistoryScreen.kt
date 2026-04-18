@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,8 +43,6 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -69,7 +66,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
-import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
 import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -140,9 +136,8 @@ fun JournalHistoryScreen(
                 // keyboard show, silent onSearch). Input stays pinned at the top; results
                 // stream below the TabRow.
                 SearchOverlay(
-                    state       = searchState,
+                    state         = searchState,
                     onQueryChange = searchViewModel::onQueryChange,
-                    onTabChange   = searchViewModel::onTabChange,
                     onCollapse    = searchViewModel::collapse,
                     onOpenEntry   = onOpenEntry,
                     onOpenPerson  = onOpenPerson,
@@ -206,13 +201,13 @@ fun JournalHistoryScreen(
  * Full-screen search UI shown when the search bar is expanded. Replaces the
  * Material3 SearchBar expanded-state slot to avoid its positioning quirks
  * (input centering, premature onExpandedChange(false) on keyboard events,
- * silent onSearch). The input is pinned at the top; tabs and results stream below.
+ * silent onSearch). The input is pinned at the top; all result categories stream
+ * below as a single grouped scrollable list — Entries, People, Places, Tags.
  */
 @Composable
 private fun SearchOverlay(
     state: SearchUiState,
     onQueryChange: (String) -> Unit,
-    onTabChange: (SearchTab) -> Unit,
     onCollapse: () -> Unit,
     onOpenEntry: (UUID) -> Unit,
     onOpenPerson: (UUID) -> Unit,
@@ -263,187 +258,160 @@ private fun SearchOverlay(
             }
         }
         HorizontalDivider()
-
-        // ── Tab row ──────────────────────────────────────────────────────────
-        TabRow(selectedTabIndex = state.activeTab.ordinal) {
-            SearchTab.entries.forEach { tab ->
-                Tab(
-                    selected = tab == state.activeTab,
-                    onClick  = { onTabChange(tab) },
-                    text = {
-                        Text(
-                            tab.name.lowercase(Locale.ROOT)
-                                .replaceFirstChar { it.uppercase(Locale.ROOT) }
-                        )
-                    },
-                )
-            }
-        }
         if (state.isLoading) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
-        // ── Tab content ───────────────────────────────────────────────────────
-        when (state.activeTab) {
-            SearchTab.ENTRIES -> SearchEntryResults(
-                results   = state.entryResults,
-                isLoading = state.isLoading,
-                query     = state.query,
-                onOpenEntry = onOpenEntry,
-                onCollapse  = { keyboardController?.hide(); onCollapse() },
-            )
-            SearchTab.PEOPLE -> SearchPeopleResults(
-                results      = state.peopleResults,
-                query        = state.query,
-                onOpenPerson = onOpenPerson,
-                onCollapse   = { keyboardController?.hide(); onCollapse() },
-            )
-            SearchTab.PLACES -> SearchPlaceResults(
-                results = state.placeResults,
-                query   = state.query,
-            )
-            SearchTab.TAGS -> SearchTagResults(
-                results = state.tagResults,
-                query   = state.query,
-            )
-        }
-    }
-}
-
-// ── Search result sections ─────────────────────────────────────────────────────
-
-@Composable
-private fun SearchEntryResults(
-    results: List<JournalEntry>,
-    isLoading: Boolean,
-    query: String,
-    onOpenEntry: (UUID) -> Unit,
-    onCollapse: () -> Unit,
-) {
-    when {
-        query.isBlank() -> SearchEmptyHint("Start typing to search entries")
-        !isLoading && results.isEmpty() -> SearchEmptyHint("No entries found")
-        else -> LazyColumn(modifier = Modifier.fillMaxHeight()) {
-            items(results, key = { it.id }) { entry ->
-                ListItem(
-                    overlineContent = {
-                        Text(
-                            entry.moodLabel.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    headlineContent = {
-                        Text(
-                            entry.content ?: "Mood log (no text)",
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    modifier = Modifier.clickable {
-                        onCollapse()
-                        onOpenEntry(entry.id)
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchPeopleResults(
-    results: List<Person>,
-    query: String,
-    onOpenPerson: (UUID) -> Unit,
-    onCollapse: () -> Unit,
-) {
-    when {
-        query.isBlank() -> SearchEmptyHint("Start typing to search people")
-        results.isEmpty() -> SearchEmptyHint("No people found")
-        else -> LazyColumn(modifier = Modifier.fillMaxHeight()) {
-            items(results, key = { it.id }) { person ->
-                val displayName = person.nickname
-                    ?: listOfNotNull(person.firstName, person.lastName).joinToString(" ")
-                val vibeColor = when {
-                    person.vibeScore > 0.3f -> MaterialTheme.colorScheme.tertiary
-                    person.vibeScore < -0.3f -> MaterialTheme.colorScheme.secondary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+        // ── Grouped results ───────────────────────────────────────────────────
+        if (state.query.isBlank()) {
+            SearchEmptyHint("Start typing to search")
+        } else {
+            val onDismiss: () -> Unit = { keyboardController?.hide(); onCollapse() }
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                // Entries section
+                item {
+                    SearchSectionHeader("Entries")
                 }
-                ListItem(
-                    headlineContent = { Text(displayName) },
-                    supportingContent = {
-                        Text(
-                            person.relationshipType.name.lowercase(Locale.ROOT)
-                                .replaceFirstChar { it.uppercase(Locale.ROOT) },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                if (state.entryResults.isEmpty()) {
+                    item {
+                        SearchSectionEmptyHint(
+                            if (state.isSemanticLoading) "Searching…" else "No entries found"
                         )
-                    },
-                    trailingContent = {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(vibeColor, CircleShape),
+                    }
+                } else {
+                    items(state.entryResults, key = { "entry_${it.id}" }) { entry ->
+                        ListItem(
+                            overlineContent = {
+                                Text(
+                                    entry.moodLabel.lowercase(Locale.ROOT)
+                                        .replaceFirstChar { it.uppercase(Locale.ROOT) },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            },
+                            headlineContent = {
+                                Text(
+                                    entry.content ?: "Mood log (no text)",
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            modifier = Modifier.clickable { onDismiss(); onOpenEntry(entry.id) },
                         )
-                    },
-                    modifier = Modifier.clickable {
-                        onCollapse()
-                        onOpenPerson(person.id)
-                    },
-                )
+                    }
+                }
+
+                // People section
+                item { SearchSectionHeader("People") }
+                if (state.peopleResults.isEmpty()) {
+                    item {
+                        SearchSectionEmptyHint(
+                            if (state.isLikeLoading) "Searching…" else "No people found"
+                        )
+                    }
+                } else {
+                    items(state.peopleResults, key = { "person_${it.id}" }) { person ->
+                        val displayName = person.nickname
+                            ?: listOfNotNull(person.firstName, person.lastName).joinToString(" ")
+                        val vibeColor = when {
+                            person.vibeScore > 0.3f -> MaterialTheme.colorScheme.tertiary
+                            person.vibeScore < -0.3f -> MaterialTheme.colorScheme.secondary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        ListItem(
+                            headlineContent = { Text(displayName) },
+                            supportingContent = {
+                                Text(
+                                    person.relationshipType.name.lowercase(Locale.ROOT)
+                                        .replaceFirstChar { it.uppercase(Locale.ROOT) },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            trailingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .background(vibeColor, CircleShape),
+                                )
+                            },
+                            modifier = Modifier.clickable { onDismiss(); onOpenPerson(person.id) },
+                        )
+                    }
+                }
+
+                // Places section
+                item { SearchSectionHeader("Places") }
+                if (state.placeResults.isEmpty()) {
+                    item {
+                        SearchSectionEmptyHint(
+                            if (state.isLikeLoading) "Searching…" else "No places found"
+                        )
+                    }
+                } else {
+                    items(state.placeResults, key = { "place_${it.place.id}" }) { (place, count) ->
+                        ListItem(
+                            headlineContent = { Text(place.name) },
+                            supportingContent = {
+                                Text(
+                                    if (count == 1) "1 entry" else "$count entries",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                        )
+                    }
+                }
+
+                // Tags section
+                item { SearchSectionHeader("Tags") }
+                if (state.tagResults.isEmpty()) {
+                    item {
+                        SearchSectionEmptyHint(
+                            if (state.isLikeLoading) "Searching…" else "No tags found"
+                        )
+                    }
+                } else {
+                    items(state.tagResults, key = { "tag_${it.tag.id}" }) { (tag, count) ->
+                        ListItem(
+                            headlineContent = { Text("#${tag.name}") },
+                            supportingContent = {
+                                Text(
+                                    if (count == 1) "1 entry" else "$count entries",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                        )
+                    }
+                }
             }
         }
     }
 }
 
+// ── Search result helpers ─────────────────────────────────────────────────────
+
 @Composable
-private fun SearchPlaceResults(
-    results: List<PlaceResult>,
-    query: String,
-) {
-    when {
-        query.isBlank() -> SearchEmptyHint("Start typing to search places")
-        results.isEmpty() -> SearchEmptyHint("No places found")
-        else -> LazyColumn(modifier = Modifier.fillMaxHeight()) {
-            items(results, key = { it.place.id }) { (place, count) ->
-                ListItem(
-                    headlineContent = { Text(place.name) },
-                    supportingContent = {
-                        Text(
-                            if (count == 1) "1 entry" else "$count entries",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                )
-            }
-        }
-    }
+private fun SearchSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    )
 }
 
 @Composable
-private fun SearchTagResults(
-    results: List<TagResult>,
-    query: String,
-) {
-    when {
-        query.isBlank() -> SearchEmptyHint("Start typing to search tags")
-        results.isEmpty() -> SearchEmptyHint("No tags found")
-        else -> LazyColumn(modifier = Modifier.fillMaxHeight()) {
-            items(results, key = { it.tag.id }) { (tag, count) ->
-                ListItem(
-                    headlineContent = { Text("#${tag.name}") },
-                    supportingContent = {
-                        Text(
-                            if (count == 1) "1 entry" else "$count entries",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                )
-            }
-        }
-    }
+private fun SearchSectionEmptyHint(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
 }
 
 @Composable
@@ -590,24 +558,3 @@ private fun PreviewEntryCardReframed() {
     }
 }
 
-@Preview(name = "Person result row (dark)", showBackground = true, backgroundColor = 0xFF1C1B1F)
-@Composable
-private fun PreviewSearchPersonRow() {
-    LatticeTheme(darkTheme = true, dynamicColor = false) {
-        SearchPeopleResults(
-            results = listOf(
-                Person(
-                    id = UUID.randomUUID(),
-                    firstName = "Sherlock",
-                    lastName = "Holmes",
-                    nickname = null,
-                    relationshipType = RelationshipType.FRIEND,
-                    vibeScore = 0.7f,
-                )
-            ),
-            query = "holmes",
-            onOpenPerson = {},
-            onCollapse = {},
-        )
-    }
-}
