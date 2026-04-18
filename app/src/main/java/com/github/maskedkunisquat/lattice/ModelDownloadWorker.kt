@@ -18,6 +18,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import java.security.MessageDigest
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -150,8 +151,8 @@ class ModelDownloadWorker(
                     val raw = conn.getHeaderField("Location")
                         ?: throw IOException("Redirect $code with no Location header from $location")
                     val resolved = URI(location).resolve(raw)
-                    val originalHost = URI(url).host
-                    val resolvedHost = resolved.host ?: ""
+                    val originalHost = URI(url).host?.lowercase(Locale.ROOT) ?: ""
+                    val resolvedHost = resolved.host?.lowercase(Locale.ROOT) ?: ""
                     // Trust redirects within huggingface.co and hf.co (covers the XetHub CDN
                     // at cas-bridge.xethub.hf.co that HuggingFace now uses for large files).
                     val trusted = resolved.scheme == "https" && (
