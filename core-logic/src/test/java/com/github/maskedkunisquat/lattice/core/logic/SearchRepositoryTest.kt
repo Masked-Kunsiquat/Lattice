@@ -2,6 +2,7 @@ package com.github.maskedkunisquat.lattice.core.logic
 
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,15 @@ class SearchRepositoryTest {
         override suspend fun incrementVibeScore(personId: UUID, delta: Float) = Unit
         override suspend fun deletePersonById(id: UUID) = Unit
         override fun searchByName(query: String): Flow<List<Person>> = flowOf(emptyList())
+    }
+
+    private class FakePlaceDao : PlaceDao {
+        override suspend fun insertPlace(place: com.github.maskedkunisquat.lattice.core.data.model.Place) = Unit
+        override suspend fun deleteById(id: UUID) = Unit
+        override fun getAll(): Flow<List<com.github.maskedkunisquat.lattice.core.data.model.Place>> = flowOf(emptyList())
+        override fun searchByName(query: String): Flow<List<com.github.maskedkunisquat.lattice.core.data.model.Place>> = flowOf(emptyList())
+        override suspend fun getById(id: UUID): com.github.maskedkunisquat.lattice.core.data.model.Place? = null
+        override suspend fun getByName(name: String): com.github.maskedkunisquat.lattice.core.data.model.Place? = null
     }
 
     private fun entry(
@@ -61,6 +71,7 @@ class SearchRepositoryTest {
         return SearchRepository(
             journalDao = dao,
             personDao = FakePersonDao(),
+            placeDao = FakePlaceDao(),
             embeddingProvider = object : EmbeddingProvider() {
                 override suspend fun generateEmbedding(text: String) = FloatArray(384) { 0.1f }
             }

@@ -285,6 +285,12 @@ class ReframingLoop(
                 actionStep
             }
 
+            ReframeStrategy.REFLECTION ->
+                "Write exactly 2-3 sentences in first person that:\n" +
+                "1. Notice what this entry reveals about what matters to you.\n" +
+                "2. Name the value, relationship, or aspiration the entry points to — without inventing effort or achievement that isn't there.\n" +
+                "3. Leave the observation open rather than resolved — no uplifting conclusion."
+
             ReframeStrategy.STRENGTHS_AFFIRMATION ->
                 "Write exactly 2-3 sentences in first person that:\n" +
                 "1. Name the strength or effort this entry shows.\n" +
@@ -455,7 +461,9 @@ class ReframingLoop(
         SOCRATIC_REALITY_TESTING,
         /** Quadrant III (v<0, a<0): Behavioral Activation + Evidence for the Contrary. */
         BEHAVIORAL_ACTIVATION,
-        /** Quadrant I/IV (v≥0): Positive-valence strengths affirmation. */
+        /** Low-positive band (0 ≤ v < AFFIRMATION_THRESHOLD): Reflective awareness of what matters. */
+        REFLECTION,
+        /** High-positive band (v ≥ AFFIRMATION_THRESHOLD): Strengths affirmation for clearly positive entries. */
         STRENGTHS_AFFIRMATION,
     }
 
@@ -474,6 +482,13 @@ class ReframingLoop(
         private const val TAG = "ReframingLoop"
         /** Maximum activity difficulty included in the BA suggestion lookup (0–10 scale). */
         internal const val BA_MAX_DIFFICULTY = 5
+        /**
+         * Minimum valence for [ReframeStrategy.STRENGTHS_AFFIRMATION]. Entries with valence in
+         * [0, AFFIRMATION_THRESHOLD) are routed to [ReframeStrategy.REFLECTION] instead.
+         * Tune this value to adjust how much of the positive-valence band gets reflective vs.
+         * strengths-focused framing.
+         */
+        internal const val AFFIRMATION_THRESHOLD = 0.4f
 
         internal const val AFFECTIVE_SYSTEM =
             "You are an affective computing assistant. " +
@@ -494,15 +509,17 @@ class ReframingLoop(
             "No markdown, no asterisks, no ellipses, no therapist language."
 
         /**
-         * Selects the intervention strategy based on circumplex quadrant.
-         * v<0 and a≥0 → Quadrant II → [ReframeStrategy.SOCRATIC_REALITY_TESTING]
-         * v<0 and a<0  → Quadrant III → [ReframeStrategy.BEHAVIORAL_ACTIVATION]
-         * v≥0 (any a)  → Positive valence → [ReframeStrategy.STRENGTHS_AFFIRMATION]
+         * Selects the intervention strategy based on circumplex quadrant and valence band.
+         * v<0 and a≥0              → Quadrant II   → [ReframeStrategy.SOCRATIC_REALITY_TESTING]
+         * v<0 and a<0              → Quadrant III  → [ReframeStrategy.BEHAVIORAL_ACTIVATION]
+         * 0 ≤ v < AFFIRMATION_THRESHOLD (any a) → [ReframeStrategy.REFLECTION]
+         * v ≥ AFFIRMATION_THRESHOLD (any a)     → [ReframeStrategy.STRENGTHS_AFFIRMATION]
          */
         fun selectStrategy(valence: Float, arousal: Float): ReframeStrategy = when {
-            valence < 0f && arousal >= 0f -> ReframeStrategy.SOCRATIC_REALITY_TESTING
-            valence < 0f && arousal < 0f  -> ReframeStrategy.BEHAVIORAL_ACTIVATION
-            else                          -> ReframeStrategy.STRENGTHS_AFFIRMATION
+            valence < 0f && arousal >= 0f        -> ReframeStrategy.SOCRATIC_REALITY_TESTING
+            valence < 0f && arousal < 0f         -> ReframeStrategy.BEHAVIORAL_ACTIVATION
+            valence < AFFIRMATION_THRESHOLD      -> ReframeStrategy.REFLECTION
+            else                                 -> ReframeStrategy.STRENGTHS_AFFIRMATION
         }
         // Both regexes tolerate optional spaces around `=` and an optional leading `-`.
         private val V_REGEX = Regex("""v\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)

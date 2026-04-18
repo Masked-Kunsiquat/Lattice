@@ -509,14 +509,34 @@ class ReframingLoopTest {
     }
 
     @Test
-    fun `selectStrategy - strengths affirmation for positive valence`() {
+    fun `selectStrategy - reflection for low-positive valence below threshold`() {
+        assertEquals(
+            ReframingLoop.ReframeStrategy.REFLECTION,
+            ReframingLoop.selectStrategy(0.0f, 0.7f)   // zero valence
+        )
+        assertEquals(
+            ReframingLoop.ReframeStrategy.REFLECTION,
+            ReframingLoop.selectStrategy(0.3f, 0.7f)   // below threshold
+        )
+        assertEquals(
+            ReframingLoop.ReframeStrategy.REFLECTION,
+            ReframingLoop.selectStrategy(0.39f, -0.5f) // just below threshold, Q4 arousal
+        )
+    }
+
+    @Test
+    fun `selectStrategy - strengths affirmation for high-positive valence at or above threshold`() {
         assertEquals(
             ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
-            ReframingLoop.selectStrategy(0.3f, 0.7f)  // Q1
+            ReframingLoop.selectStrategy(0.4f, 0.7f)   // exactly at threshold
         )
         assertEquals(
             ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
-            ReframingLoop.selectStrategy(0.6f, -0.4f)  // Q4
+            ReframingLoop.selectStrategy(0.6f, -0.4f)  // well above threshold, Q4
+        )
+        assertEquals(
+            ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
+            ReframingLoop.selectStrategy(1.0f, 1.0f)   // max positive
         )
     }
 
@@ -554,6 +574,20 @@ class ReframingLoopTest {
         assertTrue(prompt.contains("Overgeneralization"))
         assertTrue(prompt.contains("avoidance", ignoreCase = true))
         assertTrue(prompt.contains("temporary state", ignoreCase = true))
+    }
+
+    @Test
+    fun `buildInterventionPrompt - reflection prompt asks what entry reveals about what matters`() {
+        val prompt = loop.buildInterventionPrompt(
+            maskedText = "meeting up with [PERSON_abc] later. might go to the park.",
+            strategy = ReframingLoop.ReframeStrategy.REFLECTION,
+            distortions = emptyList(),
+        )
+        assertTrue(prompt.contains("reveals", ignoreCase = true))
+        assertTrue(prompt.contains("matters", ignoreCase = true))
+        // Should not contain strengths-affirmation or BA-specific language
+        assertFalse(prompt.contains("strength", ignoreCase = true))
+        assertFalse(prompt.contains("avoidance", ignoreCase = true))
     }
 
     @Test
