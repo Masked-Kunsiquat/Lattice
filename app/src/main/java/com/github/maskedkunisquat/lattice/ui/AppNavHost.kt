@@ -58,15 +58,13 @@ fun AppNavHost(app: LatticeApplication) {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
                 bottomNavDests.forEach { dest ->
+                    val isInDestHierarchy = currentDestination
+                        ?.hierarchy
+                        ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true
                     NavigationBarItem(
-                        selected = currentDestination
-                            ?.hierarchy
-                            ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true,
+                        selected = isInDestHierarchy,
                         onClick = {
-                            val alreadySelected = currentDestination
-                                ?.hierarchy
-                                ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true
-                            if (alreadySelected) {
+                            if (isInDestHierarchy) {
                                 // Second tap: pop back to this tab's root without recreating it.
                                 navController.popBackStack(dest.route, inclusive = false)
                             } else {

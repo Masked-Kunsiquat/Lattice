@@ -234,7 +234,7 @@ private fun EntryDetailContent(
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(tagsData.people) { person ->
                             val name = person.nickname
-                                ?: "${person.firstName}${if (person.lastName != null) " ${person.lastName}" else ""}"
+                                ?: listOfNotNull(person.firstName, person.lastName).joinToString(" ")
                             SuggestionChip(
                                 onClick = { onOpenPerson(person.id) },
                                 label = { Text("@$name") },

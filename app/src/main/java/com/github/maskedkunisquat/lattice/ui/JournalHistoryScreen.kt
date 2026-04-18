@@ -80,8 +80,8 @@ import java.util.UUID
 
 // ── PII highlight helper ──────────────────────────────────────────────────────
 
-private val PERSON_HIGHLIGHT_REGEX = Regex("@(?:[\\p{L}\\p{N}_]+ )*[\\p{L}\\p{N}_]+")
-private val PLACE_HIGHLIGHT_REGEX  = Regex("!(?:[\\p{L}\\p{N}_]+ )*[\\p{L}\\p{N}_]+")
+private val PERSON_HIGHLIGHT_REGEX = Regex("@[\\p{L}\\p{N}_]+(?=$|\\s|[^\\p{L}\\p{N}_])")
+private val PLACE_HIGHLIGHT_REGEX  = Regex("![\\p{L}\\p{N}_]+(?=$|\\s|[^\\p{L}\\p{N}_])")
 private val TAG_HIGHLIGHT_REGEX    = Regex("#[\\p{L}\\p{N}_]+")
 
 /**

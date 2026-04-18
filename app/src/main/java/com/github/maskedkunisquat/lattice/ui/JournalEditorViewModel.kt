@@ -63,6 +63,12 @@ data class EditorUiState(
     val resolvedPersons: Map<String, UUID> = emptyMap(),
     /** Place name → UUID for places resolved via ! autocomplete. Masking deferred to save(). */
     val resolvedPlaces: Map<String, UUID> = emptyMap(),
+    /**
+     * Persisted reframe text loaded when editing an existing entry. Stored in masked form
+     * ([PERSON_uuid] tokens) so it can be passed through to [JournalRepository.saveEntry]
+     * unchanged, preserving any prior reframe across edits.
+     */
+    val reframedContent: String? = null,
 )
 
 class JournalEditorViewModel(
@@ -108,6 +114,7 @@ class JournalEditorViewModel(
                             moodSelected = true,
                             resolvedPersons = resolvedPersons,
                             resolvedPlaces = resolvedPlaces,
+                            reframedContent = entry.reframedContent,
                         )
                     }
                 }
@@ -359,6 +366,7 @@ class JournalEditorViewModel(
                 embedding = FloatArray(EmbeddingProvider.EMBEDDING_DIM),
                 tagIds = tagIds,
                 placeIds = placeIds,
+                reframedContent = state.reframedContent,
             )
         )
         return newId
