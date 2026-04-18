@@ -172,6 +172,15 @@ class ReframingLoop(
     ): Result<ReframeResult> = withContext(dispatcher) {
         runCatching {
             val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
+            val displayText = buildDisplayText(maskedText, personById, placeById)
+
+            // Distortion gate: REFLECTION entries with no detected distortions have nothing to
+            // reframe. Skip the LLM entirely and return a retrieval card instead.
+            if (strategy == ReframeStrategy.REFLECTION && diagnosis.distortions.isEmpty()) {
+                val evidence = fetchReflectionEvidence(maskedText)
+                val card = buildReflectionCard(displayText, evidence, personById, placeById)
+                return@runCatching ReframeResult(strategy = ReframeStrategy.REFLECTION_CARD, reframe = card)
+            }
 
             // For Quadrant III (Behavioral Activation), look up the most accessible activity
             // whose valueCategory aligns with the entry context.
@@ -185,17 +194,10 @@ class ReframingLoop(
                 fetchEvidenceEntries(maskedText)
             } else emptyList()
 
-            // Convert UUID placeholders to pseudonymous display names for the prompt only.
-            // Everything upstream (stages 1 & 2, evidence retrieval, storage) uses maskedText.
-            val displayText = buildDisplayText(maskedText, personById, placeById)
-
-            // Anchor call: one-sentence description grounds the reframe in what was literally written.
-            val anchorText = runAnchorCall(displayText)
-
             val reframe = collectTokens(
                 orchestrator.process(
                     buildInterventionPrompt(
-                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries, anchorText
+                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -259,10 +261,7 @@ class ReframingLoop(
         distortions: List<CognitiveDistortion>,
         baActivity: ActivityHierarchy? = null,
         evidenceEntries: List<JournalEntry> = emptyList(),
-        anchorText: String? = null,
     ): String {
-        val anchorLine = if (anchorText != null) "The person is: $anchorText\n\n" else ""
-
         val distortionLine = if (distortions.isEmpty()) ""
         else "Distortions present: ${distortions.joinToString(", ") { it.label }}\n"
 
@@ -293,10 +292,12 @@ class ReframingLoop(
 
             ReframeStrategy.STRENGTHS_AFFIRMATION ->
                 "Name the strength or effort this entry shows and connect it to what matters to you."
+
+            ReframeStrategy.REFLECTION_CARD ->
+                throw IllegalArgumentException("buildInterventionPrompt must not be called for REFLECTION_CARD — use buildReflectionCard instead.")
         }
 
         return "Journal entry: \"$maskedText\"\n\n" +
-            anchorLine +
             distortionLine +
             evidenceBlock +
             "$techniqueBlock\n\n" +
@@ -332,23 +333,56 @@ class ReframingLoop(
         return result
     }
 
-    internal fun buildAnchorPrompt(displayText: String): String =
-        "In one sentence, describe concretely what this journal entry is about.\n\n" +
-        "Entry: $displayText"
+    /**
+     * Builds a retrieval card for undistorted REFLECTION entries — no LLM generation.
+     *
+     * Extracts `@name` and `!place` tokens from [displayText] (already substituted by
+     * [buildDisplayText]), then assembles a card from [evidenceEntries] (at most 2 snippets,
+     * each unmasked via [buildDisplayText]). Falls back to a single templated line when no
+     * evidence is available.
+     */
+    internal fun buildReflectionCard(
+        displayText: String,
+        evidenceEntries: List<JournalEntry>,
+        personById: Map<java.util.UUID, Person>,
+        placeById: Map<java.util.UUID, Place>,
+    ): String {
+        val atNames  = Regex("""@(\S+)""").findAll(displayText).map { "@${it.groupValues[1]}" }.toList()
+        val bangNames = Regex("""!(\S+)""").findAll(displayText).map { "!${it.groupValues[1]}" }.toList()
+        val entities  = (atNames + bangNames).distinct()
+        val entityList = when {
+            entities.isEmpty() -> "these connections"
+            entities.size == 1 -> entities[0]
+            else               -> entities.dropLast(1).joinToString(", ") + " and " + entities.last()
+        }
+
+        val snippets = evidenceEntries.take(2).mapNotNull { entry ->
+            val content = entry.content?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val display = buildDisplayText(content, personById, placeById)
+            val trimmed = if (display.length > 120) display.take(120) + "…" else display
+            "\"$trimmed\""
+        }
+
+        return if (snippets.isNotEmpty()) {
+            "You've written about $entityList before:\n${snippets.joinToString("\n")}\n" +
+            "Connection to $entityList keeps showing up in what you write."
+        } else {
+            "Spending time with $entityList is something that matters to you."
+        }
+    }
 
     /**
-     * Runs a short (~20 token) LLM call to produce a one-sentence description of [displayText].
-     * The result is injected at the top of the Stage 3 prompt as `"The person is: …"` so the
-     * model commits to what the entry literally says before generating the reframe.
-     *
-     * Returns null if the call fails or the result is blank — Stage 3 proceeds without an anchor.
+     * Fetches recent journal entries referencing the same entity placeholders as the current
+     * entry, with no valence filter. Used for the [ReframeStrategy.REFLECTION_CARD] path.
      */
-    private suspend fun runAnchorCall(displayText: String): String? = runCatching {
-        val raw = collectTokens(
-            orchestrator.process(buildAnchorPrompt(displayText), "anchor", ANCHOR_SYSTEM)
-        )
-        raw.ifBlank { null }
-    }.getOrNull()
+    private suspend fun fetchReflectionEvidence(maskedText: String): List<JournalEntry> {
+        val repo = searchRepository ?: return emptyList()
+        val placeholders = (
+            PLACEHOLDER_REGEX.findAll(maskedText) +
+            PLACE_PLACEHOLDER_REGEX.findAll(maskedText)
+        ).map { it.value }.toSet()
+        return repo.findRecentEntriesForEntities(placeholders)
+    }
 
     // ── Parsers ──────────────────────────────────────────────────────────────
 
@@ -425,21 +459,28 @@ class ReframingLoop(
         withContext(dispatcher) {
             runCatching {
                 val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
+                val displayText = buildDisplayText(maskedText, personById, placeById)
+
+                // Distortion gate: REFLECTION + no distortions → retrieval card, no LLM call.
+                if (strategy == ReframeStrategy.REFLECTION && diagnosis.distortions.isEmpty()) {
+                    val evidence = fetchReflectionEvidence(maskedText)
+                    val card = buildReflectionCard(displayText, evidence, personById, placeById)
+                    val cardFlow = kotlinx.coroutines.flow.flow<LlmResult> {
+                        emit(LlmResult.Token(card))
+                        emit(LlmResult.Complete)
+                    }
+                    return@runCatching Pair(ReframeStrategy.REFLECTION_CARD, cardFlow)
+                }
+
                 val baActivity = if (strategy == ReframeStrategy.BEHAVIORAL_ACTIVATION) {
                     pickBaActivity(maskedText)
                 } else null
                 val evidenceEntries = if (affectiveMap.valence < 0f) {
                     fetchEvidenceEntries(maskedText)
                 } else emptyList()
-                // Convert UUID placeholders to pseudonymous display names for the prompt only.
-                val displayText = buildDisplayText(maskedText, personById, placeById)
-
-                // Anchor call: one-sentence description grounds the reframe in what was literally written.
-                val anchorText = runAnchorCall(displayText)
-
                 val flow = orchestrator.process(
                     buildInterventionPrompt(
-                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries, anchorText
+                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -518,6 +559,12 @@ class ReframingLoop(
         REFLECTION,
         /** High-positive band (v ≥ AFFIRMATION_THRESHOLD): Strengths affirmation for clearly positive entries. */
         STRENGTHS_AFFIRMATION,
+        /**
+         * Undistorted REFLECTION entry — assembled from entity-anchored retrieval, no LLM generation.
+         * Returned when [strategy] == [REFLECTION] and distortions are empty; the [ReframeResult.reframe]
+         * string contains a retrieval card rather than generated text.
+         */
+        REFLECTION_CARD,
     }
 
     /**
@@ -560,10 +607,6 @@ class ReframingLoop(
             "No motivational cheerleading. " +
             "Write in first person singular only (I, me, my). Never use 'we', 'let's', or 'you'. " +
             "No markdown, no asterisks, no ellipses, no therapist language."
-
-        /** System prompt for the anchor pre-call that grounds Stage 3 in the entry's literal content. */
-        internal const val ANCHOR_SYSTEM =
-            "Summarize journal entries in one concrete sentence. No opinions, no interpretations."
 
         /**
          * Selects the intervention strategy based on circumplex quadrant and valence band.

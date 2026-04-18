@@ -58,7 +58,7 @@ class SearchRepositoryTest {
             override suspend fun deleteEntry(e: JournalEntry) = Unit
             override fun getEntries(): Flow<List<JournalEntry>> = flowOf(emptyList())
             override fun getEntryById(id: UUID): Flow<JournalEntry?> = flowOf(null)
-            override suspend fun getAllEntries(): List<JournalEntry> = emptyList()
+            override suspend fun getAllEntries(): List<JournalEntry> = entries
             override suspend fun updateReframedContent(id: String, content: String) = Unit
             override suspend fun deleteEntryById(id: UUID) = Unit
             override suspend fun getEntriesWithMinValence(minValence: Float): List<JournalEntry> =
@@ -173,5 +173,38 @@ class SearchRepositoryTest {
         )
         assertEquals("Only entries containing a matching placeholder should be returned", 1, results.size)
         assertEquals(matchingEntry.id, results[0].id)
+    }
+
+    @Test
+    fun `findRecentEntriesForEntities - returns entries regardless of valence`() = runTest {
+        val personId = UUID.randomUUID()
+        val placeholder = "[PERSON_$personId]"
+
+        val positive = entry(valence = 0.8f, content = "Good time with $placeholder.")
+        val neutral  = entry(valence = 0.1f, content = "Just hung out with $placeholder.")
+        val negative = entry(valence = -0.5f, content = "Tough chat with $placeholder.")
+
+        val repo = makeRepo(listOf(positive, neutral, negative))
+        val results = repo.findRecentEntriesForEntities(setOf(placeholder))
+        assertEquals("All valences should be included", 3, results.size)
+    }
+
+    @Test
+    fun `findRecentEntriesForEntities - empty placeholders returns no entries`() = runTest {
+        val personId = UUID.randomUUID()
+        val placeholder = "[PERSON_$personId]"
+        val repo = makeRepo(listOf(entry(valence = 0.8f, content = "Good time with $placeholder.")))
+        val results = repo.findRecentEntriesForEntities(emptySet())
+        assertEquals(0, results.size)
+    }
+
+    @Test
+    fun `findRecentEntriesForEntities - limit caps results`() = runTest {
+        val personId = UUID.randomUUID()
+        val placeholder = "[PERSON_$personId]"
+        val entries = (1..5).map { entry(valence = 0.5f, content = "Entry $it with $placeholder.") }
+        val repo = makeRepo(entries)
+        val results = repo.findRecentEntriesForEntities(setOf(placeholder), limit = 2)
+        assertEquals(2, results.size)
     }
 }

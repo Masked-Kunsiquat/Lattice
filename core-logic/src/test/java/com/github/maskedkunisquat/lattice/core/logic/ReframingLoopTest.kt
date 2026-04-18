@@ -604,33 +604,49 @@ class ReframingLoopTest {
         assertFalse(prompt.contains("Distortions present:"))
     }
 
+    // ── buildReflectionCard ──────────────────────────────────────────────────
+
     @Test
-    fun `buildInterventionPrompt - anchor line injected when anchorText provided`() {
-        val prompt = loop.buildInterventionPrompt(
-            maskedText = "Hanging out later.",
-            strategy = ReframingLoop.ReframeStrategy.REFLECTION,
-            distortions = emptyList(),
-            anchorText = "making plans to see a friend.",
+    fun `buildReflectionCard - uses evidence snippets when available`() {
+        val personId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+        val person = Person(id = personId, firstName = "Alice", lastName = null, nickname = null,
+            relationshipType = RelationshipType.FRIEND, vibeScore = 0f, isFavorite = false)
+        val evidence = JournalEntry(
+            id = UUID.randomUUID(), timestamp = 0L,
+            content = "Had a great lunch with [PERSON_00000000-0000-0000-0000-000000000001].",
+            valence = 0.8f, arousal = 0.2f, moodLabel = "SERENE", embedding = FloatArray(384),
         )
-        assertTrue(prompt.contains("The person is: making plans to see a friend."))
+        val card = loop.buildReflectionCard(
+            displayText = "Hanging out with @Alice later.",
+            evidenceEntries = listOf(evidence),
+            personById = mapOf(personId to person),
+            placeById = emptyMap(),
+        )
+        assertTrue(card.contains("@Alice"))
+        assertTrue(card.contains("Had a great lunch with @Alice"))
     }
 
     @Test
-    fun `buildInterventionPrompt - no anchor line when anchorText is null`() {
-        val prompt = loop.buildInterventionPrompt(
-            maskedText = "Hanging out later.",
-            strategy = ReframingLoop.ReframeStrategy.REFLECTION,
-            distortions = emptyList(),
-            anchorText = null,
+    fun `buildReflectionCard - falls back to template when no evidence`() {
+        val card = loop.buildReflectionCard(
+            displayText = "Hanging out with @Alice later.",
+            evidenceEntries = emptyList(),
+            personById = emptyMap(),
+            placeById = emptyMap(),
         )
-        assertFalse(prompt.contains("The person is:"))
+        assertTrue(card.contains("@Alice"))
+        assertTrue(card.contains("matters", ignoreCase = true))
     }
 
     @Test
-    fun `buildAnchorPrompt - contains entry text and instruction`() {
-        val prompt = loop.buildAnchorPrompt("meeting up with @JJ later.")
-        assertTrue(prompt.contains("meeting up with @JJ later."))
-        assertTrue(prompt.contains("one sentence", ignoreCase = true))
+    fun `buildReflectionCard - generic fallback when no entities in entry`() {
+        val card = loop.buildReflectionCard(
+            displayText = "Had a quiet evening.",
+            evidenceEntries = emptyList(),
+            personById = emptyMap(),
+            placeById = emptyMap(),
+        )
+        assertTrue(card.contains("these connections", ignoreCase = true))
     }
 
     // ── buildDisplayText ─────────────────────────────────────────────────────
