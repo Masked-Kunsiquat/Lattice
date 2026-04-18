@@ -8,7 +8,8 @@ import androidx.work.WorkManager
 import com.github.maskedkunisquat.lattice.core.logic.ModelDownloader
 
 /** Implements [ModelDownloader] by enqueueing a [ModelDownloadWorker] via WorkManager. */
-class WorkManagerModelDownloader(private val context: Context) : ModelDownloader {
+class WorkManagerModelDownloader(context: Context) : ModelDownloader {
+    private val context = context.applicationContext
 
     override fun enqueue(modelFile: String, url: String, sha256: String?) {
         val inputData = Data.Builder()

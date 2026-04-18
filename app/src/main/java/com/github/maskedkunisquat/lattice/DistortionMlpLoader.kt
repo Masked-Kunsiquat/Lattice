@@ -44,8 +44,15 @@ object DistortionMlpLoader {
             return null
         }
 
+        // Clean up any staging file left behind by a crash between manifest commit and rename.
+        context.filesDir.resolve("${manifest.headPath}.staged").delete()
+
         val weightFile = context.filesDir.resolve(manifest.headPath)
-        if (!weightFile.exists() || weightFile.length() != DistortionMlp.WEIGHT_BYTES.toLong()) return null
+        if (!weightFile.exists() || weightFile.length() != DistortionMlp.WEIGHT_BYTES.toLong()) {
+            weightFile.delete()
+            DistortionManifestStore.reset(prefs)
+            return null
+        }
         return runCatching { DistortionMlp.loadWeights(weightFile, manifest.thresholds) }.getOrElse { e ->
             Log.e(TAG, "Failed to load weights — deleting stale head", e)
             weightFile.delete()

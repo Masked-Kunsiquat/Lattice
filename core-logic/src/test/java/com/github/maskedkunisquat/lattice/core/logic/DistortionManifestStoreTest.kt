@@ -2,6 +2,7 @@ package com.github.maskedkunisquat.lattice.core.logic
 
 import com.github.maskedkunisquat.lattice.core.logic.DistortionManifestStore.fromJson
 import com.github.maskedkunisquat.lattice.core.logic.DistortionManifestStore.toJson
+import org.json.JSONException
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -133,7 +134,7 @@ class DistortionManifestStoreTest {
         assertEquals("v2", manifest.corpusVersion)
     }
 
-    @Test(expected = Exception::class)
+    @Test(expected = JSONException::class)
     fun `fromJson throws on invalid JSON`() {
         fromJson("not-json")
     }

@@ -20,9 +20,14 @@ import com.github.maskedkunisquat.lattice.core.logic.sha256Hex
 class DistortionCheckpointWriter(private val context: Context) : CheckpointWriter {
 
     override fun write(mlp: DistortionMlp, trainedOnCount: Int, corpusVersion: String) {
-        val weightFile = context.filesDir.resolve(DistortionMlp.WEIGHT_FILE)
-        mlp.saveWeights(weightFile)
-        Log.i(TAG, "Weights saved to ${weightFile.absolutePath}")
+        val weightFile  = context.filesDir.resolve(DistortionMlp.WEIGHT_FILE)
+        val stagingFile = context.filesDir.resolve("${DistortionMlp.WEIGHT_FILE}.staged")
+
+        // Write weights to a staging path first so the final path is only populated
+        // after the manifest has been committed — prevents the manifest and weights
+        // from being in an inconsistent state if the process dies mid-write.
+        mlp.saveWeights(stagingFile)
+        Log.i(TAG, "Weights staged to ${stagingFile.absolutePath}")
 
         val modelHash = "sha256:${context.assets.open(DistortionMlp.EMBEDDING_ASSET).use { sha256Hex(it) }}"
         Log.i(TAG, "Embedding asset hashed: $modelHash")
@@ -40,9 +45,16 @@ class DistortionCheckpointWriter(private val context: Context) : CheckpointWrite
         val prefs = context.getSharedPreferences(DistortionManifestStore.PREFS_NAME, Context.MODE_PRIVATE)
         val committed = DistortionManifestStore.write(prefs, manifest)
         if (!committed) {
+            stagingFile.delete()
             throw IllegalStateException("DistortionManifest write failed — SharedPreferences.commit() returned false")
         }
-        Log.i(TAG, "Manifest committed (trainedOn=$trainedOnCount, corpus=$corpusVersion)")
+
+        // Manifest committed — promote staging file to the final weight path.
+        if (!stagingFile.renameTo(weightFile)) {
+            stagingFile.copyTo(weightFile, overwrite = true)
+            stagingFile.delete()
+        }
+        Log.i(TAG, "Manifest committed and weights finalised (trainedOn=$trainedOnCount, corpus=$corpusVersion)")
     }
 
     companion object {

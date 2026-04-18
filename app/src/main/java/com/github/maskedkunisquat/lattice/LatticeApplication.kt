@@ -19,7 +19,6 @@ import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
-import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.NanoProvider
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
@@ -35,6 +34,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import androidx.room.withTransaction
 import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 import java.io.File
@@ -74,9 +74,9 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
 
     val peopleRepository by lazy {
         PeopleRepository(
-            database = database,
             personDao = database.personDao(),
             phoneNumberDao = database.phoneNumberDao(),
+            transact = { database.withTransaction(it) },
         )
     }
 

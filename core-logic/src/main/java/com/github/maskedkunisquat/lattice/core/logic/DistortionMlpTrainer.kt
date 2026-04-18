@@ -57,8 +57,15 @@ class DistortionMlpTrainer(
         override fun debug(tag: String, msg: String) = Unit
         override fun info(tag: String, msg: String) = Unit
         override fun warn(tag: String, msg: String, throwable: Throwable?) = Unit
+        override fun error(tag: String, msg: String, throwable: Throwable?) = Unit
     },
 ) {
+    init {
+        require(lr.isFinite() && lr > 0f) { "lr must be finite and > 0, was $lr" }
+        require(weightDecay.isFinite() && weightDecay >= 0f) { "weightDecay must be finite and >= 0, was $weightDecay" }
+        require(epochs > 0) { "epochs must be > 0, was $epochs" }
+    }
+
     private val beta1   = 0.9f
     private val beta2   = 0.999f
     private val epsilon = 1e-8f

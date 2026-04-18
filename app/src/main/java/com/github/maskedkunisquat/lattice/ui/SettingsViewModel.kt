@@ -15,8 +15,8 @@ import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
 import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
+import com.github.maskedkunisquat.lattice.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.ModelDownloadWorker
-import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 import com.github.maskedkunisquat.lattice.core.logic.toAffectiveManifest

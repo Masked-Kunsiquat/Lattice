@@ -8,8 +8,8 @@ package com.github.maskedkunisquat.lattice.core.logic
  * - Hashing the embedding asset to detect model drift.
  * - Persisting a [DistortionManifest] durably.
  *
- * The Android-specific implementation lives in `:app` and uses [Context.filesDir],
- * [Context.assets], and [SharedPreferences]. Core-logic code never imports Android APIs.
+ * The Android-specific implementation lives in `:app` and uses `Context.filesDir`,
+ * `Context.assets`, and `SharedPreferences`. Core-logic code never imports Android APIs.
  *
  * @throws Exception on any I/O or persistence failure — callers must not swallow this.
  */

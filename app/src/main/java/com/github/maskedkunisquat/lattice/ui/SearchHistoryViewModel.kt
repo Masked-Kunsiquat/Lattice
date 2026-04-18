@@ -131,11 +131,17 @@ class SearchHistoryViewModel(
 
         // Semantic entry search — debounced 300 ms, re-launched (and previous cancelled) on each keystroke.
         semanticJob = viewModelScope.launch {
+            val localQuery = query
             try {
                 delay(300)
                 _uiState.update { it.copy(isSemanticLoading = true) }
-                val results = searchRepository.findSimilarEntries(query, limit = 20)
-                _uiState.update { it.copy(entryResults = results, isSemanticLoading = false) }
+                val results = searchRepository.findSimilarEntries(localQuery, limit = 20)
+                // Guard against a stale result landing after the query has changed.
+                if (_uiState.value.query == localQuery) {
+                    _uiState.update { it.copy(entryResults = results, isSemanticLoading = false) }
+                } else {
+                    _uiState.update { it.copy(isSemanticLoading = false) }
+                }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.update { it.copy(isSemanticLoading = false) }
@@ -144,12 +150,13 @@ class SearchHistoryViewModel(
 
         // LIKE searches for people / places / tags — debounced 150 ms.
         likeJob = viewModelScope.launch {
+            val localQuery = query
             try {
                 delay(150)
                 _uiState.update { it.copy(isLikeLoading = true) }
-                val people = peopleRepository.searchByName(query)
-                val places = placeRepository.searchPlaces(query)
-                val tags = tagRepository.searchTags(query)
+                val people = peopleRepository.searchByName(localQuery)
+                val places = placeRepository.searchPlaces(localQuery)
+                val tags = tagRepository.searchTags(localQuery)
 
                 // Entry counts from lightweight ref snapshot; avoids loading content/embeddings.
                 val entryRefs = entryRefsState.value
@@ -159,13 +166,18 @@ class SearchHistoryViewModel(
                 val tagResults = tags.map { tag ->
                     TagResult(tag, entryRefs.count { tag.id in it.tagIds })
                 }
-                _uiState.update {
-                    it.copy(
-                        peopleResults = people,
-                        placeResults = placeResults,
-                        tagResults = tagResults,
-                        isLikeLoading = false,
-                    )
+                // Guard against a stale result landing after the query has changed.
+                if (_uiState.value.query == localQuery) {
+                    _uiState.update {
+                        it.copy(
+                            peopleResults = people,
+                            placeResults = placeResults,
+                            tagResults = tagResults,
+                            isLikeLoading = false,
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(isLikeLoading = false) }
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e

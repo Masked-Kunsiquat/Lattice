@@ -145,7 +145,9 @@ fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
                     // result before following it (guards against open-redirect exploitation).
                     val resolved = java.net.URI(location).resolve(raw)
                     val originalHost = java.net.URI(url).host
-                    if (resolved.scheme != "https" || (resolved.host != originalHost && resolved.host?.endsWith(".huggingface.co") != true)) {
+                    if (resolved.scheme != "https" ||
+                        resolved.userInfo != null ||
+                        (resolved.host != originalHost && resolved.host?.endsWith(".huggingface.co") != true)) {
                         throw GradleException(
                             "Redirect to untrusted location '${resolved}' rejected (expected https://$originalHost or *.huggingface.co)"
                         )

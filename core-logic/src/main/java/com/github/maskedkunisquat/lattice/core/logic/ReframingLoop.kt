@@ -39,6 +39,7 @@ class ReframingLoop(
         override fun debug(tag: String, msg: String) = Unit
         override fun info(tag: String, msg: String) = Unit
         override fun warn(tag: String, msg: String, throwable: Throwable?) = Unit
+        override fun error(tag: String, msg: String, throwable: Throwable?) = Unit
     },
 ) {
 
@@ -238,7 +239,7 @@ class ReframingLoop(
         "Respond with only this line (no explanation, no markdown):\n" +
         "DISTORTIONS: <comma-separated names from the list, or NONE>\n\n" +
         "Text: $maskedText\n\n" +
-        "DISTORTIONS:"
+        "FINAL_DISTORTIONS:"
 
 
     internal fun buildInterventionPrompt(
@@ -323,16 +324,20 @@ class ReframingLoop(
      * any greedy inference — callers should treat a missing sentinel as an unparseable response.
      */
     internal fun parseDotOutput(raw: String): DiagnosisResult {
-        val sentinelLine = raw.lines()
-            .lastOrNull { it.contains("DISTORTIONS:", ignoreCase = true)  }
+        // Prefer the unique FINAL_DISTORTIONS: sentinel (avoids confusion with the
+        // instruction-format line); fall back to legacy DISTORTIONS: for robustness.
+        val lines = raw.lines()
+        val sentinelLine = lines.lastOrNull { it.contains("FINAL_DISTORTIONS:", ignoreCase = true) }
+            ?: lines.lastOrNull { it.contains("DISTORTIONS:", ignoreCase = true) }
 
         if (sentinelLine == null) {
             logger.debug(TAG, "parseDotOutput: no sentinel in output — returning empty distortions")
             return DiagnosisResult(distortions = emptyList(), reasoning = raw)
         }
 
-        val colonIdx = sentinelLine.indexOf("DISTORTIONS:", ignoreCase = true)
-        val csv = sentinelLine.substring(colonIdx + "DISTORTIONS:".length).trim()
+        val sentinel = if (sentinelLine.contains("FINAL_DISTORTIONS:", ignoreCase = true)) "FINAL_DISTORTIONS:" else "DISTORTIONS:"
+        val colonIdx = sentinelLine.indexOf(sentinel, ignoreCase = true)
+        val csv = sentinelLine.substring(colonIdx + sentinel.length).trim()
 
         if (csv.equals("NONE", ignoreCase = true) || csv.isEmpty()) {
             return DiagnosisResult(distortions = emptyList(), reasoning = raw)

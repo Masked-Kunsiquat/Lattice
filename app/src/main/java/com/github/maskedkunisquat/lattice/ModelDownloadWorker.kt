@@ -110,6 +110,7 @@ class ModelDownloadWorker(
             }
             Result.success()
         } catch (e: CancellationException) {
+            tmp.delete()
             throw e
         } catch (e: PermanentDownloadException) {
             Log.e(TAG, "Permanent download failure — will not retry: ${e.message}")

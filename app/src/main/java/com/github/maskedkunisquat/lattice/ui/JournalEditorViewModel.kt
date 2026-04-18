@@ -309,12 +309,12 @@ class JournalEditorViewModel(
             state.resolvedPersons.entries
                 .sortedByDescending { it.key.length }
                 .forEach { (displayName, uuid) ->
-                    masked = masked.replace(Regex("@${Regex.escape(displayName)}(?!\\w)"), "[PERSON_$uuid]")
+                    masked = masked.replace(Regex("@${Regex.escape(displayName)}(?![\\p{L}\\p{N}_])"), "[PERSON_$uuid]")
                 }
             state.resolvedPlaces.entries
                 .sortedByDescending { it.key.length }
                 .forEach { (name, uuid) ->
-                    masked = masked.replace(Regex("!${Regex.escape(name)}(?!\\w)"), "[PLACE_$uuid]")
+                    masked = masked.replace(Regex("!${Regex.escape(name)}(?![\\p{L}\\p{N}_])"), "[PLACE_$uuid]")
                 }
             masked
         }

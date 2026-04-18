@@ -11,7 +11,7 @@ import com.github.maskedkunisquat.lattice.core.data.seed.SeedPersona
 import com.github.maskedkunisquat.lattice.core.logic.CognitiveDistortion
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
-import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
+import com.github.maskedkunisquat.lattice.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.NanoProvider
 import com.github.maskedkunisquat.lattice.core.logic.PrivacyLevel

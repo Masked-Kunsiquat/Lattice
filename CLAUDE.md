@@ -94,7 +94,7 @@ KeyProvider → LatticeDatabase (SQLCipher, encrypted) → DAOs
                                                       ↓
 SettingsRepository (DataStore) ──────────────────────→ LlmOrchestrator → ReframingLoop
 EmbeddingProvider (TFLite) ───────────────────────────↗
-LocalFallbackProvider (MediaPipe, background init) ───↗
+LocalFallbackProvider (LiteRT-LM, background init) ───↗
 CloudProvider (Retrofit) ─────────────────────────────↗
 JournalRepository / SearchRepository ────────────────→ ReframingLoop
 ```
@@ -119,7 +119,7 @@ PII masking is enforced at every system boundary:
 Three-tier, local-first:
 
 1. **Nano** — Gemini on-device via Google AICore (API 35+, checked at runtime)
-2. **LocalFallback** — Gemma 3 1B Instruct via MediaPipe Tasks GenAI (all APIs, GPU + CPU fallback)
+2. **LocalFallback** — Gemma 3 1B Instruct via LiteRT-LM Engine (all APIs — NPU/GPU/CPU backends)
 3. **Cloud** — Remote API via Retrofit (disabled by default, requires explicit user opt-in)
 
 When cloud is selected, `privacyState` transitions to `PrivacyLevel.CloudTransit` (amber UI border) and a `TransitEvent` is logged — **the prompt is never persisted**. A `SecurityException` blocks cloud dispatch if raw PII is detected in the prompt.

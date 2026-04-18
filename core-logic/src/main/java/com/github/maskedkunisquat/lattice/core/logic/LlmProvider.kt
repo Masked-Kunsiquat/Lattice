@@ -6,9 +6,9 @@ import kotlinx.coroutines.flow.Flow
  * Contract for an LLM inference backend.
  *
  * Three tiers are implemented:
- * - [NanoProvider]        — Gemini Nano via Google AICore (on-device, API 35+)
- * - [LocalFallbackProvider] — Gemma 3 1B via LiteRT-LM (on-device, all API levels)
- * - [CloudProvider]       — Remote API (off-device, DISABLED by default)
+ * - [NanoProvider]     — Gemini Nano via Google AICore (on-device, API 35+)
+ * - local fallback provider — Gemma 3 1B via LiteRT-LM (on-device, all API levels); see [LocalModelProvider]
+ * - [CloudProvider]    — Remote API (off-device, DISABLED by default)
  *
  * The [LlmOrchestrator] selects among these based on hardware availability and
  * the user's explicit consent to cloud routing.

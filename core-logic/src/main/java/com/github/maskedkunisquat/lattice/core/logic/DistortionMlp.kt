@@ -4,7 +4,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.file.AtomicMoveNotSupportedException
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.math.exp
@@ -107,7 +107,7 @@ class DistortionMlp(
             }
             try {
                 Files.move(tmpFile.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE)
-            } catch (e: AtomicMoveNotSupportedException) {
+            } catch (e: IOException) {
                 Files.move(tmpFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
         } catch (e: Exception) {

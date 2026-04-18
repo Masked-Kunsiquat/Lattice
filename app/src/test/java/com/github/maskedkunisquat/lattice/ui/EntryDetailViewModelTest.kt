@@ -107,6 +107,8 @@ class EntryDetailViewModelTest {
         override suspend fun deleteEntryById(id: UUID) = Unit
         override suspend fun getLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): List<JournalEntry> = emptyList()
         override suspend fun countLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): Int = 0
+        override fun getEntriesForPerson(personId: UUID): Flow<List<JournalEntry>> = flowOf(emptyList())
+        override fun getEntryRefs(): Flow<List<com.github.maskedkunisquat.lattice.core.data.model.JournalEntryRef>> = flowOf(emptyList())
     }
 
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -129,12 +131,12 @@ class EntryDetailViewModelTest {
         val unavailable = object : LlmProvider {
             override val id = "none"
             override suspend fun isAvailable() = false
-            override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
         }
         val fakeLocal = object : LlmProvider {
             override val id = "fake_local"
             override suspend fun isAvailable() = true
-            override fun process(prompt: String): Flow<LlmResult> =
+            override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> =
                 (providerTokens.map { LlmResult.Token(it) } + LlmResult.Complete).asFlow()
         }
         val orchestrator = LlmOrchestrator(
@@ -212,8 +214,9 @@ class EntryDetailViewModelTest {
             vm.reframeState.value is ReframeState.Done,
         )
 
-        // Accept with the same text the model produced.
-        vm.acceptReframe("Original reframe.")
+        // Accept with the exact text the model produced — no user edits.
+        val modelOutput = (vm.reframeState.value as ReframeState.Done).text
+        vm.acceptReframe(modelOutput)
         advanceUntilIdle()
 
         assertFalse(

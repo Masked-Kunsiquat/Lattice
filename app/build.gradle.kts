@@ -80,6 +80,8 @@ dependencies {
     implementation(libs.moshi.kotlin)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.litertlm.android)
+    implementation(libs.litert.android)
     implementation(libs.androidx.biometric)
     implementation(libs.material)
     testImplementation(libs.junit)

@@ -1,7 +1,5 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import androidx.room.withTransaction
-import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PhoneNumberDao
 import com.github.maskedkunisquat.lattice.core.data.model.Person
@@ -20,14 +18,14 @@ data class PersonWithPhones(
 )
 
 class PeopleRepository(
-    private val database: LatticeDatabase,
     private val personDao: PersonDao,
-    private val phoneNumberDao: PhoneNumberDao
-) {
+    private val phoneNumberDao: PhoneNumberDao,
     /**
-     * Returns a reactive stream of all people with their associated phone numbers.
-     * Fulfills Directive 1.2 (Local-First Persistence).
+     * Executes [block] inside an atomic transaction. Callers provide this at construction
+     * time, typically as `{ database.withTransaction(it) }`. Unit tests can pass `{ it() }`.
      */
+    private val transact: suspend (block: suspend () -> Unit) -> Unit,
+) {
     /**
      * Returns a reactive stream for a single person with their phone numbers.
      * Emits null when the person does not exist (e.g., after deletion).
@@ -41,13 +39,9 @@ class PeopleRepository(
         }
 
     fun getPeople(): Flow<List<PersonWithPhones>> {
-        // We combine the flows to create the aggregate reactive model
         return combine(
             personDao.getPersons(),
-            // This is a simple implementation; for very large datasets, 
-            // a custom Room @Relation or JOIN would be more performant.
-            // But for a personal lattice, this is clean and reactive.
-            phoneNumberDao.getAllPhoneNumbers() 
+            phoneNumberDao.getAllPhoneNumbers()
         ) { people, allPhones ->
             people.map { person ->
                 PersonWithPhones(
@@ -59,7 +53,7 @@ class PeopleRepository(
     }
 
     suspend fun savePerson(person: Person, phoneNumbers: List<PhoneNumber>) {
-        database.withTransaction {
+        transact {
             personDao.insertPerson(person)
             phoneNumberDao.deleteByPersonId(person.id)
             phoneNumberDao.insertPhoneNumbers(phoneNumbers)

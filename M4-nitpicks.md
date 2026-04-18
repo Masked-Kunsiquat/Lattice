@@ -1,20 +1,8 @@
 ## Running commit message
 
-```
-fix: address nitpick findings from m4-stability (part 1)
+```text
+fix: address nitpick findings from m4-stability (part 2)
 
-- JournalEditorScreen: remove dead if/else around COPYING_MODEL progress indicator;
-  both branches were identical — replaced with single LinearProgressIndicator
-- JournalEditorScreen: replace multi-line placeholder with concise “What’s on your
-  mind?”; move @name/#tag/!place legend to OutlinedTextField supportingText slot
-- DistortionCorpusMapper.toLabels: return BooleanArray? (null for blank or
-  unrecognised dominant); “No Distortion” still returns all-false (success path);
-  update tests to !! and add null-dominant / null-unrecognised cases
-- MainActivity: move notification permission LaunchedEffect inside the unlocked
-  branch; add checkSelfPermission guard; persist “asked_once_notifications” in
-  SharedPreferences to prevent re-prompting after denial
-- LlmOrchestrator.process KDoc: document systemInstruction as developer-authored;
-  PII gate on prompt only is intentional by design
 ```
 
 ---
@@ -30,7 +18,7 @@ fix: address nitpick findings from m4-stability (part 1)
 [x] core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/DistortionCorpusMapper.kt-58-64 (1)
 58-64: Fixed — toLabels now returns BooleanArray? (null for unmapped/blank dominant).
 
-----
+---
 
 [x] core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/JournalRepository.kt-38-49 (1)
 38-49: Already fixed — getEntriesForPerson unmasks both content and reframedContent.
