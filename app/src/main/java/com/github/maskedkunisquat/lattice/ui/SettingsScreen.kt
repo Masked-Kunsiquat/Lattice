@@ -1,9 +1,17 @@
 package com.github.maskedkunisquat.lattice.ui
 
-import kotlinx.coroutines.flow.StateFlow
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,25 +25,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -43,38 +52,30 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
-import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
-import android.Manifest
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import android.util.Log
-import androidx.core.content.ContextCompat
-import androidx.work.WorkInfo
-import com.github.maskedkunisquat.lattice.BuildConfig
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
+import androidx.work.WorkInfo
+import com.github.maskedkunisquat.lattice.BuildConfig
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
+import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.ui.SettingsViewModel.Companion.CLOUD_NONE_PROVIDER
 
 private val CLOUD_PROVIDERS = listOf(
@@ -82,38 +83,110 @@ private val CLOUD_PROVIDERS = listOf(
     "cloud_claude" to "Claude (Cloud)",
 )
 
+// ── Top-level settings screen ─────────────────────────────────────────────────
+
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onNavigateToAudit: () -> Unit,
-    onNavigateToActivities: () -> Unit,
+    onNavigateToInference: () -> Unit,
+    onNavigateToPersonalization: () -> Unit,
+    onNavigateToPrivacy: () -> Unit,
     onNavigateToDebugSeed: () -> Unit = {},
 ) {
+    Scaffold { innerPadding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            contentPadding = PaddingValues(bottom = 24.dp),
+        ) {
+            item { SectionHeader("Inference") }
+            item {
+                ListItem(
+                    headlineContent = { Text("Local model & cloud") },
+                    supportingContent = { Text("On-device Gemma 3 1B and cloud processing settings") },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onNavigateToInference),
+                )
+            }
+
+            item { SectionHeader("Personalization") }
+            item {
+                ListItem(
+                    headlineContent = { Text("Mood learning & activities") },
+                    supportingContent = { Text("On-device mood adaptation and behavioral activation") },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onNavigateToPersonalization),
+                )
+            }
+
+            item { SectionHeader("Privacy & Data") }
+            item {
+                ListItem(
+                    headlineContent = { Text("Audit log & export") },
+                    supportingContent = { Text("Review data transfers and export your journal") },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onNavigateToPrivacy),
+                )
+            }
+
+            item { SectionHeader("About") }
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    AboutRow("App version", "1.0")
+                    AboutRow("Schema version", ExportManager.SCHEMA_VERSION)
+                    AboutRow("Embedding model", "snowflake-arctic-embed-xs")
+                }
+            }
+
+            if (BuildConfig.DEBUG) {
+                item { SectionHeader("Debug") }
+                item {
+                    ListItem(
+                        headlineContent = { Text("Seed Data") },
+                        supportingContent = { Text("Inject and clear persona datasets") },
+                        trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                        modifier = Modifier.clickable(onClick = onNavigateToDebugSeed),
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Inference sub-screen ──────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InferenceSettingsScreen(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val activities by viewModel.activities.collectAsStateWithLifecycle()
     val showCloudDialog by viewModel.showCloudEnableDialog.collectAsStateWithLifecycle()
     val apiKeySaved by viewModel.apiKeySaved.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val downloadWorkInfo by viewModel.downloadWorkInfo.collectAsStateWithLifecycle(null)
-    val manifestState: AffectiveManifest? by viewModel.manifest.collectAsStateWithLifecycle()
-    val isResetting by viewModel.isResetting.collectAsStateWithLifecycle()
 
-    val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) {
-        viewModel.snackbarMessage.collect { msg -> snackbarHostState.showSnackbar(msg) }
+    // Request POST_NOTIFICATIONS before enqueueing the download worker so the
+    // foreground service progress notification is permitted. Download proceeds
+    // regardless of the outcome — in-app progress is always visible.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        viewModel.downloadModel()
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.exportShareIntent.collect { intent ->
-            try {
-                context.startActivity(intent)
-            } catch (e: ActivityNotFoundException) {
-                Log.w("SettingsScreen", "No app available to handle export intent", e)
-                snackbarHostState.showSnackbar("No app found to open the export file")
-            }
+    val onDownload: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.downloadModel()
         }
     }
 
@@ -124,12 +197,33 @@ fun SettingsScreen(
         )
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { innerPadding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Inference") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            // ── Sovereignty ──────────────────────────────────────────────────
+            item { SectionHeader("Local Model") }
+            item {
+                LocalModelSection(
+                    modelLoadState = modelLoadState,
+                    downloadProgress = downloadProgress,
+                    downloadWorkInfo = downloadWorkInfo,
+                    onDownload = onDownload,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+
             item { SectionHeader("Sovereignty") }
             item {
                 SovereigntySection(
@@ -144,21 +238,41 @@ fun SettingsScreen(
                     onApiKeyClear = viewModel::clearApiKey,
                 )
             }
+        }
+    }
+}
 
-            // ── Local Model ──────────────────────────────────────────────────
-            item { SectionHeader("Local Model") }
-            item {
-                LocalModelSection(
-                    modelLoadState = modelLoadState,
-                    downloadProgress = downloadProgress,
-                    downloadWorkInfo = downloadWorkInfo,
-                    onDownload = viewModel::downloadModel,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
+// ── Personalization sub-screen ────────────────────────────────────────────────
 
-            // ── Personalization ──────────────────────────────────────────────
-            item { SectionHeader("Personalization") }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PersonalizationSettingsScreen(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+    onNavigateToActivities: () -> Unit,
+) {
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val manifestState by viewModel.manifest.collectAsStateWithLifecycle()
+    val isResetting by viewModel.isResetting.collectAsStateWithLifecycle()
+    val activities by viewModel.activities.collectAsStateWithLifecycle()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Personalization") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            contentPadding = PaddingValues(bottom = 24.dp),
+        ) {
+            item { SectionHeader("Mood Learning") }
             item {
                 PersonalizationSection(
                     personalizationEnabled = settings.personalizationEnabled,
@@ -169,18 +283,6 @@ fun SettingsScreen(
                 )
             }
 
-            // ── Audit Trail ──────────────────────────────────────────────────
-            item { SectionHeader("Audit Trail") }
-            item {
-                ListItem(
-                    headlineContent = { Text("View Audit Log") },
-                    supportingContent = { Text("See when data has left this device") },
-                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
-                    modifier = Modifier.clickable(onClick = onNavigateToAudit),
-                )
-            }
-
-            // ── Behavioral Activation ────────────────────────────────────────
             item { SectionHeader("Behavioral Activation") }
             item {
                 val activityCount = activities.size
@@ -199,8 +301,64 @@ fun SettingsScreen(
                     modifier = Modifier.clickable(onClick = onNavigateToActivities),
                 )
             }
+        }
+    }
+}
 
-            // ── Data Portability ─────────────────────────────────────────────
+// ── Privacy & Data sub-screen ─────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PrivacyDataSettingsScreen(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+    onNavigateToAudit: () -> Unit,
+) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.snackbarMessage.collect { msg -> snackbarHostState.showSnackbar(msg) }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.exportShareIntent.collect { intent ->
+            try {
+                context.startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                Log.w("SettingsScreen", "No app available to handle export intent", e)
+                snackbarHostState.showSnackbar("No app found to open the export file")
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Privacy & Data") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            contentPadding = PaddingValues(bottom = 24.dp),
+        ) {
+            item { SectionHeader("Audit Trail") }
+            item {
+                ListItem(
+                    headlineContent = { Text("View Audit Log") },
+                    supportingContent = { Text("See when data has left this device") },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onNavigateToAudit),
+                )
+            }
+
             item { SectionHeader("Data Portability") }
             item {
                 Button(
@@ -214,34 +372,11 @@ fun SettingsScreen(
                     Text("Export Journal")
                 }
             }
-
-            // ── Debug (debug builds only) ────────────────────────────────────
-            if (BuildConfig.DEBUG) {
-                item { SectionHeader("Debug") }
-                item {
-                    ListItem(
-                        headlineContent = { Text("Seed Data") },
-                        supportingContent = { Text("Inject and clear persona datasets") },
-                        trailingContent = {
-                            Icon(Icons.Default.ChevronRight, contentDescription = null)
-                        },
-                        modifier = Modifier.clickable(onClick = onNavigateToDebugSeed),
-                    )
-                }
-            }
-
-            // ── About ────────────────────────────────────────────────────────
-            item { SectionHeader("About") }
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    AboutRow("App version", "1.0")
-                    AboutRow("Schema version", ExportManager.SCHEMA_VERSION)
-                    AboutRow("Embedding model", "snowflake-arctic-embed-xs")
-                }
-            }
         }
     }
 }
+
+// ── Local Model section ───────────────────────────────────────────────────────
 
 @Composable
 private fun LocalModelSection(
@@ -263,19 +398,20 @@ private fun LocalModelSection(
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val statusText = when {
-            isDownloading -> "Downloading model… ${(downloadProgress * 100).toInt()}%"
-            modelLoadState == ModelLoadState.IDLE -> "Not started"
+            isDownloading -> "Downloading… ${(downloadProgress * 100).toInt()}%"
+            modelLoadState == ModelLoadState.IDLE -> "Not downloaded"
             modelLoadState == ModelLoadState.COPYING_MODEL -> "Copying model…"
-            modelLoadState == ModelLoadState.LOADING_SESSION -> "Loading model session…"
+            modelLoadState == ModelLoadState.LOADING_SESSION -> "Loading session…"
             modelLoadState == ModelLoadState.READY -> "Ready"
-            modelLoadState == ModelLoadState.ERROR -> "Not found / Failed to load"
-            else -> "Not started"
+            modelLoadState == ModelLoadState.ERROR -> "Load failed"
+            else -> "Not downloaded"
         }
-        val statusColor = when (modelLoadState) {
-            ModelLoadState.READY  -> Color(0xFF2E7D32)
-            ModelLoadState.ERROR  -> Color(0xFFB00020)
-            else                  -> MaterialTheme.colorScheme.onSurfaceVariant
-        }
+        // Only READY gets a distinct color; all other states use the neutral variant.
+        val statusColor = if (modelLoadState == ModelLoadState.READY)
+            Color(0xFF2E7D32)
+        else
+            MaterialTheme.colorScheme.onSurfaceVariant
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -339,9 +475,7 @@ private fun LocalModelSection(
                 }
             }
             modelLoadState == ModelLoadState.COPYING_MODEL -> {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
                     "Preparing model files. Please wait.",
                     style = MaterialTheme.typography.bodySmall,
@@ -358,9 +492,16 @@ private fun LocalModelSection(
             }
             modelLoadState == ModelLoadState.ERROR -> {
                 Text(
-                    "The model file is missing or corrupted. You can download it now (689MB) or push it via ADB.",
+                    "The model file failed to load. Download to try again (~700 MB).",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            modelLoadState == ModelLoadState.IDLE -> {
+                Text(
+                    "Download to enable local inference (~700 MB). Runs entirely on-device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             else -> Unit
@@ -429,8 +570,6 @@ private fun PersonalizationSection(
         AboutRow("Trained on", "$trainedCount corrections")
         AboutRow("Last updated", formatRelativeTimestamp(lastTimestamp))
 
-        // 3.6-g: only show the reset button when there is actually something to reset,
-        // and disable it while a reset is already in progress (double-tap guard).
         if (trainedCount > 0 || isResetting) {
             Spacer(Modifier.height(8.dp))
             TextButton(
@@ -451,11 +590,11 @@ private fun formatRelativeTimestamp(timestamp: Long): String {
     if (timestamp == 0L) return "Never"
     val diff = System.currentTimeMillis() - timestamp
     return when {
-        diff < 60_000L              -> "Just now"
-        diff < 3_600_000L           -> "${diff / 60_000} min ago"
-        diff < 86_400_000L          -> "${diff / 3_600_000} hr ago"
-        diff < 2 * 86_400_000L      -> "Yesterday"
-        else                        -> (diff / 86_400_000).let { d -> if (d == 1L) "1 day ago" else "$d days ago" }
+        diff < 60_000L         -> "Just now"
+        diff < 3_600_000L      -> "${diff / 60_000} min ago"
+        diff < 86_400_000L     -> "${diff / 3_600_000} hr ago"
+        diff < 2 * 86_400_000L -> "Yesterday"
+        else                   -> (diff / 86_400_000).let { d -> if (d == 1L) "1 day ago" else "$d days ago" }
     }
 }
 
@@ -479,8 +618,11 @@ private fun AboutRow(label: String, value: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
-        Text(value, style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -640,8 +782,7 @@ private fun CloudEnableWarningDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Icon(Icons.Default.Warning, contentDescription = null,
-                tint = Color(0xFFF59E0B))
+            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFF59E0B))
         },
         title = { Text("Enable cloud processing?") },
         text = {

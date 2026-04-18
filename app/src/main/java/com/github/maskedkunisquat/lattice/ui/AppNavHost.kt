@@ -181,9 +181,48 @@ fun AppNavHost(app: LatticeApplication) {
                 Box(Modifier.fillMaxSize().testTag("screen:settings")) {
                     SettingsScreen(
                         viewModel = vm,
-                        onNavigateToAudit = { navController.navigate("settings/audit") },
-                        onNavigateToActivities = { navController.navigate("settings/activities") },
+                        onNavigateToInference = { navController.navigate("settings/inference") },
+                        onNavigateToPersonalization = { navController.navigate("settings/personalization") },
+                        onNavigateToPrivacy = { navController.navigate("settings/privacy") },
                         onNavigateToDebugSeed = { navController.navigate("settings/debug/seed") },
+                    )
+                }
+            }
+
+            composable("settings/inference") {
+                val vm: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:settings-inference")) {
+                    InferenceSettingsScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+            }
+
+            composable("settings/personalization") {
+                val vm: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:settings-personalization")) {
+                    PersonalizationSettingsScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                        onNavigateToActivities = { navController.navigate("settings/activities") },
+                    )
+                }
+            }
+
+            composable("settings/privacy") {
+                val vm: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:settings-privacy")) {
+                    PrivacyDataSettingsScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                        onNavigateToAudit = { navController.navigate("settings/audit") },
                     )
                 }
             }

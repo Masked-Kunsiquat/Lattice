@@ -113,16 +113,16 @@ Add a fourth tab between History and Settings:
 ### Entry detail & history
 
 - [x] **Journal entry editing** — `EntryDetailScreen` has only Reframe and Delete; no way to correct typos or update thoughts. Add an Edit action that opens the entry in `JournalEditorScreen` pre-populated with existing content and resolved mentions. Decide whether edits invalidate the existing embedding (re-embed on save) and how they interact with saved `reframedContent`.
-- [ ] **PII / mention highlighting** — person, place, and tag tokens are unmasked to plain text with no visual distinction. Add colored inline chips or highlights for resolved tokens in `JournalHistoryScreen` entry snippets and the `EntryDetailScreen` content body.
+- [ ] **PII / mention highlighting** — person, place, and tag tokens are unmasked to plain text with no visual distinction. Add colored inline chips or highlights for resolved tokens in `JournalHistoryScreen` entry snippets and the `EntryDetailScreen` content body. *(grouped with Visual Polish — tackle alongside status colors and arc spacing)*
 - [x] **Entry detail title** — `TopAppBar` shows the bare string "Entry". Replace with the entry's formatted date/time or mood label for at-a-glance context.
 - [x] **Mood data prominence** — valence, arousal, and label are rendered small and secondary in `EntryDetailScreen`. Promote them to a visible card or header area.
 - [x] **Tagged entities section** — add a bottom section to `EntryDetailScreen` listing tagged people, places, and tags with tap-through navigation (→ `PersonDetailScreen`; future place/tag detail screens).
 
 ### Settings
 
-- [ ] **Sub-page navigation** — the flat 8-section `LazyColumn` will grow. Group into top-level categories (Inference, Personalization, Privacy & Data, About) with nested routes, following the pattern already used for Audit Trail and Activities.
-- [ ] **Model download: feature framing, not error framing** — `IDLE` and `ERROR` states use red styling and error-like copy. Since the model is intentionally not bundled, the not-downloaded state should read "Download to enable local inference" with neutral/informational styling.
-- [ ] **Model download notification** — progress notifications don't appear during download. Verify `POST_NOTIFICATIONS` runtime permission is requested before `ModelDownloadWorker` is enqueued, and that the notification channel is created before the first notification is posted.
+- [x] **Sub-page navigation** — the flat 8-section `LazyColumn` will grow. Group into top-level categories (Inference, Personalization, Privacy & Data, About) with nested routes, following the pattern already used for Audit Trail and Activities.
+- [x] **Model download: feature framing, not error framing** — `IDLE` and `ERROR` states use red styling and error-like copy. Since the model is intentionally not bundled, the not-downloaded state should read "Download to enable local inference" with neutral/informational styling.
+- [x] **Model download notification** — progress notifications don't appear during download. Verify `POST_NOTIFICATIONS` runtime permission is requested before `ModelDownloadWorker` is enqueued, and that the notification channel is created before the first notification is posted.
 
 ### Visual polish
 
