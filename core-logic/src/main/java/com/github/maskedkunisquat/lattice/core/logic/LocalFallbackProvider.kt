@@ -9,11 +9,6 @@ import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import java.io.File
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
-import androidx.work.workDataOf
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +19,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 enum class ModelLoadState { IDLE, COPYING_MODEL, LOADING_SESSION, READY, ERROR }
@@ -70,7 +64,8 @@ enum class ModelLoadState { IDLE, COPYING_MODEL, LOADING_SESSION, READY, ERROR }
  */
 class LocalFallbackProvider(
     private val context: Context,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val modelDownloader: ModelDownloader,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : LlmProvider {
 
     override val id = "gemma3_1b_litertlm"
@@ -92,33 +87,9 @@ class LocalFallbackProvider(
      * UI should observe [getDownloadWorkInfo] to track progress.
      */
     fun downloadModel() {
-        val workManager = WorkManager.getInstance(context)
         val (modelFile, _) = selectModelAndBackends()
         val sha256 = MODEL_SHA256[modelFile]
-
-        val inputData = androidx.work.Data.Builder()
-            .putString(ModelDownloadWorker.KEY_MODEL_ASSET, modelFile)
-            .putString(ModelDownloadWorker.KEY_URL, "$HF_BASE_URL/$modelFile")
-            .also { if (sha256 != null) it.putString(ModelDownloadWorker.KEY_SHA256, sha256) }
-            .build()
-
-        val downloadRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
-            .setInputData(inputData)
-            .addTag(ModelDownloadWorker.UNIQUE_WORK_NAME)
-            .build()
-
-        workManager.enqueueUniqueWork(
-            ModelDownloadWorker.UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.KEEP,
-            downloadRequest
-        )
-    }
-
-    /** Returns a Flow of [WorkInfo] to track download progress in the UI. */
-    fun getDownloadWorkInfo(): Flow<WorkInfo?> {
-        return WorkManager.getInstance(context)
-            .getWorkInfosForUniqueWorkFlow(ModelDownloadWorker.UNIQUE_WORK_NAME)
-            .map { it.firstOrNull() }
+        modelDownloader.enqueue(modelFile, "$HF_BASE_URL/$modelFile", sha256)
     }
 
     /**

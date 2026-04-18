@@ -1,6 +1,5 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import android.util.Log
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
@@ -36,6 +35,11 @@ class ReframingLoop(
     private val embeddingProvider: EmbeddingProvider? = null,
     @Volatile var affectiveMlp: AffectiveMlp? = null,
     @Volatile var distortionMlp: DistortionMlp? = null,
+    private val logger: Logger = object : Logger {
+        override fun debug(tag: String, msg: String) = Unit
+        override fun info(tag: String, msg: String) = Unit
+        override fun warn(tag: String, msg: String, throwable: Throwable?) = Unit
+    },
 ) {
 
     // ── Stage 1 ──────────────────────────────────────────────────────────────
@@ -62,7 +66,7 @@ class ReframingLoop(
                         val (v, a) = mlp.forward(embedding)
                         val vc = v.coerceIn(-1f, 1f)
                         val ac = a.coerceIn(-1f, 1f)
-                        Log.d(TAG, "Stage1: source=mlp")
+                        logger.debug(TAG, "Stage1: source=mlp")
                         AffectiveMapResult(
                             valence = vc,
                             arousal = ac,
@@ -70,7 +74,7 @@ class ReframingLoop(
                             source = AffectiveSource.MLP,
                         )
                     }.onFailure { e ->
-                        Log.w(TAG, "Stage1: MLP path threw, falling back to regex", e)
+                        logger.warn(TAG, "Stage1: MLP path threw, falling back to regex", e)
                     }.getOrNull()
                 } else null
 
@@ -82,7 +86,7 @@ class ReframingLoop(
                             AFFECTIVE_SYSTEM,
                         )
                     )
-                    Log.d(TAG, "Stage1: source=regex")
+                    logger.debug(TAG, "Stage1: source=regex")
                     parseAffectiveCoords(raw)
                 }
             }
@@ -116,14 +120,14 @@ class ReframingLoop(
                             "MLP output size ${labels.size} < expected ${CognitiveDistortion.entries.size}"
                         }
                         val distortions = CognitiveDistortion.entries.filterIndexed { i, _ -> labels[i] }
-                        Log.d(TAG, "Stage2: source=mlp, distortions=$distortions")
+                        logger.debug(TAG, "Stage2: source=mlp, distortions=$distortions")
                         DiagnosisResult(
                             distortions = distortions,
                             reasoning   = "MLP classifier (${distortions.size} classes active)",
                             source      = DiagnosisSource.MLP,
                         )
                     }.onFailure { e ->
-                        Log.w(TAG, "Stage2: MLP path threw, falling back to LLM", e)
+                        logger.warn(TAG, "Stage2: MLP path threw, falling back to LLM", e)
                     }.getOrNull()
                 } else null
 
@@ -315,49 +319,32 @@ class ReframingLoop(
      * Finds the last `DISTORTIONS:` sentinel line in [raw], splits the CSV, and resolves
      * each token to a [CognitiveDistortion]. Unrecognised tokens are silently dropped.
      *
-     * Fallback: if the model omits the sentinel prefix (e.g. outputs bare names like
-     * "Mind Reading" or "Should Statements  Mental Filter"), the raw output is scanned
-     * directly for known distortion labels before giving up.
+     * If the sentinel is absent, returns an empty distortion list rather than attempting
+     * any greedy inference — callers should treat a missing sentinel as an unparseable response.
      */
     internal fun parseDotOutput(raw: String): DiagnosisResult {
         val sentinelLine = raw.lines()
-            .lastOrNull { it.contains("DISTORTIONS:", ignoreCase = true) }
+            .lastOrNull { it.contains("DISTORTIONS:", ignoreCase = true)  }
 
-        val csv: String = if (sentinelLine != null) {
-            val colonIdx = sentinelLine.indexOf("DISTORTIONS:", ignoreCase = true)
-            sentinelLine.substring(colonIdx + "DISTORTIONS:".length).trim()
-        } else {
-            // Sentinel omitted — treat the entire output as the candidate string.
-            Log.d(TAG, "parseDotOutput: no sentinel, attempting bare-text fallback on \"$raw\"")
-            raw.trim()
+        if (sentinelLine == null) {
+            logger.debug(TAG, "parseDotOutput: no sentinel in output — returning empty distortions")
+            return DiagnosisResult(distortions = emptyList(), reasoning = raw)
         }
+
+        val colonIdx = sentinelLine.indexOf("DISTORTIONS:", ignoreCase = true)
+        val csv = sentinelLine.substring(colonIdx + "DISTORTIONS:".length).trim()
 
         if (csv.equals("NONE", ignoreCase = true) || csv.isEmpty()) {
             return DiagnosisResult(distortions = emptyList(), reasoning = raw)
         }
 
-        // Prefer comma-splitting (the expected format). If that yields nothing, fall back
-        // to greedy label scanning — necessary when the model omits the sentinel and outputs
-        // multi-word names separated by whitespace (e.g. "Mind Reading  Should Statements").
         val commaTokens = csv.split(",").map { it.trim() }.filter { it.isNotBlank() }
         val fromCommas = commaTokens.mapNotNull { CognitiveDistortion.fromLabel(it) }
-
-        val recognized = if (fromCommas.isNotEmpty()) {
-            val unrecognized = commaTokens.filter { CognitiveDistortion.fromLabel(it) == null }
-            if (unrecognized.isNotEmpty()) {
-                Log.d(TAG, "parseDotOutput: unrecognized tokens $unrecognized in csv=\"$csv\"")
-            }
-            fromCommas
-        } else {
-            // Greedy scan: find every known label that appears verbatim in the output.
-            val found = CognitiveDistortion.entries.filter { d ->
-                csv.contains(d.label, ignoreCase = true)
-            }
-            Log.d(TAG, "parseDotOutput: greedy fallback found $found in csv=\"$csv\"")
-            found
+        val unrecognized = commaTokens.filter { CognitiveDistortion.fromLabel(it) == null }
+        if (unrecognized.isNotEmpty()) {
+            logger.debug(TAG, "parseDotOutput: unrecognized tokens $unrecognized in csv=\"$csv\"")
         }
-
-        return DiagnosisResult(distortions = recognized, reasoning = raw)
+        return DiagnosisResult(distortions = fromCommas, reasoning = raw)
     }
 
     /**

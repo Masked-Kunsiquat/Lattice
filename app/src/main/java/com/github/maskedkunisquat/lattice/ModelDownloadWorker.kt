@@ -1,4 +1,4 @@
-package com.github.maskedkunisquat.lattice.core.logic
+package com.github.maskedkunisquat.lattice
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,32 +11,41 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.github.maskedkunisquat.lattice.core.logic.DownloadDependencies
+import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.security.MessageDigest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * WorkManager worker that downloads [LocalFallbackProvider.MODEL_FILE] from HuggingFace.
+ * WorkManager worker that downloads the LiteRT-LM model file from HuggingFace.
  *
  * ## doWork() steps
  * 1. If the file already exists: validate it by attempting [LocalFallbackProvider.initialize].
  *    Skip the download only if the engine reaches [ModelLoadState.READY]; otherwise fall through.
  * 2. Show foreground progress notification.
- * 3. Stream download to [Context.filesDir]/<name>.tmp.
- * 4. Verify SHA-256 if [KEY_SHA256] was supplied; reject if mismatch.
+ * 3. Stream download to filesDir/<name>.tmp.
+ * 4. Verify SHA-256 if [KEY_SHA256] was supplied; throw [PermanentDownloadException] on mismatch.
  * 5. Rename .tmp → final destination.
- * 6. Call [LocalFallbackProvider.initialize]; return [Result.retry] if it fails.
+ * 6. Call [LocalFallbackProvider.initialize]; throw [PermanentDownloadException] if engine fails to load.
+ *
+ * Error classification:
+ * - [CancellationException] — rethrown immediately (never retried).
+ * - [PermanentDownloadException] — corrupt/wrong file, logged and returned as [Result.failure()].
+ * - All other exceptions — transient network/IO errors, returned as [Result.retry()].
  */
 class ModelDownloadWorker(
     ctx: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(ctx, params) {
 
-    private val localFallbackProvider get() = (applicationContext as DownloadDependencies).localFallbackProvider
+    private val localFallbackProvider get() =
+        (applicationContext as DownloadDependencies).localFallbackProvider
 
     override suspend fun getForegroundInfo(): ForegroundInfo = buildForegroundInfo(0)
 
@@ -71,13 +80,17 @@ class ModelDownloadWorker(
                 }
 
                 if (tmp.length() < 100_000_000L) {
-                    throw IOException("Downloaded file too small (${tmp.length()} bytes) — likely a 404 page.")
+                    throw PermanentDownloadException(
+                        "Downloaded file too small (${tmp.length()} bytes) — likely a 404 page."
+                    )
                 }
 
                 if (expectedSha256 != null) {
                     val actual = sha256Hex(tmp)
                     if (!actual.equals(expectedSha256, ignoreCase = true)) {
-                        throw IOException("SHA-256 mismatch — expected $expectedSha256 but got $actual")
+                        throw PermanentDownloadException(
+                            "SHA-256 mismatch — expected $expectedSha256 but got $actual"
+                        )
                     }
                     Log.i(TAG, "SHA-256 verified: $actual")
                 }
@@ -89,14 +102,21 @@ class ModelDownloadWorker(
 
                 localFallbackProvider.initialize()
 
-                // initialize() swallows its own exception; propagate failure so WorkManager retries.
                 if (localFallbackProvider.modelLoadState.value != ModelLoadState.READY) {
-                    throw IOException("Engine init failed after download — ${localFallbackProvider.modelLoadState.value}")
+                    throw PermanentDownloadException(
+                        "Engine init failed after download — ${localFallbackProvider.modelLoadState.value}"
+                    )
                 }
             }
             Result.success()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: PermanentDownloadException) {
+            Log.e(TAG, "Permanent download failure — will not retry: ${e.message}")
+            tmp.delete()
+            Result.failure()
         } catch (e: Exception) {
-            Log.e(TAG, "Model download failed", e)
+            Log.e(TAG, "Transient download error — scheduling retry", e)
             tmp.delete()
             Result.retry()
         }
@@ -116,43 +136,57 @@ class ModelDownloadWorker(
 
     private fun downloadFile(url: String, dest: File, onProgress: (Float) -> Unit) {
         var location = url
-        repeat(5) { // Follow up to 5 redirects
-            val conn = URL(location).openConnection() as HttpURLConnection
+        repeat(5) {
+            val conn = URI(location).toURL().openConnection() as HttpURLConnection
             conn.instanceFollowRedirects = false
             conn.connectTimeout = 30_000
             conn.readTimeout = 60_000
             conn.setRequestProperty("User-Agent", "Lattice-Android-Downloader")
 
-            val code = conn.responseCode
-            if (code in 300..399) {
-                location = conn.getHeaderField("Location") ?: throw IOException("Redirect without location")
-                return@repeat
-            }
+            try {
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val raw = conn.getHeaderField("Location")
+                        ?: throw IOException("Redirect $code with no Location header from $location")
+                    val resolved = URI(location).resolve(raw)
+                    val originalHost = URI(url).host
+                    if (resolved.scheme != "https" ||
+                        (resolved.host != originalHost && resolved.host?.endsWith(".huggingface.co") != true)
+                    ) {
+                        throw PermanentDownloadException(
+                            "Redirect to untrusted location '${resolved}' rejected"
+                        )
+                    }
+                    location = resolved.toString()
+                    return@repeat
+                }
 
-            if (code != 200) throw IOException("HTTP $code from $location")
+                if (code != 200) throw IOException("HTTP $code from $location")
 
-            val total = conn.contentLengthLong
-            conn.inputStream.use { input ->
-                dest.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var bytesRead: Int
-                    var totalRead = 0L
-                    var lastUpdate = 0L
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalRead += bytesRead
-
-                        val now = System.currentTimeMillis()
-                        if (total > 0 && now - lastUpdate > 500) {
-                            onProgress(totalRead.toFloat() / total)
-                            lastUpdate = now
+                val total = conn.contentLengthLong
+                conn.inputStream.use { input ->
+                    dest.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var bytesRead: Int
+                        var totalRead = 0L
+                        var lastUpdate = 0L
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            totalRead += bytesRead
+                            val now = System.currentTimeMillis()
+                            if (total > 0 && now - lastUpdate > 500) {
+                                onProgress(totalRead.toFloat() / total)
+                                lastUpdate = now
+                            }
                         }
                     }
                 }
+                return
+            } finally {
+                conn.disconnect()
             }
-            return
         }
-        throw IOException("Too many redirects")
+        throw IOException("Too many redirects for $url")
     }
 
     private fun buildForegroundInfo(progress: Int): ForegroundInfo {
@@ -163,9 +197,6 @@ class ModelDownloadWorker(
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, progress, false)
             .setOngoing(true)
-            // Show immediately — without FOREGROUND_SERVICE_IMMEDIATE Android suppresses
-            // foreground service notifications for 10 seconds, which is longer than the
-            // worker runs when a valid model file already exists.
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setRequestPromotedOngoing(true)
             .build()
@@ -182,10 +213,6 @@ class ModelDownloadWorker(
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Model Downloads",
-                // IMPORTANCE_DEFAULT so the status bar icon is visible on OEM skins (e.g. OneUI 7).
-                // IMPORTANCE_LOW hides the icon on Samsung devices while keeping the notification in
-                // the shade. Sound is disabled explicitly so this behaves like IMPORTANCE_LOW in
-                // terms of audio while keeping the icon visible.
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = "Progress of large model file downloads"
@@ -201,11 +228,14 @@ class ModelDownloadWorker(
         private const val TAG = "ModelDownloadWorker"
         const val CHANNEL_ID = "lattice_model_download_v2"
         private const val NOTIFICATION_ID = 8001
-        
+
         const val KEY_MODEL_ASSET = "model_asset"
         const val KEY_URL = "url"
-        const val KEY_SHA256 = "sha256"   // optional — pass expected hex digest to verify integrity
+        const val KEY_SHA256 = "sha256"
         const val KEY_PROGRESS = "progress"
         const val UNIQUE_WORK_NAME = "model_download"
     }
 }
+
+/** Thrown for permanent download failures that should not be retried (corrupt file, hash mismatch, engine load failure). */
+class PermanentDownloadException(message: String) : Exception(message)

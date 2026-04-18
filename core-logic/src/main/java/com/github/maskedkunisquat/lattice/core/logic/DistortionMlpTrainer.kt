@@ -1,7 +1,5 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import android.content.Context
-import android.util.Log
 import kotlin.math.ln
 import kotlin.math.sqrt
 
@@ -40,17 +38,26 @@ import kotlin.math.sqrt
  * θ  = θ − lr·m̂ / (√v̂ + ε)               [biases — no weight decay]
  * ```
  *
- * @param mlp          The [DistortionMlp] whose weights will be updated in-place.
- * @param lr           Learning rate (default 1e-3).
- * @param weightDecay  L2 regularisation coefficient λ (default 1e-4). Applied to
- *                     weight matrices only, not biases, per AdamW convention.
- * @param epochs       Number of full passes over the sample list in [trainBatch] (default 10).
+ * @param mlp               The [DistortionMlp] whose weights will be updated in-place.
+ * @param lr                Learning rate (default 1e-3).
+ * @param weightDecay       L2 regularisation coefficient λ (default 1e-4). Applied to
+ *                          weight matrices only, not biases, per AdamW convention.
+ * @param epochs            Number of full passes over the sample list in [trainBatch] (default 10).
+ * @param checkpointWriter  Optional platform-specific writer used by [save]. If null,
+ *                          [save] throws [IllegalStateException].
+ * @param logger            Platform-agnostic logger; defaults to a no-op implementation.
  */
 class DistortionMlpTrainer(
     val mlp: DistortionMlp,
     val lr: Float = 1e-3f,
     val weightDecay: Float = 1e-4f,
     val epochs: Int = 10,
+    private val checkpointWriter: CheckpointWriter? = null,
+    private val logger: Logger = object : Logger {
+        override fun debug(tag: String, msg: String) = Unit
+        override fun info(tag: String, msg: String) = Unit
+        override fun warn(tag: String, msg: String, throwable: Throwable?) = Unit
+    },
 ) {
     private val beta1   = 0.9f
     private val beta2   = 0.999f
@@ -86,6 +93,9 @@ class DistortionMlpTrainer(
         }
         require(labels.size == DistortionMlp.OUT2) {
             "Expected ${DistortionMlp.OUT2} labels, got ${labels.size}"
+        }
+        require(embedding.all { it.isFinite() }) {
+            "embedding contains non-finite values — cannot train on corrupt input"
         }
 
         // Advance bias-correction accumulators
@@ -173,45 +183,20 @@ class DistortionMlpTrainer(
     }
 
     /**
-     * Saves the trained weights and writes a [DistortionManifest] to SharedPreferences.
+     * Persists the trained weights and manifest via the injected [checkpointWriter].
      *
-     * Thresholds default to 0.5 — call [DistortionManifestStore.write] with an updated
-     * manifest after running a threshold sweep on the validation set.
+     * Thresholds default to 0.5 — callers may update the manifest via
+     * [DistortionManifestStore.write] after a threshold sweep on the validation set.
      *
-     * @param context          Android [Context] used to resolve `filesDir` and hash the
-     *                         embedding asset.
-     * @param trainedOnCount   Number of samples this head was trained on (for the manifest).
-     * @param corpusVersion    Corpus version tag written into the manifest (default "v1").
+     * @param trainedOnCount  Number of samples this head was trained on (for the manifest).
+     * @param corpusVersion   Corpus version tag written into the manifest (default "v1").
+     * @throws IllegalStateException if no [CheckpointWriter] was injected.
+     * @throws Exception if the writer fails (I/O error, hash failure, manifest write failure).
      */
-    fun save(
-        context: Context,
-        trainedOnCount: Int,
-        corpusVersion: String = "v1",
-    ) {
-        val weightFile = context.filesDir.resolve(DistortionMlp.WEIGHT_FILE)
-        mlp.saveWeights(weightFile)
-
-        val modelHash = try {
-            "sha256:${context.assets.open(EMBEDDING_ASSET).use { sha256Hex(it) }}"
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to hash $EMBEDDING_ASSET while saving manifest", e)
-            ""
-        }
-
-        val manifest = DistortionManifest(
-            schemaVersion         = DistortionMlp.CURRENT_SCHEMA_VERSION,
-            baseModelHash         = modelHash,
-            headPath              = DistortionMlp.WEIGHT_FILE,
-            trainedOnCount        = trainedOnCount,
-            lastTrainingTimestamp = System.currentTimeMillis(),
-            corpusVersion         = corpusVersion,
-            thresholds            = mlp.thresholds.copyOf(),
-        )
-
-        val prefs = context.getSharedPreferences(
-            DistortionManifestStore.PREFS_NAME, Context.MODE_PRIVATE
-        )
-        DistortionManifestStore.write(prefs, manifest)
+    fun save(trainedOnCount: Int, corpusVersion: String = "v1") {
+        val writer = checkpointWriter
+            ?: throw IllegalStateException("No CheckpointWriter injected — cannot save checkpoint")
+        writer.write(mlp, trainedOnCount, corpusVersion)
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -236,8 +221,4 @@ class DistortionMlpTrainer(
         }
     }
 
-    companion object {
-        private const val TAG              = "DistortionMlpTrainer"
-        private const val EMBEDDING_ASSET  = "snowflake-arctic-embed-xs_float32.tflite"
-    }
 }

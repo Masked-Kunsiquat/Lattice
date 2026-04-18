@@ -75,7 +75,7 @@ class DistortionMlpTest {
     }
 
     @Test
-    fun `forward with zero weights predicts all false at default threshold`() {
+    fun `forward with zero weights predicts all true at default threshold`() {
         val mlp = DistortionMlp(
             w1 = FloatArray(DistortionMlp.OUT1 * DistortionMlp.IN),
             b1 = FloatArray(DistortionMlp.OUT1),

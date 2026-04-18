@@ -1,20 +1,27 @@
 ## Running commit message
 
 ```
-fix: address inline review findings from m4-stability (part 4)
+fix: address inline review findings from m4-stability (part 5)
 
-- DistortionMlp: remove android.util.Log and Context.load(); move Android-specific
-  manifest/hash/file loading to DistortionMlpLoader in :app; make sha256Hex public;
-  EMBEDDING_ASSET promoted to public const for loader access
-- DistortionMlp: validate thresholds are finite and in [0,1] in init block;
-  validate embedding finiteness in forward() before rawLogits
-- LlmProvider/LlmOrchestrator KDoc: replace "MediaPipe Tasks GenAI" with "LiteRT-LM"
-- LocalFallbackProvider: add MODEL_SHA256 companion map; pass KEY_SHA256 via
-  Data.Builder in downloadModel() when hash is non-null
-- LocalFallbackProvider: add "kailua" (Pixel 9 Pro SM8750) to Elite branch in
-  selectModelAndBackends() so it routes to MODEL_FILE_ELITE with Backend.NPU
-- LocalFallbackProvider (build.gradle finding): else branch already uses
-  gemma3-1b-it-int4.litertlm — verified, no change needed
+- ModelDownloadWorker: move from :core-logic to :app; add ModelDownloader fun
+  interface in core-logic; inject into LocalFallbackProvider; implement via
+  WorkManagerModelDownloader; remove getDownloadWorkInfo() from LocalFallbackProvider;
+  SettingsViewModel now queries WorkManager directly
+- ModelDownloadWorker: add PermanentDownloadException; rethrow CancellationException;
+  Result.failure() for permanent errors (size/hash/engine); Result.retry() for transient
+- ModelDownloadWorker.downloadFile: resolve redirects against current URL via URI.resolve();
+  validate HTTPS + host allowlist; always disconnect HttpURLConnection in finally block
+- ReframingLoop: inject Logger (no-op default); replace all Log.d/Log.w with logger calls;
+  remove android.util.Log import
+- ReframingLoop.parseDotOutput: require DISTORTIONS: sentinel; return empty distortions
+  immediately when absent; remove greedy label-scan fallback
+- DistortionMlpTest: rename "predicts all false at default threshold" →
+  "predicts all true at default threshold" to match actual >= boundary behavior
+- DistortionMlpTrainer: remove Context/Log; add CheckpointWriter fun interface and Logger;
+  inject both via constructor; save() delegates to writer (throws if no writer injected)
+- DistortionMlpTrainer.trainStep: guard embedding finiteness before any mlp mutation
+- DistortionCheckpointWriter (new :app class): Android implementation of CheckpointWriter;
+  propagates hash failures and throws on manifest commit returning false
 ```
 
 ---
@@ -220,7 +227,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   matches.
 -----
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/ModelDownloadWorker.kt`
   around lines 3 - 20, ModelDownloadWorker and its Android/WorkManager/network
   code (class ModelDownloadWorker, methods using CoroutineWorker, ForegroundInfo,
@@ -236,7 +243,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   gradle in :core-logic do not request internet permissions.
 
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/ModelDownloadWorker.kt`
   around lines 73 - 101, The catch-all Exception handler in ModelDownloadWorker
   swallows cancellation and permanent failures; change the error model so
@@ -251,7 +258,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   transient (log, delete tmp, return Result.retry()); this ensures cancelled work
   and permanent errors are not rescheduled.
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/ModelDownloadWorker.kt`
   around lines 117 - 132, In downloadFile, validate and safely resolve redirects
   before following them: when handling the 3xx branch in downloadFile(), resolve
@@ -266,7 +273,7 @@ references (alternatively move all asset/cache I/O and logging code into the
 
 -----
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/ReframingLoop.kt`
   around lines 119 - 127, The core module now directly uses android.util.Log
   (Log.d/Log.w with TAG) inside ReframingLoop.kt (notably the Stage2 block that
@@ -279,7 +286,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   DiagnosisResult/getOrNull; ensure the core module does not import
   android.util.Log after this change.
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/ReframingLoop.kt`
   around lines 322 - 360, parseDotOutput currently falls back to greedy label
   scanning when the "DISTORTIONS:" sentinel is missing which can misclassify
@@ -295,7 +302,7 @@ references (alternatively move all asset/cache I/O and logging code into the
 
 -----
 
-- [] In
+- [x] In
   `@core-logic/src/test/java/com/github/maskedkunisquat/lattice/core/logic/DistortionMlpTest.kt`
   around lines 78 - 90, Test name is inconsistent with its assertions: the body
   checks that sigmoid(0) (0.5) is treated as true but the function is named
@@ -305,7 +312,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   threshold\`()` or similar) so the test name matches the verified contract for
   DistortionMlp.forward and the default threshold behavior.
 
-- [] In
+- [x] In
   `@core-logic/src/test/java/com/github/maskedkunisquat/lattice/core/logic/DistortionMlpTest.kt`
   around lines 78 - 90, Rename the test function whose current name is `forward
 with zero weights predicts all false at default threshold` to reflect the
@@ -315,7 +322,7 @@ zero weights predicts all true at default threshold`; update only the test
   (if any) still match; no logic changes needed—keep the use of
   DistortionMlp.forward and the existing assertions intact.
 -----
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/DistortionMlpTrainer.kt`
   around lines 3 - 4, The DistortionMlpTrainer currently imports Android APIs
   (android.content.Context and android.util.Log) making core-logic Android-bound;
@@ -327,7 +334,7 @@ zero weights predicts all true at default threshold`; update only the test
   errors, and move any Android-specific save(...) implementations into the app
   module where you implement CheckpointWriter using Context/Log.
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/DistortionMlpTrainer.kt`
   around lines 83 - 90, The trainStep function may accept embeddings containing
   NaN/Infinity which will corrupt mlp weights when gradients are applied; before
@@ -339,7 +346,7 @@ zero weights predicts all true at default threshold`; update only the test
   stop execution before any calls that mutate mlp or its weights if the check
   fails.
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/DistortionMlpTrainer.kt`
   around lines 194 - 214, Do not swallow failures when computing the embedding
   hash or persisting the manifest: remove or change the empty-catch around the

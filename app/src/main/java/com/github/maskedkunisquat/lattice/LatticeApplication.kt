@@ -115,7 +115,9 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
 
     val embeddingProvider by lazy { EmbeddingProvider() }
 
-    override val localFallbackProvider by lazy { LocalFallbackProvider(this) }
+    override val localFallbackProvider by lazy {
+        LocalFallbackProvider(this, WorkManagerModelDownloader(this))
+    }
 
     val journalRepository by lazy {
         JournalRepository(

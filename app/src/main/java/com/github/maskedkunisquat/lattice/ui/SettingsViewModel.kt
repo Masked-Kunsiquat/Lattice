@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
@@ -14,8 +15,8 @@ import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
 import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
+import com.github.maskedkunisquat.lattice.ModelDownloadWorker
 import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
-import com.github.maskedkunisquat.lattice.core.logic.ModelDownloadWorker
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 import com.github.maskedkunisquat.lattice.core.logic.toAffectiveManifest
@@ -50,6 +51,7 @@ class SettingsViewModel(
     private val trainingCoordinator: TrainingCoordinator,
     // 3.6-e: outlives the ViewModel so reset can't be cancelled mid-flight by navigation
     private val applicationScope: CoroutineScope,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     val settings: StateFlow<LatticeSettings> = settingsRepository.settings.stateIn(
@@ -84,7 +86,9 @@ class SettingsViewModel(
         .map { it?.toAffectiveManifest() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialValue = null)
 
-    val downloadWorkInfo: StateFlow<WorkInfo?> = localFallbackProvider.getDownloadWorkInfo()
+    val downloadWorkInfo: StateFlow<WorkInfo?> = workManager
+        .getWorkInfosForUniqueWorkFlow(ModelDownloadWorker.UNIQUE_WORK_NAME)
+        .map { it.firstOrNull() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val downloadProgress: StateFlow<Float> = downloadWorkInfo
@@ -211,6 +215,7 @@ class SettingsViewModel(
                     trainingCoordinator = app.trainingCoordinator,
                     localFallbackProvider = app.localFallbackProvider,
                     applicationScope = app.applicationScope,
+                    workManager = WorkManager.getInstance(app),
                 ) as T
         }
     }
