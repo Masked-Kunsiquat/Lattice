@@ -53,8 +53,9 @@ class SearchHistoryViewModel(
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
-    // Cached snapshot of all entries — reused across searches instead of cold-fetching each time.
-    private val allEntriesState = journalRepository.getEntries()
+    // Lightweight snapshot of entry refs (id/tagIds/placeIds only) for count-based UI operations.
+    // Does not cache full entry content or embeddings.
+    private val entryRefsState = journalRepository.getEntryRefs()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var semanticJob: Job? = null
@@ -115,6 +116,19 @@ class SearchHistoryViewModel(
             return
         }
 
+        // Clear stale results from the previous query immediately so cancelled jobs
+        // don't leave misleading results visible during the debounce window.
+        _uiState.update {
+            it.copy(
+                entryResults = emptyList(),
+                peopleResults = emptyList(),
+                placeResults = emptyList(),
+                tagResults = emptyList(),
+                isSemanticLoading = true,
+                isLikeLoading = true,
+            )
+        }
+
         // Semantic entry search — debounced 300 ms, re-launched (and previous cancelled) on each keystroke.
         semanticJob = viewModelScope.launch {
             try {
@@ -137,13 +151,13 @@ class SearchHistoryViewModel(
                 val places = placeRepository.searchPlaces(query)
                 val tags = tagRepository.searchTags(query)
 
-                // Entry counts from cached in-memory snapshot; avoids a cold Flow fetch per keystroke.
-                val allEntries = allEntriesState.value
+                // Entry counts from lightweight ref snapshot; avoids loading content/embeddings.
+                val entryRefs = entryRefsState.value
                 val placeResults = places.map { place ->
-                    PlaceResult(place, allEntries.count { place.id in it.placeIds })
+                    PlaceResult(place, entryRefs.count { place.id in it.placeIds })
                 }
                 val tagResults = tags.map { tag ->
-                    TagResult(tag, allEntries.count { tag.id in it.tagIds })
+                    TagResult(tag, entryRefs.count { tag.id in it.tagIds })
                 }
                 _uiState.update {
                     it.copy(

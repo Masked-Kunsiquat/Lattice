@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.JournalEntryRef
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
@@ -23,6 +24,9 @@ interface JournalDao {
 
     @Query("SELECT * FROM journal_entries ORDER BY timestamp DESC")
     fun getEntries(): Flow<List<JournalEntry>>
+
+    @Query("SELECT id, tagIds, placeIds FROM journal_entries")
+    fun getEntryRefs(): Flow<List<JournalEntryRef>>
 
     @Query("""
         SELECT * FROM journal_entries

@@ -1,7 +1,5 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import android.content.Context
-import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -10,10 +8,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Loads the distortion training corpus and serialises it to a binary cache in [Context.filesDir].
+ * Loads the distortion training corpus and serialises it to a binary cache file.
  *
- * On first call, reads three JSONL asset files, embeds each text via [EmbeddingProvider],
- * and writes `distortion_dataset_v1.bin` to filesDir so subsequent calls skip re-embedding.
+ * On first call, reads three JSONL asset files, masks text via [PiiShield], embeds each
+ * via [EmbeddingProvider], and writes `distortion_dataset_v1.bin` to the provided [cacheFile]
+ * so subsequent calls skip re-embedding.
  *
  * Asset paths (relative to `core-logic/src/main/assets/`):
  * - `training/distortion_corpus.jsonl`  — 2 530 rows, 10 Shreevastava classes
@@ -46,43 +45,71 @@ object DistortionDatasetLoader {
     /**
      * Returns the full distortion training dataset as [DistortionSample] pairs.
      *
-     * Reads from the binary cache in [context.filesDir] if it exists; otherwise embeds
+     * Reads from the binary cache at [cacheFile] if it exists and is valid; otherwise embeds
      * all JSONL assets via [embeddingProvider] and writes the cache before returning.
+     * A corrupt cache is deleted and regenerated automatically.
      *
-     * Caller is responsible for ensuring [embeddingProvider] is already initialised.
-     * If [embeddingProvider] is not initialised, rows will be embedded as zero-vectors
-     * (EmbeddingProvider's own fallback) and a warning is logged.
+     * If [embeddingProvider] is not initialised, generation proceeds but the cache write is
+     * skipped so zero-vector embeddings are never persisted to disk.
+     *
+     * All text from corpus assets is passed through [PiiShield.mask] before embedding so
+     * the embedding pipeline only ever receives masked input.
+     *
+     * @param assetSource Platform-agnostic access to bundled asset files.
+     * @param cacheFile   File to read/write the binary cache. Caller owns the path resolution.
+     * @param embeddingProvider Embedding model; must be initialised for a valid cache to be written.
+     * @param logger      Platform-agnostic logger for progress and diagnostic messages.
      */
-    suspend fun load(context: Context, embeddingProvider: EmbeddingProvider): List<DistortionSample> {
-        val cacheFile = context.filesDir.resolve(CACHE_FILE)
+    suspend fun load(
+        assetSource: AssetSource,
+        cacheFile: File,
+        embeddingProvider: EmbeddingProvider,
+        logger: Logger,
+    ): List<DistortionSample> {
         if (cacheFile.exists()) {
-            Log.i(TAG, "Loading from cache: ${cacheFile.absolutePath}")
-            return cacheFile.inputStream().use { deserialize(it) }
-        }
-
-        if (!embeddingProvider.isInitialized) {
-            Log.w(TAG, "EmbeddingProvider not initialised — embeddings will be zero-vectors")
-        }
-
-        Log.i(TAG, "Cache miss — embedding corpus from assets")
-        val samples = mutableListOf<DistortionSample>()
-
-        for (assetPath in ASSET_PATHS) {
-            val rows = context.assets.open(assetPath).bufferedReader().use { it.readLines() }
-                .filter { it.isNotBlank() }
-            Log.i(TAG, "Embedding $assetPath (${rows.size} rows)…")
-
-            for ((idx, line) in rows.withIndex()) {
-                val (text, labels) = parseJsonlRow(line)
-                val embedding = embeddingProvider.generateEmbedding(text)
-                samples += DistortionSample(embedding, labels)
-                if ((idx + 1) % 500 == 0) Log.d(TAG, "  …${idx + 1}/${rows.size}")
+            logger.info(TAG, "Loading from cache: ${cacheFile.absolutePath}")
+            try {
+                return cacheFile.inputStream().use { deserialize(it) }
+            } catch (e: Exception) {
+                logger.warn(TAG, "Cache corrupt or stale — deleting and regenerating", e)
+                cacheFile.delete()
             }
         }
 
-        Log.i(TAG, "Embedding complete — ${samples.size} total rows. Writing cache…")
-        serialize(samples, cacheFile)
-        Log.i(TAG, "Cache written to ${cacheFile.absolutePath}")
+        // Skip writing the cache when the embedding provider is uninitialised so zero-vector
+        // embeddings are never persisted and the next launch retries generation properly.
+        val skipCacheWrite = !embeddingProvider.isInitialized
+        if (skipCacheWrite) {
+            logger.warn(TAG, "EmbeddingProvider not initialised — embeddings will be zero-vectors; cache write skipped")
+        }
+
+        logger.info(TAG, "Cache miss — embedding corpus from assets")
+        val samples = mutableListOf<DistortionSample>()
+
+        for (assetPath in ASSET_PATHS) {
+            val rows = assetSource.open(assetPath).bufferedReader().use { it.readLines() }
+                .filter { it.isNotBlank() }
+            logger.info(TAG, "Embedding $assetPath (${rows.size} rows)…")
+
+            for ((idx, line) in rows.withIndex()) {
+                val (text, labels) = parseJsonlRow(line)
+                // Corpus text must be masked before embedding per the privacy model.
+                // Corpus assets are pre-anonymised, so mask() with empty person/place
+                // lists is effectively a no-op but enforces the architectural contract.
+                val maskedText = PiiShield.mask(text, emptyList())
+                val embedding = embeddingProvider.generateEmbedding(maskedText)
+                samples += DistortionSample(embedding, labels)
+                if ((idx + 1) % 500 == 0) logger.debug(TAG, "  …${idx + 1}/${rows.size}")
+            }
+        }
+
+        logger.info(TAG, "Embedding complete — ${samples.size} total rows.")
+
+        if (!skipCacheWrite) {
+            logger.info(TAG, "Writing cache…")
+            serialize(samples, cacheFile)
+            logger.info(TAG, "Cache written to ${cacheFile.absolutePath}")
+        }
 
         return samples
     }

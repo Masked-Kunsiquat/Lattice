@@ -31,7 +31,6 @@ import com.github.maskedkunisquat.lattice.core.logic.TrainingDependencies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -145,8 +144,6 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
             activityHierarchyDao = database.activityHierarchyDao(),
             searchRepository     = searchRepository,
             embeddingProvider    = embeddingProvider,
-            affectiveMlp         = runBlocking(Dispatchers.IO) { AffectiveMlp.load(this@LatticeApplication) },
-            distortionMlp        = runBlocking(Dispatchers.IO) { DistortionMlp.load(this@LatticeApplication) },
         )
     }
 
@@ -174,6 +171,15 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
 
         embeddingProvider.initialize(this)
         Thread { localFallbackProvider.initialize() }.start()
+
+        // Load trained MLP heads from disk without blocking startup. reframingLoop starts
+        // with null heads and degrades safely until each model is hot-swapped in.
+        applicationScope.launch(Dispatchers.IO) {
+            reframingLoop.affectiveMlp = AffectiveMlp.load(this@LatticeApplication)
+        }
+        applicationScope.launch(Dispatchers.IO) {
+            reframingLoop.distortionMlp = DistortionMlp.load(this@LatticeApplication)
+        }
 
         // Warm-start the affective head from the GoEmotions base layer on first launch.
         // No-op on subsequent launches (guarded by SharedPreferences). Once trained,

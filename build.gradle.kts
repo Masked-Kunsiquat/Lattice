@@ -42,13 +42,13 @@ tasks.register("downloadModels") {
             try {
                 val pb = ProcessBuilder("adb", "shell", "getprop", "ro.product.board")
                 val proc = pb.start()
-                val board = proc.inputStream.bufferedReader().use { it.readText() }.trim()
                 val exited = proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
                 if (!exited) {
                     proc.destroyForcibly()
                     logger.lifecycle("  ℹ  ADB timed out — using universal tier.")
                     return@run "universal"
                 }
+                val board = proc.inputStream.bufferedReader().use { it.readText() }.trim()
                 logger.lifecycle("  ℹ  Detected ro.product.board=$board")
                 when (board.lowercase()) {
                     "kailua" -> "elite"   // Snapdragon 8 Elite (SM8750)
