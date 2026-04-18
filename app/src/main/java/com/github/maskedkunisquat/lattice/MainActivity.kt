@@ -1,11 +1,14 @@
 package com.github.maskedkunisquat.lattice
 
 import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -46,15 +49,24 @@ class MainActivity : FragmentActivity() {
                 val isUnlocked by lockViewModel.isUnlocked.collectAsStateWithLifecycle()
                 val authError by lockViewModel.authError.collectAsStateWithLifecycle()
 
-                // Request notification permission on Android 13+ (API 33)
-                LaunchedEffect(Unit) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                }
-
                 // Skip the gate on devices with no lock screen — better than a permanent block.
                 if (!biometricGate.canAuthenticate() || isUnlocked) {
+                    // Request notification permission after unlock on Android 13+ (API 33).
+                    // Guards: only launches if not already granted, and only once per install
+                    // (persisted via SharedPreferences) to avoid re-prompting after denial.
+                    LaunchedEffect(Unit) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val granted = ContextCompat.checkSelfPermission(
+                                this@MainActivity, Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                            val prefs = getSharedPreferences("lattice_perm", Context.MODE_PRIVATE)
+                            val alreadyAsked = prefs.getBoolean("asked_once_notifications", false)
+                            if (!granted && !alreadyAsked) {
+                                prefs.edit().putBoolean("asked_once_notifications", true).apply()
+                                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                    }
                     AppNavHost(app = app)
                 } else {
                     LockScreen(

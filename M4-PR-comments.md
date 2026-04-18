@@ -1,27 +1,8 @@
 ## Running commit message
 
 ```
-fix: address inline review findings from m4-stability (part 5)
+fix: address inline review findings from m4-stability (part 6)
 
-- ModelDownloadWorker: move from :core-logic to :app; add ModelDownloader fun
-  interface in core-logic; inject into LocalFallbackProvider; implement via
-  WorkManagerModelDownloader; remove getDownloadWorkInfo() from LocalFallbackProvider;
-  SettingsViewModel now queries WorkManager directly
-- ModelDownloadWorker: add PermanentDownloadException; rethrow CancellationException;
-  Result.failure() for permanent errors (size/hash/engine); Result.retry() for transient
-- ModelDownloadWorker.downloadFile: resolve redirects against current URL via URI.resolve();
-  validate HTTPS + host allowlist; always disconnect HttpURLConnection in finally block
-- ReframingLoop: inject Logger (no-op default); replace all Log.d/Log.w with logger calls;
-  remove android.util.Log import
-- ReframingLoop.parseDotOutput: require DISTORTIONS: sentinel; return empty distortions
-  immediately when absent; remove greedy label-scan fallback
-- DistortionMlpTest: rename "predicts all false at default threshold" →
-  "predicts all true at default threshold" to match actual >= boundary behavior
-- DistortionMlpTrainer: remove Context/Log; add CheckpointWriter fun interface and Logger;
-  inject both via constructor; save() delegates to writer (throws if no writer injected)
-- DistortionMlpTrainer.trainStep: guard embedding finiteness before any mlp mutation
-- DistortionCheckpointWriter (new :app class): Android implementation of CheckpointWriter;
-  propagates hash failures and throws on manifest commit returning false
 ```
 
 ---

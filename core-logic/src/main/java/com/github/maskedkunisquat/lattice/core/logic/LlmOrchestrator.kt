@@ -70,6 +70,9 @@ class LlmOrchestrator(
      * @param prompt            The (PII-masked) user message — plain text, no chat tokens.
      * @param operationType     Label for the audit log (e.g. "reframe", "summarize").
      * @param systemInstruction Optional system-level instruction forwarded to the provider.
+     *   **Must be developer-authored** — all call sites pass string literals defined in
+     *   [ReframingLoop] ([ReframingLoop.AFFECTIVE_SYSTEM] etc.). The PII gate only checks
+     *   [prompt]; [systemInstruction] is assumed to contain no user-derived content.
      */
     fun process(
         prompt: String,

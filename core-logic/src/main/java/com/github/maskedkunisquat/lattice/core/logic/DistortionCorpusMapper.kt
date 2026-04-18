@@ -52,13 +52,21 @@ object DistortionCorpusMapper {
      * Builds a 12-element [BooleanArray] aligned to [CognitiveDistortion.entries] ordinal order
      * from [dominant] and an optional [secondary] label string.
      *
-     * Unrecognised labels are logged and skipped; the row is not dropped entirely so that a
-     * valid dominant label still produces a useful training example.
+     * Returns **null** when [dominant] is blank or maps to an unrecognised label — callers must
+     * drop those rows rather than treating them as negative ("No Distortion") examples.
+     * "No Distortion" is an explicit corpus sentinel that maps to `success(null)` and produces
+     * an all-false array (valid negative training example).
+     *
+     * Unrecognised [secondary] labels are silently skipped without dropping the row.
      */
-    fun toLabels(dominant: String, secondary: String? = null): BooleanArray {
+    fun toLabels(dominant: String, secondary: String? = null): BooleanArray? {
+        if (dominant.isBlank()) return null
+        val dominantResult = map(dominant)
+        if (dominantResult.isFailure) return null
         val labels = BooleanArray(CognitiveDistortion.entries.size)
-        for (raw in listOfNotNull(dominant.takeIf { it.isNotBlank() }, secondary?.takeIf { it.isNotBlank() })) {
-            map(raw).getOrNull()?.let { labels[it.ordinal] = true }
+        dominantResult.getOrNull()?.let { labels[it.ordinal] = true }
+        secondary?.takeIf { it.isNotBlank() }?.let { sec ->
+            map(sec).getOrNull()?.let { labels[it.ordinal] = true }
         }
         return labels
     }

@@ -109,13 +109,7 @@ fun JournalEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (modelLoadState == ModelLoadState.COPYING_MODEL) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
                     text = when (modelLoadState) {
                         ModelLoadState.COPYING_MODEL ->
@@ -357,12 +351,8 @@ private fun JournalEditorContent(
                 .fillMaxWidth()
                 .weight(1f)
                 .onFocusChanged { focus -> if (!focus.isFocused) onMentionDismiss() },
-            placeholder = {
-                Text(
-                    "What's on your mind?\n\n" +
-                    "Tip: type @name to mention a person, #tag to add a tag, !place to log a location."
-                )
-            },
+            placeholder = { Text("What's on your mind?") },
+            supportingText = { Text("@name · #tag · !place") },
             visualTransformation = PiiHighlightTransformation(
                 highlightColor = MaterialTheme.colorScheme.tertiary,
                 tagHighlightColor = MaterialTheme.colorScheme.secondary,

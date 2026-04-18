@@ -73,7 +73,7 @@ class DistortionCorpusMapperTest {
 
     @Test
     fun `toLabels sets correct ordinal bit for dominant-only row`() {
-        val labels = DistortionCorpusMapper.toLabels("Labeling")
+        val labels = DistortionCorpusMapper.toLabels("Labeling")!!
         assertTrue("LABELING bit must be set",
             labels[CognitiveDistortion.LABELING.ordinal])
         assertEquals("exactly one bit set", 1, labels.count { it })
@@ -84,7 +84,7 @@ class DistortionCorpusMapperTest {
         val labels = DistortionCorpusMapper.toLabels(
             dominant  = "Labeling",
             secondary = "Emotional Reasoning",
-        )
+        )!!
         assertTrue(labels[CognitiveDistortion.LABELING.ordinal])
         assertTrue(labels[CognitiveDistortion.EMOTIONAL_REASONING.ordinal])
         assertEquals("exactly two bits set", 2, labels.count { it })
@@ -92,21 +92,33 @@ class DistortionCorpusMapperTest {
 
     @Test
     fun `toLabels produces all-zeros for No Distortion`() {
-        val labels = DistortionCorpusMapper.toLabels("No Distortion")
+        val labels = DistortionCorpusMapper.toLabels("No Distortion")!!
         assertFalse("no bits set for No Distortion", labels.any { it })
     }
 
     @Test
+    fun `toLabels returns null for blank dominant`() {
+        assertNull("blank dominant must be dropped", DistortionCorpusMapper.toLabels(""))
+        assertNull("blank dominant must be dropped", DistortionCorpusMapper.toLabels("   "))
+    }
+
+    @Test
+    fun `toLabels returns null for unrecognised dominant`() {
+        assertNull("unknown dominant must be dropped",
+            DistortionCorpusMapper.toLabels("UnknownDistortionLabel"))
+    }
+
+    @Test
     fun `toLabels ignores blank secondary`() {
-        val withBlank = DistortionCorpusMapper.toLabels("Personalization", "")
-        val withNull  = DistortionCorpusMapper.toLabels("Personalization", null)
+        val withBlank = DistortionCorpusMapper.toLabels("Personalization", "")!!
+        val withNull  = DistortionCorpusMapper.toLabels("Personalization", null)!!
         assertTrue(withBlank.contentEquals(withNull))
         assertEquals(1, withBlank.count { it })
     }
 
     @Test
     fun `toLabels skips unrecognised secondary without failing the row`() {
-        val labels = DistortionCorpusMapper.toLabels("Personalization", "Unknown Label")
+        val labels = DistortionCorpusMapper.toLabels("Personalization", "Unknown Label")!!
         assertTrue(labels[CognitiveDistortion.PERSONALIZATION.ordinal])
         assertEquals("only dominant bit should be set", 1, labels.count { it })
     }
@@ -128,6 +140,6 @@ class DistortionCorpusMapperTest {
     @Test
     fun `toLabels returns array of length equal to enum size`() {
         assertEquals(CognitiveDistortion.entries.size,
-            DistortionCorpusMapper.toLabels("Labeling").size)
+            DistortionCorpusMapper.toLabels("Labeling")!!.size)
     }
 }
