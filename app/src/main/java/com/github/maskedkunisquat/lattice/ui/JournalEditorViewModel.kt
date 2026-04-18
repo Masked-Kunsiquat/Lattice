@@ -121,10 +121,28 @@ class JournalEditorViewModel(
      */
     fun onTextChanged(newText: String) {
         reframeJob?.cancel()
-        // Snapshot resolved maps before updating state — used below to suppress re-triggers.
-        val resolvedPersons = _uiState.value.resolvedPersons
-        val resolvedPlaces  = _uiState.value.resolvedPlaces
-        _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
+
+        // Prune resolved maps to only keep names whose token is still present in the text.
+        // This prevents the re-trigger guard from blocking a fresh @Name query after the
+        // user deleted and retyped the same mention (e.g. resolved @Alice, deleted it,
+        // then typed "@Alice and" — stale resolvedPersons["Alice"] would incorrectly block).
+        val prevPersons = _uiState.value.resolvedPersons
+        val prevPlaces  = _uiState.value.resolvedPlaces
+        val activePersons = prevPersons.filterKeys { name ->
+            RESOLVED_PERSON_PATTERN(name).containsMatchIn(newText)
+        }
+        val activePlaces = prevPlaces.filterKeys { name ->
+            RESOLVED_PLACE_PATTERN(name).containsMatchIn(newText)
+        }
+
+        _uiState.update {
+            it.copy(
+                text           = newText,
+                reframeState   = ReframeState.Idle,
+                resolvedPersons = activePersons,
+                resolvedPlaces  = activePlaces,
+            )
+        }
 
         val personMatch = MENTION_REGEX.find(newText)
         val tagMatch    = TAG_REGEX.find(newText)
@@ -134,8 +152,9 @@ class JournalEditorViewModel(
             // Guard: if the matched query starts with an already-resolved name followed by a
             // space, the multi-word regex has spilled over into subsequent words (e.g. "@Alice"
             // resolved, user types " and" → regex matches "@Alice and"). Skip the trigger so
-            // "Create 'Alice and'" is never shown.
-            personMatch != null && resolvedPersons.keys.none { personMatch.groupValues[1].startsWith("$it ") } -> {
+            // "Create 'Alice and'" is never shown. Uses the pruned active maps so deleted-
+            // then-retyped names are not incorrectly suppressed.
+            personMatch != null && activePersons.keys.none { personMatch.groupValues[1].startsWith("$it ") } -> {
                 val query = personMatch.groupValues[1]
                 currentMentionJob = viewModelScope.launch {
                     val results = peopleRepository.searchByName(query)
@@ -150,7 +169,7 @@ class JournalEditorViewModel(
                 }
             }
             // Same re-trigger guard for places — PLACE_REGEX has the same multi-word pattern.
-            placeMatch != null && resolvedPlaces.keys.none { placeMatch.groupValues[1].startsWith("$it ") } -> {
+            placeMatch != null && activePlaces.keys.none { placeMatch.groupValues[1].startsWith("$it ") } -> {
                 val query = placeMatch.groupValues[1]
                 currentMentionJob = viewModelScope.launch {
                     val results = placeRepository.searchPlaces(query)
@@ -480,6 +499,14 @@ class JournalEditorViewModel(
         private val TAG_WORD_REGEX = Regex("#($W+)")
         /** Matches all resolved !place tokens in saved text for placeId collection. */
         private val PLACE_WORD_REGEX = Regex("!((?:$W+ )*$W+)")
+        /**
+         * Returns a regex that matches "@name" when not immediately followed by a word char.
+         * Used to detect whether a resolved person token is still present in the editor text.
+         * Mirrors the masking pattern in [persistEntry] so presence checks stay consistent.
+         */
+        fun RESOLVED_PERSON_PATTERN(name: String) = Regex("@${Regex.escape(name)}(?![\\p{L}\\p{N}_])")
+        /** Same as [RESOLVED_PERSON_PATTERN] but for "!place" tokens. */
+        fun RESOLVED_PLACE_PATTERN(name: String)  = Regex("!${Regex.escape(name)}(?![\\p{L}\\p{N}_])")
 
         fun factory(app: LatticeApplication, initialEntryId: UUID? = null) =
             object : ViewModelProvider.Factory {

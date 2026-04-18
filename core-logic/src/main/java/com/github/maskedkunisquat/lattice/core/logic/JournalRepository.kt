@@ -149,8 +149,6 @@ class JournalRepository(
             embedding = embedding
         )
 
-        journalDao.insertEntry(entryToSave)
-
         // Extract unique person UUIDs from [PERSON_UUID] placeholders
         val mentionedPersonIds = maskedContent?.let { PERSON_PLACEHOLDER.findAll(it) }
             ?.map { UUID.fromString(it.groupValues[1]) }
@@ -158,7 +156,16 @@ class JournalRepository(
             ?.toList()
             ?: emptyList()
 
-        // Persist Mention rows so PersonDetailViewModel can surface linked entries
+        // Snapshot existing mentions BEFORE insertEntry: REPLACE cascades-deletes them,
+        // so querying after would always yield an empty set.
+        val previousMentionPersonIds = mentionDao.getMentionsByEntry(entryToSave.id)
+            .map { it.personId }
+            .toSet()
+
+        journalDao.insertEntry(entryToSave)
+
+        // Persist Mention rows so PersonDetailViewModel can surface linked entries.
+        // insertMention uses REPLACE, so re-saves are idempotent.
         mentionedPersonIds.forEach { personId ->
             mentionDao.insertMention(
                 Mention(
@@ -170,10 +177,14 @@ class JournalRepository(
             )
         }
 
-        // Vibe Evolution: update vibe scores for mentioned persons
+        // Vibe Evolution: only adjust scores for the diff to avoid double-counting on re-saves.
+        val newMentionSet = mentionedPersonIds.toSet()
         val delta = entry.valence * 0.1f
-        mentionedPersonIds.forEach { personId ->
+        (newMentionSet - previousMentionPersonIds).forEach { personId ->
             personDao.incrementVibeScore(personId, delta)
+        }
+        (previousMentionPersonIds - newMentionSet).forEach { personId ->
+            personDao.incrementVibeScore(personId, -delta)
         }
     }
 
