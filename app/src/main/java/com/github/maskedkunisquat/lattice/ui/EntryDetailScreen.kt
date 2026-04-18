@@ -3,8 +3,8 @@ package com.github.maskedkunisquat.lattice.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -90,7 +90,7 @@ fun EntryDetailScreen(
 
 // Stateless inner composable — all mutable state lives in the ViewModel or local remember.
 // Previews target this directly with stub state.
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EntryDetailContent(
     entryState: EntryDetailState,
@@ -231,8 +231,8 @@ private fun EntryDetailContent(
                     || tagsData.places.isNotEmpty()
                     || tagsData.tags.isNotEmpty()
                 if (hasEntities) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        tagsData.people.forEach { person ->
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(tagsData.people) { person ->
                             val name = person.nickname
                                 ?: "${person.firstName}${if (person.lastName != null) " ${person.lastName}" else ""}"
                             SuggestionChip(
@@ -240,13 +240,13 @@ private fun EntryDetailContent(
                                 label = { Text("@$name") },
                             )
                         }
-                        tagsData.places.forEach { place ->
+                        items(tagsData.places) { place ->
                             SuggestionChip(
                                 onClick = {},
                                 label = { Text("!${place.name}") },
                             )
                         }
-                        tagsData.tags.forEach { tag ->
+                        items(tagsData.tags) { tag ->
                             SuggestionChip(
                                 onClick = {},
                                 label = { Text("#${tag.name}") },
