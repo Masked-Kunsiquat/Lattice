@@ -27,7 +27,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -83,13 +88,17 @@ class SettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val downloadProgress: StateFlow<Float> = downloadWorkInfo
-        .map { info ->
-            if (info?.state == WorkInfo.State.SUCCEEDED) {
-                viewModelScope.launch { localFallbackProvider.initialize() }
-            }
-            info?.progress?.getFloat(ModelDownloadWorker.KEY_PROGRESS, 0f) ?: 0f
-        }
+        .map { info -> info?.progress?.getFloat(ModelDownloadWorker.KEY_PROGRESS, 0f) ?: 0f }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)
+
+    init {
+        downloadWorkInfo
+            .map { it?.state }
+            .distinctUntilChanged()
+            .filter { it == WorkInfo.State.SUCCEEDED }
+            .onEach { viewModelScope.launch(Dispatchers.IO) { localFallbackProvider.initialize() } }
+            .launchIn(viewModelScope)
+    }
 
     fun setApiKey(key: String) {
         val trimmed = key.trim()
