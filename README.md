@@ -6,7 +6,7 @@ A private, on-device CBT journaling app for Android. You write. The model thinks
 
 ## What it does
 
-Lattice lets you log journal entries with a mood coordinate (valence × arousal on the circumplex model), automatically masks the names of people you mention with stable per-person UUIDs, and runs a three-stage cognitive reframing pipeline locally using a quantized Llama-3.2-3B model. The reframe is streamed token-by-token to the UI. You can accept it (it persists to the entry) or dismiss it.
+Lattice lets you log journal entries with a mood coordinate (valence × arousal on the circumplex model), automatically masks the names of people you mention with stable per-person UUIDs, and runs a three-stage cognitive reframing pipeline locally using a Gemma 3 1B model via MediaPipe. The reframe is streamed token-by-token to the UI. You can accept it (it persists to the entry) or dismiss it.
 
 **Type `!reframe` anywhere in the editor to trigger the pipeline.**
 
@@ -18,7 +18,7 @@ All inference is local by default. The orchestrator routes requests through a st
 
 ```text
 Gemini Nano (AICore, API 35+)
-  → Llama-3.2-3B via ONNX Runtime (all API levels)
+  → Gemma 3 1B via MediaPipe Tasks GenAI (all API levels)
     → Cloud API (disabled by default, requires explicit opt-in)
 ```
 
@@ -89,11 +89,21 @@ Idle → Loading → Streaming(partial) → Done(text)
 | Model | Role | Format |
 |---|---|---|
 | Snowflake Arctic Embed XS | Semantic embeddings | ONNX, int8, 384-dim |
-| Llama-3.2-3B-Instruct Q4 | All three reframing stages | ONNX, Q4, 3 shards |
+| Gemma 3 1B Instruct | All three reframing stages | LiteRT INT4 — three hardware tiers |
 
-The Llama model shards (`model_q4.onnx`, `model_q4.onnx_data`, `model_q4.onnx_data_1`) are staged to `context.filesDir` on first run — ONNX Runtime requires real filesystem paths for external-data models. NNAPI (NPU/GPU on Snapdragon 8 Elite) is requested first with CPU fallback. Inference uses a KV-cached greedy-decode loop capped at 512 new tokens.
+Three model variants are available. `LocalFallbackProvider` selects at runtime via
+`Build.BOARD`; `./gradlew downloadModels` downloads the right one via ADB:
 
-> **Model files are not committed to this repository.** Place them in `app/src/main/assets/` before building. See `assets/snowflake-arctic-embed-xs.onnx.placeholder` for the expected filenames.
+| Tier | File | Target | Latency |
+|---|---|---|---|
+| Elite | `gemma3-1b-it-elite.litertlm` | SM8750 S25 Ultra | ~10 s reframe |
+| Ultra | `gemma3-1b-it-ultra.litertlm` | SM8650 S24 Ultra | ~15 s reframe |
+| Universal | `gemma3-1b-it-universal.task` | Any ARM64 | fallback |
+
+The selected file is staged to `context.filesDir` on first run (MediaPipe requires a
+filesystem path). Context window is 1,280 tokens (`ekv1280`).
+
+> **Model files are not committed to this repository.** Run `./gradlew downloadModels` before building.
 
 ---
 
@@ -123,4 +133,4 @@ The Llama model shards (`model_q4.onnx`, `model_q4.onnx_data`, `model_q4.onnx_da
 
 ## Tech stack
 
-Kotlin · Jetpack Compose · Room · ONNX Runtime · Coroutines/Flow · Retrofit + Moshi · Coil · Accompanist · KSP
+Kotlin · Jetpack Compose · Room · ONNX Runtime (embeddings) · MediaPipe Tasks GenAI · Coroutines/Flow · Retrofit + Moshi · Coil · Accompanist · KSP

@@ -2,9 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Required for WorkManager's foreground service on API 31+ -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Required for foreground service notifications to appear as Live Update chips on Android 16+ -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
 
 
     <application
@@ -26,6 +30,15 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Grant access to vendor-partition native libs required by LiteRT-LM backends.
+             required="false" so the APK installs on devices that lack the lib (e.g. non-Qualcomm).
+             libvndksupport.so — VNDK support shim (needed by the other two)
+             libOpenCL.so      — Adreno GPU / OpenCL JIT for Backend.GPU
+             libcdsprpc.so     — Qualcomm CDK DSP RPC bridge for Backend.NPU (Hexagon) -->
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
 
         <!-- Merge foreground service type for WorkManager's EmbeddingTrainingWorker -->
         <service

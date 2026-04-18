@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.lattice.ui
 
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,9 +45,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.util.Log
+import androidx.core.content.ContextCompat
+import androidx.work.WorkInfo
 import com.github.maskedkunisquat.lattice.BuildConfig
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,8 +94,9 @@ fun SettingsScreen(
     val showCloudDialog by viewModel.showCloudEnableDialog.collectAsStateWithLifecycle()
     val apiKeySaved by viewModel.apiKeySaved.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
-    val copyProgress by viewModel.copyProgress.collectAsStateWithLifecycle()
-    val manifest by viewModel.manifest.collectAsStateWithLifecycle()
+    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
+    val downloadWorkInfo by viewModel.downloadWorkInfo.collectAsStateWithLifecycle(null)
+    val manifestState: AffectiveManifest? by viewModel.manifest.collectAsStateWithLifecycle()
     val isResetting by viewModel.isResetting.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -140,7 +150,9 @@ fun SettingsScreen(
             item {
                 LocalModelSection(
                     modelLoadState = modelLoadState,
-                    copyProgress = copyProgress,
+                    downloadProgress = downloadProgress,
+                    downloadWorkInfo = downloadWorkInfo,
+                    onDownload = viewModel::downloadModel,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -150,7 +162,7 @@ fun SettingsScreen(
             item {
                 PersonalizationSection(
                     personalizationEnabled = settings.personalizationEnabled,
-                    manifest = manifest,
+                    manifest = manifestState,
                     isResetting = isResetting,
                     onToggle = viewModel::setPersonalizationEnabled,
                     onReset = viewModel::resetPersonalization,
@@ -234,16 +246,30 @@ fun SettingsScreen(
 @Composable
 private fun LocalModelSection(
     modelLoadState: ModelLoadState,
-    copyProgress: Float,
+    downloadProgress: Float,
+    downloadWorkInfo: WorkInfo?,
+    onDownload: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isDownloading = downloadWorkInfo?.state == WorkInfo.State.RUNNING ||
+            downloadWorkInfo?.state == WorkInfo.State.ENQUEUED
+
+    val context = LocalContext.current
+    val notificationsBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS
+        ) != PackageManager.PERMISSION_GRANTED
+    } else false
+
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        val statusText = when (modelLoadState) {
-            ModelLoadState.IDLE            -> "Not started"
-            ModelLoadState.COPYING_SHARDS  -> "Copying model shards… ${(copyProgress * 100).toInt()}%"
-            ModelLoadState.LOADING_SESSION -> "Loading model session…"
-            ModelLoadState.READY           -> "Ready"
-            ModelLoadState.ERROR           -> "Failed to load"
+        val statusText = when {
+            isDownloading -> "Downloading model… ${(downloadProgress * 100).toInt()}%"
+            modelLoadState == ModelLoadState.IDLE -> "Not started"
+            modelLoadState == ModelLoadState.COPYING_MODEL -> "Copying model…"
+            modelLoadState == ModelLoadState.LOADING_SESSION -> "Loading model session…"
+            modelLoadState == ModelLoadState.READY -> "Ready"
+            modelLoadState == ModelLoadState.ERROR -> "Not found / Failed to load"
+            else -> "Not started"
         }
         val statusColor = when (modelLoadState) {
             ModelLoadState.READY  -> Color(0xFF2E7D32)
@@ -256,28 +282,85 @@ private fun LocalModelSection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Llama 3.2 3B (local fallback)", style = MaterialTheme.typography.bodyLarge)
+                Text("Gemma 3 1B (local fallback)", style = MaterialTheme.typography.bodyLarge)
                 Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
             }
+            if ((modelLoadState == ModelLoadState.ERROR || modelLoadState == ModelLoadState.IDLE) && !isDownloading) {
+                Button(
+                    onClick = onDownload,
+                    modifier = Modifier.padding(start = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                ) {
+                    Text("Download", style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
-        when (modelLoadState) {
-            ModelLoadState.COPYING_SHARDS -> {
+        when {
+            isDownloading -> {
                 LinearProgressIndicator(
-                    progress = { copyProgress },
+                    progress = { downloadProgress },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "First launch only — model is ~3.4 GB and copies to device storage.",
+                    "Downloading ~700 MB to device storage. You can close the app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (notificationsBlocked) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            "Notifications are off — no status bar progress.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        ) {
+                            Text("Enable", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+            modelLoadState == ModelLoadState.COPYING_MODEL -> {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Preparing model files. Please wait.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            ModelLoadState.LOADING_SESSION -> {
+            modelLoadState == ModelLoadState.LOADING_SESSION -> {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
-                    "Compiling ONNX graph for your hardware. First launch may take several minutes.",
+                    "Optimizing model for your hardware. This may take a minute.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            modelLoadState == ModelLoadState.ERROR -> {
+                Text(
+                    "The model file is missing or corrupted. You can download it now (689MB) or push it via ADB.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
             else -> Unit

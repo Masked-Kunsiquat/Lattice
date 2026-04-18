@@ -36,6 +36,8 @@ class JournalRepositoryDeleteEntryTest {
         override suspend fun deleteEntryById(id: UUID) = Unit
         override suspend fun getLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): List<JournalEntry> = emptyList()
         override suspend fun countLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): Int = 0
+        override fun getEntriesForPerson(personId: UUID): Flow<List<JournalEntry>> = flowOf(emptyList())
+        override fun getEntryRefs(): Flow<List<com.github.maskedkunisquat.lattice.core.data.model.JournalEntryRef>> = flowOf(emptyList())
     }
 
     private class FakePersonDao : PersonDao {

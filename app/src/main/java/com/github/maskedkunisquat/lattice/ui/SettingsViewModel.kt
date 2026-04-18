@@ -2,8 +2,11 @@ package com.github.maskedkunisquat.lattice.ui
 
 import android.content.Intent
 import androidx.lifecycle.ViewModel
+import com.github.maskedkunisquat.lattice.BuildConfig
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
@@ -13,17 +16,25 @@ import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifest
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.LatticeSettings
 import com.github.maskedkunisquat.lattice.core.logic.TrainingCoordinator
+import com.github.maskedkunisquat.lattice.LocalFallbackProvider
+import com.github.maskedkunisquat.lattice.ModelDownloadWorker
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 import com.github.maskedkunisquat.lattice.core.logic.toAffectiveManifest
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,12 +46,13 @@ class SettingsViewModel(
     private val exportManager: ExportManager,
     private val cloudCredentialStore: CloudCredentialStore,
     val modelLoadState: StateFlow<ModelLoadState>,
-    val copyProgress: StateFlow<Float>,
+    private val localFallbackProvider: LocalFallbackProvider,
     private val manifestDao: TrainingManifestDao,
     // 3.6-f: injected singleton instead of constructing ad-hoc in resetPersonalization
     private val trainingCoordinator: TrainingCoordinator,
     // 3.6-e: outlives the ViewModel so reset can't be cancelled mid-flight by navigation
     private val applicationScope: CoroutineScope,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     val settings: StateFlow<LatticeSettings> = settingsRepository.settings.stateIn(
@@ -74,6 +86,24 @@ class SettingsViewModel(
     val manifest: StateFlow<AffectiveManifest?> = manifestDao.getManifest()
         .map { it?.toAffectiveManifest() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialValue = null)
+
+    val downloadWorkInfo: StateFlow<WorkInfo?> = workManager
+        .getWorkInfosForUniqueWorkFlow(ModelDownloadWorker.UNIQUE_WORK_NAME)
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val downloadProgress: StateFlow<Float> = downloadWorkInfo
+        .map { info -> info?.progress?.getFloat(ModelDownloadWorker.KEY_PROGRESS, 0f) ?: 0f }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)
+
+    init {
+        downloadWorkInfo
+            .map { it?.state }
+            .distinctUntilChanged()
+            .filter { it == WorkInfo.State.SUCCEEDED }
+            .onEach { viewModelScope.launch(Dispatchers.IO) { localFallbackProvider.initialize() } }
+            .launchIn(viewModelScope)
+    }
 
     fun setApiKey(key: String) {
         val trimmed = key.trim()
@@ -154,6 +184,15 @@ class SettingsViewModel(
         }
     }
 
+    fun downloadModel() {
+        if (!BuildConfig.BUILD_HAS_NETWORK) {
+            // No-INTERNET build variant — network model download is disabled.
+            // TODO: route to a sideload/ADB-import flow when offline delivery is implemented.
+            return
+        }
+        localFallbackProvider.downloadModel()
+    }
+
     fun exportJournal() {
         viewModelScope.launch {
             try {
@@ -178,10 +217,11 @@ class SettingsViewModel(
                     exportManager = app.exportManager,
                     cloudCredentialStore = app.cloudCredentialStore,
                     modelLoadState = app.localFallbackProvider.modelLoadState,
-                    copyProgress = app.localFallbackProvider.copyProgress,
                     manifestDao = app.database.trainingManifestDao(),
                     trainingCoordinator = app.trainingCoordinator,
+                    localFallbackProvider = app.localFallbackProvider,
                     applicationScope = app.applicationScope,
+                    workManager = WorkManager.getInstance(app),
                 ) as T
         }
     }

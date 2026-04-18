@@ -7,15 +7,18 @@ import androidx.room.Room
 import com.github.maskedkunisquat.lattice.core.data.CloudCredentialStore
 import com.github.maskedkunisquat.lattice.core.data.KeyProvider
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveMlp
+import com.github.maskedkunisquat.lattice.core.logic.AffectiveMlpInitializer
 import com.github.maskedkunisquat.lattice.core.logic.AffectiveManifestStore
+import com.github.maskedkunisquat.lattice.core.logic.DistortionMlp
 import com.github.maskedkunisquat.lattice.core.logic.CloudProvider
+import com.github.maskedkunisquat.lattice.core.logic.DownloadDependencies
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
 import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import com.github.maskedkunisquat.lattice.core.logic.ExportManager
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
-import com.github.maskedkunisquat.lattice.core.logic.LocalFallbackProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.NanoProvider
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
@@ -31,6 +34,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import androidx.room.withTransaction
 import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 import java.io.File
@@ -40,7 +44,7 @@ private val Application.settingsDataStore by preferencesDataStore(name = "lattic
 private const val TAG = "LatticeApplication"
 private const val PREF_ENCRYPTION_DONE = "encryption_migration_done"
 
-class LatticeApplication : Application(), TrainingDependencies {
+class LatticeApplication : Application(), TrainingDependencies, DownloadDependencies {
 
     // TrainingDependencies — exposes DAOs to EmbeddingTrainingWorker via applicationContext cast
     override val journalDao get() = database.journalDao()
@@ -70,9 +74,9 @@ class LatticeApplication : Application(), TrainingDependencies {
 
     val peopleRepository by lazy {
         PeopleRepository(
-            database = database,
             personDao = database.personDao(),
             phoneNumberDao = database.phoneNumberDao(),
+            transact = { database.withTransaction(it) },
         )
     }
 
@@ -111,7 +115,9 @@ class LatticeApplication : Application(), TrainingDependencies {
 
     val embeddingProvider by lazy { EmbeddingProvider() }
 
-    val localFallbackProvider by lazy { LocalFallbackProvider(this) }
+    override val localFallbackProvider by lazy {
+        LocalFallbackProvider(this, WorkManagerModelDownloader(this))
+    }
 
     val journalRepository by lazy {
         JournalRepository(
@@ -132,8 +138,15 @@ class LatticeApplication : Application(), TrainingDependencies {
         )
     }
 
+    val affectiveMlpInitializer by lazy { AffectiveMlpInitializer() }
+
     val reframingLoop by lazy {
-        ReframingLoop(llmOrchestrator, database.activityHierarchyDao(), searchRepository)
+        ReframingLoop(
+            orchestrator         = llmOrchestrator,
+            activityHierarchyDao = database.activityHierarchyDao(),
+            searchRepository     = searchRepository,
+            embeddingProvider    = embeddingProvider,
+        )
     }
 
     val llmOrchestrator by lazy {
@@ -160,6 +173,31 @@ class LatticeApplication : Application(), TrainingDependencies {
 
         embeddingProvider.initialize(this)
         Thread { localFallbackProvider.initialize() }.start()
+
+        // Load trained MLP heads from disk without blocking startup. reframingLoop starts
+        // with null heads and degrades safely until each model is hot-swapped in.
+        //
+        // AffectiveMlp: load and first-launch init are sequential in the same coroutine so
+        // the async load cannot overwrite a freshly trained head (race from the old two-launch
+        // pattern). If a saved head exists it is installed directly; only when none is found
+        // does maybeInitialize run (guarded by SharedPreferences, so it is a no-op on all
+        // subsequent launches).
+        applicationScope.launch(Dispatchers.IO) {
+            val loaded = AffectiveMlp.load(this@LatticeApplication)
+            if (loaded != null) {
+                if (reframingLoop.affectiveMlp == null) reframingLoop.affectiveMlp = loaded
+            } else {
+                affectiveMlpInitializer.maybeInitialize(
+                    context   = this@LatticeApplication,
+                    mlp       = AffectiveMlp(),
+                    scope     = applicationScope,
+                    onTrained = { trained -> reframingLoop.affectiveMlp = trained },
+                )
+            }
+        }
+        applicationScope.launch(Dispatchers.IO) {
+            reframingLoop.distortionMlp = DistortionMlpLoader.load(this@LatticeApplication)
+        }
 
         // Schedule periodic MLP refinement (no-op if already enqueued) and observe
         // the personalization toggle so the job is cancelled/re-enqueued reactively.

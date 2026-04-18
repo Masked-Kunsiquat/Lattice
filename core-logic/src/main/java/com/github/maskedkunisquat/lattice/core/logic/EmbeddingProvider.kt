@@ -1,22 +1,24 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.nio.LongBuffer
+import org.tensorflow.lite.Interpreter
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Generates 384-dimensional sentence embeddings using the Snowflake Arctic Embed XS ONNX model.
+ * Generates 384-dimensional sentence embeddings using the Snowflake Arctic Embed XS TFLite model.
  *
  * Call [initialize] once (e.g., at app startup) before invoking [generateEmbedding].
  * If the model asset is absent the provider falls back to zero-vectors, so the app
  * remains functional during development before the real model is bundled.
+ *
+ * Model: fixed seq_len=128 (baked in at export). Inputs are INT64. Output is
+ * `last_hidden_state` [1 × 128 × 384] — masked mean-pooled to [384] using attention_mask.
  *
  * @param dispatcher Dispatcher for inference work — defaults to [Dispatchers.Default] so
  *                   inference never blocks the main thread. Inject a test dispatcher in tests.
@@ -24,14 +26,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 open class EmbeddingProvider(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
-    private var ortSession: OrtSession? = null
+    private var interpreter: Interpreter? = null
     private var tokenizer: WordPieceTokenizer? = null
-    private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
-    private val fallbackLoggedSession = AtomicBoolean(false)
+    private val fallbackLoggedInterpreter = AtomicBoolean(false)
     private val fallbackLoggedTokenizer = AtomicBoolean(false)
 
     /**
-     * Loads the ONNX model and WordPiece vocabulary from assets.
+     * Loads the TFLite model and WordPiece vocabulary from assets.
      * Safe to call on any thread; failures are logged and the provider falls back to
      * zero-vectors so the app remains functional if assets are missing.
      */
@@ -39,13 +40,24 @@ open class EmbeddingProvider(
         try {
             val vocabLines = context.assets.open(VOCAB_ASSET).bufferedReader().readLines()
             tokenizer = WordPieceTokenizer(vocabLines)
+
             val modelBytes = context.assets.open(MODEL_ASSET).readBytes()
-            ortSession = env.createSession(modelBytes, OrtSession.SessionOptions())
+            val buf = ByteBuffer.allocateDirect(modelBytes.size)
+                .order(ByteOrder.nativeOrder())
+                .apply { put(modelBytes); rewind() }
+
+            val options = Interpreter.Options().apply {
+                numThreads = 4
+            }
+            interpreter = Interpreter(buf, options)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to initialize embedding model: ${e.message}")
             // Model or vocab not yet available — generateEmbedding will return zero-vectors.
         }
     }
+
+    /** True only after [initialize] has loaded both the TFLite model and the vocabulary. */
+    val isInitialized: Boolean get() = interpreter != null && tokenizer != null
 
     /**
      * Embeds [text] into a 384-dimensional float vector.
@@ -55,12 +67,9 @@ open class EmbeddingProvider(
      *
      * Suspends and resumes on [dispatcher] (default: [Dispatchers.Default]).
      */
-    /** True only after [initialize] has loaded both the ONNX model and the vocabulary. */
-    val isInitialized: Boolean get() = ortSession != null && tokenizer != null
-
     open suspend fun generateEmbedding(text: String): FloatArray = withContext(dispatcher) {
-        val session = ortSession ?: run {
-            if (fallbackLoggedSession.compareAndSet(false, true)) {
+        val interp = interpreter ?: run {
+            if (fallbackLoggedInterpreter.compareAndSet(false, true)) {
                 Log.w(TAG, "generateEmbedding returning zero-vector: model not initialized. " +
                     "Call initialize(context) at app startup. isInitialized=$isInitialized")
             }
@@ -73,55 +82,79 @@ open class EmbeddingProvider(
             }
             return@withContext FloatArray(EMBEDDING_DIM)
         }
-        runInference(session, tok, text)
+        runInference(interp, tok, text)
     }
 
     /**
-     * Tokenizes [text] with [tokenizer] and runs ONNX inference.
+     * Tokenizes [text], pads/truncates to [MODEL_SEQ_LEN], and runs TFLite inference.
      *
-     * Input tensors: input_ids [1 × seq_len], attention_mask [1 × seq_len]
-     * Output tensor: [1 × seq_len × 384] — mean-pooled to [384].
+     * Input tensors (both INT64, shape [1 × MODEL_SEQ_LEN]):
+     *   - input_ids
+     *   - attention_mask
+     *
+     * Output tensor: last_hidden_state [1 × MODEL_SEQ_LEN × 384]
+     * Pooling: masked mean — average only over positions where attention_mask == 1.
      */
-    private fun runInference(session: OrtSession, tokenizer: WordPieceTokenizer, text: String): FloatArray {
-        val (inputIdsArr, attentionMaskArr) = tokenizer.encode(text)
-        val seqLen = inputIdsArr.size.toLong()
-        val shape = longArrayOf(1L, seqLen)
-        // BERT-based models require token_type_ids (segment IDs). For single-sequence
-        // inference these are always all-zeros — only multi-sequence tasks (e.g. QA)
-        // use non-zero values to distinguish sentence A from sentence B.
-        val tokenTypeIds = LongArray(inputIdsArr.size)
+    private fun runInference(
+        interp: Interpreter,
+        tokenizer: WordPieceTokenizer,
+        text: String
+    ): FloatArray {
+        val (rawIds, rawMask) = tokenizer.encode(text)
 
-        return OnnxTensor.createTensor(env, LongBuffer.wrap(inputIdsArr), shape).use { inputIdsTensor ->
-            OnnxTensor.createTensor(env, LongBuffer.wrap(attentionMaskArr), shape).use { attentionMaskTensor ->
-                OnnxTensor.createTensor(env, LongBuffer.wrap(tokenTypeIds), shape).use { tokenTypeIdsTensor ->
-                    val inputs = mapOf(
-                        "input_ids"      to inputIdsTensor,
-                        "attention_mask" to attentionMaskTensor,
-                        "token_type_ids" to tokenTypeIdsTensor,
-                    )
-                    session.run(inputs).use { result ->
-                        @Suppress("UNCHECKED_CAST")
-                        val raw = (result[0].value as Array<Array<FloatArray>>)[0]
-                        meanPool(raw)
-                    }
-                }
-            }
+        // Pad or truncate to fixed model seq_len.
+        val inputIds  = LongArray(MODEL_SEQ_LEN)
+        val attnMask  = LongArray(MODEL_SEQ_LEN)
+        val copyLen   = minOf(rawIds.size, MODEL_SEQ_LEN)
+        for (i in 0 until copyLen) {
+            inputIds[i] = rawIds[i]
+            attnMask[i] = rawMask[i]
         }
+
+        // token_type_ids: all-zeros for single-sequence inference (standard BERT convention).
+        val tokenTypeIds = LongArray(MODEL_SEQ_LEN)
+
+        // Wrap into [1 × MODEL_SEQ_LEN] 2-D arrays for the Interpreter.
+        val inputIdsBatch    = Array(1) { inputIds }
+        val attnMaskBatch    = Array(1) { attnMask }
+        val tokenTypeIdsBatch = Array(1) { tokenTypeIds }
+
+        // Output buffer: [1 × MODEL_SEQ_LEN × 384] float32.
+        val output = Array(1) { Array(MODEL_SEQ_LEN) { FloatArray(EMBEDDING_DIM) } }
+
+        val inputs = mapOf(
+            "input_ids"       to inputIdsBatch,
+            "attention_mask"  to attnMaskBatch,
+            "token_type_ids"  to tokenTypeIdsBatch,
+        )
+        val outputs = mapOf("last_hidden_state" to output)
+        interp.runSignature(inputs, outputs)
+
+        return maskedMeanPool(output[0], attnMask)
     }
 
-    private fun meanPool(tokenVectors: Array<FloatArray>): FloatArray {
+    /**
+     * Mean-pools [tokenVectors] weighted by [mask] (1 = real token, 0 = padding).
+     * Falls back to a plain mean if the mask sums to zero (empty input guard).
+     */
+    private fun maskedMeanPool(tokenVectors: Array<FloatArray>, mask: LongArray): FloatArray {
         val pooled = FloatArray(EMBEDDING_DIM)
-        for (token in tokenVectors) {
-            for (i in token.indices) pooled[i] += token[i]
+        var count = 0
+        for (i in tokenVectors.indices) {
+            if (mask[i] == 1L) {
+                for (j in 0 until EMBEDDING_DIM) pooled[j] += tokenVectors[i][j]
+                count++
+            }
         }
-        val n = tokenVectors.size.toFloat()
+        val n = if (count > 0) count.toFloat() else tokenVectors.size.toFloat()
         for (i in pooled.indices) pooled[i] /= n
         return pooled
     }
 
     companion object {
         const val EMBEDDING_DIM = 384
-        private const val MODEL_ASSET = "snowflake-arctic-embed-xs.onnx"
+        const val MODEL_SEQ_LEN = 128
+        private const val MODEL_ASSET = "snowflake-arctic-embed-xs_float32.tflite"
         private const val VOCAB_ASSET = "vocab.txt"
         private const val TAG = "EmbeddingProvider"
     }

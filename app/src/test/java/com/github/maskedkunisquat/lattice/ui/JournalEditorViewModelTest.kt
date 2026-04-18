@@ -3,19 +3,28 @@ package com.github.maskedkunisquat.lattice.ui
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PhoneNumberDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TagDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Mention
 import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
 import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.LlmProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
+import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
+import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
+import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
+import com.github.maskedkunisquat.lattice.core.logic.TagRepository
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -75,6 +84,27 @@ class JournalEditorViewModelTest {
         override suspend fun deleteEntryById(id: UUID) = Unit
         override suspend fun getLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): List<JournalEntry> = emptyList()
         override suspend fun countLabeledEntriesBetween(fromTimestamp: Long, toTimestamp: Long): Int = 0
+        override fun getEntriesForPerson(personId: UUID): Flow<List<JournalEntry>> = flowOf(emptyList())
+        override fun getEntryRefs(): Flow<List<com.github.maskedkunisquat.lattice.core.data.model.JournalEntryRef>> = flowOf(emptyList())
+    }
+
+    private class FakeTagDao : TagDao {
+        override suspend fun insertTag(tag: Tag) = Unit
+        override suspend fun deleteById(id: UUID) = Unit
+        override fun getAll(): Flow<List<Tag>> = flowOf(emptyList())
+        override fun searchByName(query: String): Flow<List<Tag>> = flowOf(emptyList())
+        override suspend fun getById(id: UUID): Tag? = null
+        override suspend fun getByName(name: String): Tag? = null
+    }
+
+    private class FakePhoneNumberDao : PhoneNumberDao {
+        override suspend fun insertPhoneNumber(phoneNumber: PhoneNumber) = Unit
+        override suspend fun insertPhoneNumbers(phoneNumbers: List<PhoneNumber>) = Unit
+        override suspend fun updatePhoneNumber(phoneNumber: PhoneNumber) = Unit
+        override suspend fun deletePhoneNumber(phoneNumber: PhoneNumber) = Unit
+        override fun getPhoneNumbersForPerson(personId: UUID): Flow<List<PhoneNumber>> = flowOf(emptyList())
+        override fun getAllPhoneNumbers(): Flow<List<PhoneNumber>> = flowOf(emptyList())
+        override suspend fun deleteByPersonId(personId: UUID) = Unit
     }
 
     private class FakeTransitEventDao : TransitEventDao {
@@ -120,12 +150,12 @@ class JournalEditorViewModelTest {
         val unavailableProvider = object : LlmProvider {
             override val id = "none"
             override suspend fun isAvailable() = false
-            override fun process(prompt: String): Flow<LlmResult> = flowOf()
+            override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
         }
         val fakeLocal = object : LlmProvider {
             override val id = "fake_local"
             override suspend fun isAvailable() = providerTokens.isNotEmpty()
-            override fun process(prompt: String): Flow<LlmResult> =
+            override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> =
                 (providerTokens.map { LlmResult.Token(it) } + LlmResult.Complete).asFlow()
         }
         val orchestrator = LlmOrchestrator(
@@ -141,6 +171,14 @@ class JournalEditorViewModelTest {
             // scheduler and completes synchronously within runTest.
             reframingLoop = ReframingLoop(orchestrator, dispatcher = testDispatcher),
             transitEventDao = FakeTransitEventDao(),
+            modelLoadState = MutableStateFlow(ModelLoadState.IDLE),
+            peopleRepository = PeopleRepository(
+                personDao = FakePersonDao(),
+                phoneNumberDao = FakePhoneNumberDao(),
+                transact = { it() },
+            ),
+            tagRepository = TagRepository(FakeTagDao()),
+            placeRepository = PlaceRepository(FakePlaceDao()),
         )
     }
 
@@ -159,7 +197,8 @@ class JournalEditorViewModelTest {
         )
 
         // Trigger the full pipeline so reframeState becomes Done.
-        vm.onTextChanged("!reframe I feel stuck today.")
+        vm.onTextChanged("I feel stuck today.")
+        vm.requestReframe()
         // UnconfinedTestDispatcher runs coroutines eagerly, so the pipeline is already done.
         val reframeState = vm.uiState.value.reframeState
         assertTrue(
@@ -204,7 +243,8 @@ class JournalEditorViewModelTest {
             providerTokens = listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "All good."),
         )
 
-        vm.onTextChanged("!reframe I feel stuck today.")
+        vm.onTextChanged("I feel stuck today.")
+        vm.requestReframe()
 
         val finalState = vm.uiState.value.reframeState
         assertTrue(
@@ -225,7 +265,7 @@ class JournalEditorViewModelTest {
         val fakeCloud = object : LlmProvider {
             override val id = "fake_cloud"
             override suspend fun isAvailable() = true
-            override fun process(prompt: String): Flow<LlmResult> {
+            override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> {
                 cloudCallCount++
                 return flowOf(LlmResult.Complete)
             }
@@ -233,7 +273,7 @@ class JournalEditorViewModelTest {
         val fakeLocal = object : LlmProvider {
             override val id = "fake_local"
             override suspend fun isAvailable() = true
-            override fun process(prompt: String): Flow<LlmResult> =
+            override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> =
                 (listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "All good.")
                     .map { LlmResult.Token(it) } + LlmResult.Complete).asFlow()
         }
@@ -252,7 +292,7 @@ class JournalEditorViewModelTest {
             nanoProvider = object : LlmProvider {
                 override val id = "none"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = fakeLocal,
             cloudProvider = fakeCloud,
@@ -265,9 +305,18 @@ class JournalEditorViewModelTest {
             orchestrator = orchestrator,
             reframingLoop = ReframingLoop(orchestrator, dispatcher = testDispatcher),
             transitEventDao = FakeTransitEventDao(),
+            modelLoadState = MutableStateFlow(ModelLoadState.IDLE),
+            peopleRepository = PeopleRepository(
+                personDao = FakePersonDao(),
+                phoneNumberDao = FakePhoneNumberDao(),
+                transact = { it() },
+            ),
+            tagRepository = TagRepository(FakeTagDao()),
+            placeRepository = PlaceRepository(FakePlaceDao()),
         )
 
-        vm.onTextChanged("!reframe I feel stuck today.")
+        vm.onTextChanged("I feel stuck today.")
+        vm.requestReframe()
 
         assertEquals("Cloud provider must not be called during reframe", 0, cloudCallCount)
         assertTrue(
@@ -297,7 +346,7 @@ class JournalEditorViewModelTest {
         val fakeLocal = object : LlmProvider {
             override val id = "fake_local"
             override suspend fun isAvailable() = true
-            override fun process(prompt: String): Flow<LlmResult> =
+            override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> =
                 (listOf("v=0.5 a=0.5\nDISTORTIONS: NONE\n", "All good.")
                     .map { LlmResult.Token(it) } + LlmResult.Complete).asFlow()
         }
@@ -305,7 +354,7 @@ class JournalEditorViewModelTest {
             nanoProvider = object : LlmProvider {
                 override val id = "none"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = fakeLocal,
             transitEventDao = FakeTransitEventDao(),
@@ -318,16 +367,25 @@ class JournalEditorViewModelTest {
             // leaving the job in-flight so the second onTextChanged can cancel it.
             reframingLoop = ReframingLoop(orchestrator, dispatcher = reframingDispatcher),
             transitEventDao = FakeTransitEventDao(),
+            modelLoadState = MutableStateFlow(ModelLoadState.IDLE),
+            peopleRepository = PeopleRepository(
+                personDao = FakePersonDao(),
+                phoneNumberDao = FakePhoneNumberDao(),
+                transact = { it() },
+            ),
+            tagRepository = TagRepository(FakeTagDao()),
+            placeRepository = PlaceRepository(FakePlaceDao()),
         )
 
-        // Start the pipeline — suspends at the first withContext(reframingDispatcher).
-        vm.onTextChanged("!reframe I feel stuck today.")
-        // Pipeline is suspended. Cancel it by typing normal text.
+        // Set text and start the pipeline — suspends at the first withContext(reframingDispatcher).
         vm.onTextChanged("I feel stuck today.")
+        vm.requestReframe()
+        // Pipeline is suspended. Cancel it by typing new text.
+        vm.onTextChanged("Something else entirely.")
         // Drain the scheduler — cancelled coroutine cleans up, no further state changes.
         advanceUntilIdle()
 
         assertEquals("reframeState must be Idle after cancellation", ReframeState.Idle, vm.uiState.value.reframeState)
-        assertEquals("text must reflect the last typed value", "I feel stuck today.", vm.uiState.value.text)
+        assertEquals("text must reflect the last typed value", "Something else entirely.", vm.uiState.value.text)
     }
 }

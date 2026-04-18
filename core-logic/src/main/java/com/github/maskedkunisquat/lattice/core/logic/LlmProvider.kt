@@ -6,9 +6,9 @@ import kotlinx.coroutines.flow.Flow
  * Contract for an LLM inference backend.
  *
  * Three tiers are implemented:
- * - [NanoProvider]        — Gemini Nano via Google AICore (on-device, API 35+)
- * - [LocalFallbackProvider] — Llama3-8B via ONNX Runtime (on-device, all API levels)
- * - [CloudProvider]       — Remote API (off-device, DISABLED by default)
+ * - [NanoProvider]     — Gemini Nano via Google AICore (on-device, API 35+)
+ * - local fallback provider — Gemma 3 1B via LiteRT-LM (on-device, all API levels); see [LocalModelProvider]
+ * - [CloudProvider]    — Remote API (off-device, DISABLED by default)
  *
  * The [LlmOrchestrator] selects among these based on hardware availability and
  * the user's explicit consent to cloud routing.
@@ -26,9 +26,14 @@ interface LlmProvider {
      * Emits [LlmResult.Token] for each generated token, then [LlmResult.Complete]
      * or [LlmResult.Error]. The flow is cold — collection starts inference.
      *
+     * @param prompt The (PII-masked) user message — plain text, no chat-format tokens.
+     * @param systemInstruction Optional system-level instruction. Providers that support
+     *   a native system turn (LiteRT-LM [ConversationConfig], Anthropic `system` field)
+     *   use it directly; stub providers may ignore it.
+     *
      * IMPORTANT: The prompt must already be PII-masked before reaching any provider
      * that routes data off-device ([CloudProvider]). Local providers run on-device and
      * do not require masking, but callers should mask anyway for consistency.
      */
-    fun process(prompt: String): Flow<LlmResult>
+    fun process(prompt: String, systemInstruction: String? = null): Flow<LlmResult>
 }

@@ -62,7 +62,7 @@ class AuditTrailViewModel(app: LatticeApplication) : ViewModel() {
 private fun formatProvider(raw: String) = when (raw) {
     "cloud_claude"      -> "Claude (Cloud)"
     "llama3_onnx_local" -> "Local (Llama 3)"
-    else                -> raw.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    else                -> raw.replace('_', ' ').replaceFirstChar { it.uppercase(Locale.ROOT) }
 }
 
 @Composable
@@ -123,7 +123,7 @@ private fun TransitEventRow(event: TransitEvent) {
         headlineContent = { Text(formatProvider(event.providerName)) },
         supportingContent = {
             Text(
-                event.operationType.replaceFirstChar { it.uppercase() },
+                event.operationType.replaceFirstChar { it.uppercase(Locale.ROOT) },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

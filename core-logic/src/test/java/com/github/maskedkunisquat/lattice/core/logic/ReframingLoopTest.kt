@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -28,7 +29,7 @@ class ReframingLoopTest {
         private val results: List<LlmResult>
     ) : LlmProvider {
         override suspend fun isAvailable() = true
-        override fun process(prompt: String): Flow<LlmResult> = results.asFlow()
+        override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = results.asFlow()
     }
 
     private class FakeTransitEventDao : TransitEventDao {
@@ -45,7 +46,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -61,7 +62,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = FakeProvider("local", listOf(LlmResult.Complete)),
             transitEventDao = FakeTransitEventDao(),
@@ -130,8 +131,6 @@ class ReframingLoopTest {
         val prompt = loop.buildAffectivePrompt("I feel [PERSON_abc] ignored me today.")
         assertTrue(prompt.contains("[PERSON_abc]"))
         assertTrue(prompt.contains("v=<number> a=<number>"))
-        assertTrue(prompt.contains("<|begin_of_text|>"))
-        assertTrue(prompt.contains("<|eot_id|>"))
     }
 
     // ── End-to-end flow test ──────────────────────────────────────────────────
@@ -156,7 +155,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -205,7 +204,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = FakeProvider("local", listOf(LlmResult.Complete)),
             transitEventDao = FakeTransitEventDao(),
@@ -241,7 +240,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = FakeProvider("local", errorResults),
             transitEventDao = FakeTransitEventDao(),
@@ -285,7 +284,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = FakeProvider("local", results),
             transitEventDao = FakeTransitEventDao(),
@@ -377,9 +376,12 @@ class ReframingLoopTest {
         assertEquals(raw, result.reasoning)
     }
 
-    @Test(expected = IllegalStateException::class)
-    fun `parseDotOutput - throws when sentinel missing`() {
-        loop.parseDotOutput("The text seems okay. No distortions here.")
+    @Test
+    fun `parseDotOutput - returns empty list when sentinel missing and no known labels present`() {
+        // Current behaviour: greedy fallback scans for known labels; plain text with no
+        // distortion keywords returns an empty list rather than throwing.
+        val result = loop.parseDotOutput("The text seems okay. No distortions here.")
+        assertTrue(result.distortions.isEmpty())
     }
 
     // ── Stage 2: buildDotPrompt ───────────────────────────────────────────────
@@ -395,8 +397,6 @@ class ReframingLoopTest {
                 prompt.contains(distortion.label, ignoreCase = true)
             )
         }
-        assertTrue(prompt.contains("<|begin_of_text|>"))
-        assertTrue(prompt.contains("<|eot_id|>"))
     }
 
     // ── Stage 2: end-to-end flow ──────────────────────────────────────────────
@@ -422,7 +422,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -430,6 +430,64 @@ class ReframingLoopTest {
         )
         val result = ReframingLoop(orchestrator).runStage2DiagnosisOfThought("test")
         assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `runStage2DiagnosisOfThought - MLP path used when distortionMlp is wired`() = runTest {
+        // Wire a DistortionMlp whose b2 has all positive biases → all 12 classes fire.
+        val mlp = DistortionMlp(
+            w1 = FloatArray(DistortionMlp.OUT1 * DistortionMlp.IN),
+            b1 = FloatArray(DistortionMlp.OUT1),
+            w2 = FloatArray(DistortionMlp.OUT2 * DistortionMlp.OUT1),
+            b2 = FloatArray(DistortionMlp.OUT2) { 100f },  // sigmoid(100) ≈ 1.0 → all true
+        )
+        val fakeEmbedder = object : EmbeddingProvider() {
+            override suspend fun generateEmbedding(text: String) = FloatArray(384) { 0.1f }
+        }
+        val reframingLoop = loopWithResponse("DISTORTIONS: NONE")  // LLM would return NONE
+        reframingLoop.distortionMlp   = mlp
+        reframingLoop.affectiveMlp    = null  // only Stage 2 MLP is active here
+
+        // Replace embeddingProvider via the backdoor field isn't possible (private val).
+        // Instead wire it by constructing a loop directly with all three deps:
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = FakeProvider("local", listOf(LlmResult.Complete)),
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = { false },
+        )
+        val loop = ReframingLoop(
+            orchestrator      = orchestrator,
+            embeddingProvider = fakeEmbedder,
+            distortionMlp     = mlp,
+        )
+        val result = loop.runStage2DiagnosisOfThought("I always fail at everything.")
+        assertTrue(result.isSuccess)
+        val diagnosis = result.getOrThrow()
+        assertEquals(ReframingLoop.DiagnosisSource.MLP, diagnosis.source)
+        assertEquals(DistortionMlp.OUT2, diagnosis.distortions.size)  // all 12 classes fired
+    }
+
+    @Test
+    fun `runStage2DiagnosisOfThought - falls back to LLM when distortionMlp is null`() = runTest {
+        val response = "DISTORTIONS: Labeling"
+        val reframingLoop = loopWithResponse(*response.map { it.toString() }.toTypedArray())
+        // distortionMlp defaults to null → LLM path
+        val result = reframingLoop.runStage2DiagnosisOfThought("I am such a loser.")
+        assertTrue(result.isSuccess)
+        val diagnosis = result.getOrThrow()
+        assertEquals(ReframingLoop.DiagnosisSource.LLM, diagnosis.source)
+        assertEquals(listOf(CognitiveDistortion.LABELING), diagnosis.distortions)
+    }
+
+    @Test
+    fun `DiagnosisResult source defaults to LLM`() {
+        val d = ReframingLoop.DiagnosisResult(emptyList(), "raw")
+        assertEquals(ReframingLoop.DiagnosisSource.LLM, d.source)
     }
 
     // ── Stage 3: selectStrategy ───────────────────────────────────────────────
@@ -481,10 +539,9 @@ class ReframingLoopTest {
         )
         assertTrue(prompt.contains("[PERSON_abc]"))
         assertTrue(prompt.contains("Mind Reading"))
-        assertTrue(prompt.contains("Socratic", ignoreCase = true))
-        assertTrue(prompt.contains("Reality", ignoreCase = true))
-        assertTrue(prompt.contains("probability", ignoreCase = true))
-        assertTrue(prompt.contains("<|begin_of_text|>"))
+        assertTrue(prompt.contains("fear", ignoreCase = true))
+        assertTrue(prompt.contains("assumption", ignoreCase = true))
+        assertTrue(prompt.contains("balanced", ignoreCase = true))
     }
 
     @Test
@@ -495,9 +552,8 @@ class ReframingLoopTest {
             distortions = listOf(CognitiveDistortion.OVERGENERALIZATION),
         )
         assertTrue(prompt.contains("Overgeneralization"))
-        assertTrue(prompt.contains("Behavioral", ignoreCase = true))
-        assertTrue(prompt.contains("contrary", ignoreCase = true))
-        assertTrue(prompt.contains("<|begin_of_text|>"))
+        assertTrue(prompt.contains("avoidance", ignoreCase = true))
+        assertTrue(prompt.contains("temporary state", ignoreCase = true))
     }
 
     @Test
@@ -507,7 +563,8 @@ class ReframingLoopTest {
             strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
             distortions = emptyList(),
         )
-        assertTrue(prompt.contains("No specific cognitive distortions were identified."))
+        // When distortions is empty, no distortion line is injected into the prompt.
+        assertFalse(prompt.contains("Distortions present:"))
     }
 
     // ── Stage 3: end-to-end flow ──────────────────────────────────────────────
@@ -553,7 +610,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -596,7 +653,7 @@ class ReframingLoopTest {
             nanoProvider = object : LlmProvider {
                 override val id = "nano"
                 override suspend fun isAvailable() = false
-                override fun process(prompt: String): Flow<LlmResult> = flowOf()
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
             },
             localFallbackProvider = provider,
             transitEventDao = FakeTransitEventDao(),
@@ -652,8 +709,8 @@ class ReframingLoopTest {
             distortions = emptyList(),
             baActivity = activity,
         )
+        // taskName is injected as the concrete next step; valueCategory is not part of the prompt.
         assertTrue(prompt.contains("Take a 5-minute walk"))
-        assertTrue(prompt.contains("health"))
     }
 
     // ── Task 5.3-A: RAG Evidence injection ───────────────────────────────────
@@ -676,8 +733,8 @@ class ReframingLoopTest {
             evidenceEntries = listOf(evidence),
         )
         assertTrue(
-            "Evidence for the Contrary block must appear in Q2 prompt",
-            prompt.contains("Evidence for the Contrary")
+            "Evidence block must appear in Q2 prompt",
+            prompt.contains("Past evidence that contradicts this belief")
         )
         assertTrue(
             "Evidence entry content must be present in prompt",

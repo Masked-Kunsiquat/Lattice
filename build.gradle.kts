@@ -9,47 +9,88 @@ plugins {
 
 // ── Model download ────────────────────────────────────────────────────────────
 //
-// Llama-3.2-3B ONNX shards are not committed to git. Run once before building:
+// Gemma 3 1B Instruct (LiteRT) is not committed to git. Run once before building:
 //   ./gradlew downloadModels
 //
-// Files land in app/src/main/assets/ (gitignored). Existing files are skipped.
-// Source: https://huggingface.co/masked-kunsiquat/Llama-3.2-3B-Instruct-Q4
+// The correct hardware tier is selected by querying the connected device via ADB.
+// Override with -PdownloadTier=elite|ultra|universal if no device is attached.
+//
+//   elite     gemma3-1b-it-elite.litertlm   SM8750 (S25 Ultra) — Adreno 830 AOT kernels
+//   ultra     gemma3-1b-it-ultra.litertlm   SM8650 (S24 Ultra) — Adreno 750 AOT kernels
+//   universal gemma3-1b-it-int4.litertlm    Any ARM64           — JIT / OpenCL fallback
+//
+// Source: https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert
+// NOTE: Requires accepting Google's Gemma Terms of Use. Authenticate with
+//       `huggingface-cli login` (or set HF_TOKEN) before running.
 
-private val HF_LLAMA = "https://huggingface.co/masked-kunsiquat/Llama-3.2-3B-Instruct-Q4/resolve/main"
-
-private val llamaFiles = listOf(
-    "model_q4.onnx",
-    "model_q4.onnx_data",
-    "model_q4.onnx_data_1",
-    "tokenizer.json",
-    "tokenizer_config.json",
-    "config.json",
-    "generation_config.json",
-)
+private val HF_GEMMA = "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
 
 tasks.register("downloadModels") {
     group = "lattice"
-    description = "Downloads Llama-3.2-3B ONNX shards from HuggingFace into app/src/main/assets/."
+    description = "Downloads the Gemma 3 1B LiteRT model tier for the connected device into app/src/main/assets/."
     doLast {
         val assetDir = file("app/src/main/assets")
-        llamaFiles.forEach { name ->
-            val dest = assetDir.resolve(name)
-            if (dest.exists()) {
-                logger.lifecycle("  ✓  $name  (already present)")
-                return@forEach
+
+        // ── Tier selection ────────────────────────────────────────────────────
+        // Priority: -PdownloadTier CLI property > ADB device query > universal fallback
+        val tier: String = run {
+            val propOverride = findProperty("downloadTier") as String?
+            if (propOverride != null) {
+                logger.lifecycle("  ℹ  Using -PdownloadTier=$propOverride")
+                return@run propOverride
             }
-            logger.lifecycle("  ↓  $name …")
-            val tmp = assetDir.resolve("$name.tmp")
             try {
-                hfDownload("$HF_LLAMA/$name", tmp, logger)
+                val pb = ProcessBuilder("adb", "shell", "getprop", "ro.product.board")
+                val proc = pb.start()
+                val exited = proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+                if (!exited) {
+                    proc.destroyForcibly()
+                    logger.lifecycle("  ℹ  ADB timed out — using universal tier.")
+                    return@run "universal"
+                }
+                val board = proc.inputStream.bufferedReader().use { it.readText() }.trim()
+                logger.lifecycle("  ℹ  Detected ro.product.board=$board")
+                when (board.lowercase()) {
+                    "kailua" -> "elite"   // Snapdragon 8 Elite (SM8750)
+                    "kalama" -> "ultra"   // Snapdragon 8 Gen 3 (SM8650)
+                    else -> {
+                        if (board.isNotEmpty())
+                            logger.lifecycle("  ℹ  Unknown board '$board' — falling back to universal tier")
+                        "universal"
+                    }
+                }
+            } catch (e: Exception) {
+                logger.lifecycle(
+                    "  ℹ  ADB unavailable (${e.message}) — using universal tier. " +
+                    "Connect a device or pass -PdownloadTier=elite|ultra|universal."
+                )
+                "universal"
+            }
+        }
+
+        val modelFile = when (tier) {
+            "elite" -> "gemma3-1b-it-elite.litertlm"
+            "ultra" -> "gemma3-1b-it-ultra.litertlm"
+            else    -> "gemma3-1b-it-int4.litertlm"
+        }
+
+        // ── Download ──────────────────────────────────────────────────────────
+        val dest = assetDir.resolve(modelFile)
+        if (dest.exists()) {
+            logger.lifecycle("  ✓  $modelFile  (already present)")
+        } else {
+            logger.lifecycle("  ↓  $modelFile …")
+            val tmp = assetDir.resolve("$modelFile.tmp")
+            try {
+                hfDownload("$HF_GEMMA/$modelFile", tmp, logger)
                 if (!tmp.renameTo(dest)) tmp.copyTo(dest, overwrite = true).also { tmp.delete() }
-                logger.lifecycle("  ✓  $name  (${dest.length().toHuman()})")
+                logger.lifecycle("  ✓  $modelFile  (${dest.length().toHuman()})")
             } catch (e: Exception) {
                 tmp.delete()
                 throw e
             }
         }
-        logger.lifecycle("downloadModels complete — all assets present.")
+        logger.lifecycle("downloadModels complete — $modelFile ready in app/src/main/assets/.")
     }
 }
 
@@ -57,6 +98,10 @@ tasks.register("downloadModels") {
 fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
     dest.parentFile.mkdirs()
     var location = url
+
+    val hfToken = System.getenv("HF_TOKEN")
+        ?: file("${System.getProperty("user.home")}/.cache/huggingface/token").let { if (it.exists()) it.readText().trim() else null }
+
     repeat(10) { attempt ->
         val conn = java.net.URI(location).toURL()
             .openConnection() as java.net.HttpURLConnection
@@ -64,6 +109,10 @@ fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
         conn.connectTimeout = 30_000
         conn.readTimeout    = 60_000
         conn.setRequestProperty("User-Agent", "Gradle/Lattice-downloadModels")
+        if (hfToken != null) {
+            conn.setRequestProperty("Authorization", "Bearer $hfToken")
+        }
+
         try {
             conn.connect()
             when (val code = conn.responseCode) {
@@ -96,12 +145,21 @@ fun hfDownload(url: String, dest: File, logger: org.gradle.api.logging.Logger) {
                     // result before following it (guards against open-redirect exploitation).
                     val resolved = java.net.URI(location).resolve(raw)
                     val originalHost = java.net.URI(url).host
-                    if (resolved.scheme != "https" || resolved.host != originalHost) {
+                    if (resolved.scheme != "https" ||
+                        resolved.userInfo != null ||
+                        (resolved.host != originalHost && resolved.host?.endsWith(".huggingface.co") != true)) {
                         throw GradleException(
-                            "Redirect to untrusted location '${resolved}' rejected (expected https://$originalHost)"
+                            "Redirect to untrusted location '${resolved}' rejected (expected https://$originalHost or *.huggingface.co)"
                         )
                     }
                     location = resolved.toString()
+                }
+                401, 403 -> {
+                    throw GradleException(
+                        "HTTP $code: HuggingFace access denied. Please ensure you have accepted the Gemma license " +
+                        "at https://huggingface.co/google/gemma-3-1b-it and are authenticated. " +
+                        "Run `huggingface-cli login` or set the HF_TOKEN environment variable."
+                    )
                 }
                 else -> throw GradleException("HTTP $code downloading $url")
             }

@@ -16,7 +16,7 @@ import java.util.UUID
  *
  * ## Routing priority (local-first)
  * 1. [nanoProvider]          — Gemini Nano via AICore (API 35+, on-device)
- * 2. [localFallbackProvider] — Llama-3.2-3B via ONNX (on-device, all API levels)
+ * 2. [localFallbackProvider] — Gemma 3 1B via LiteRT-LM (on-device, all API levels)
  * 3. [cloudProvider]         — Remote API (**only** when [cloudEnabled] = true)
  *
  * ## Sovereignty Gate
@@ -67,20 +67,28 @@ class LlmOrchestrator(
     /**
      * Routes [prompt] to the best available provider and streams the result.
      *
-     * @param prompt     The (PII-masked) text to process.
-     * @param operationType Label for the audit log (e.g. "reframe", "summarize").
+     * @param prompt            The (PII-masked) user message — plain text, no chat tokens.
+     * @param operationType     Label for the audit log (e.g. "reframe", "summarize").
+     * @param systemInstruction Optional system-level instruction forwarded to the provider.
+     *   **Must be developer-authored** — all call sites pass string literals defined in
+     *   [ReframingLoop] ([ReframingLoop.AFFECTIVE_SYSTEM] etc.). The PII gate only checks
+     *   [prompt]; [systemInstruction] is assumed to contain no user-derived content.
      */
     fun process(
         prompt: String,
-        operationType: String = "reframe"
+        operationType: String = "reframe",
+        systemInstruction: String? = null,
     ): Flow<LlmResult> = flow {
         val provider = selectProvider()
-        val piiDetected = provider === cloudProvider && runCatching { piiDetector?.invoke(prompt) ?: false }.getOrDefault(true)
+        val piiDetected = provider === cloudProvider && runCatching {
+            (piiDetector?.invoke(prompt) ?: false) ||
+            (systemInstruction != null && piiDetector?.invoke(systemInstruction) ?: false)
+        }.getOrDefault(true)
         if (piiDetected) {
             emit(
                 LlmResult.Error(
                     SecurityException(
-                        "Cloud dispatch blocked: raw PII detected in prompt. " +
+                        "Cloud dispatch blocked: raw PII detected in prompt or system instruction. " +
                         "Mask all personal data via PiiShield before routing to cloud."
                     )
                 )
@@ -88,7 +96,7 @@ class LlmOrchestrator(
             return@flow
         }
         applyPrivacyState(provider, operationType)
-        emitAll(provider.process(prompt))
+        emitAll(provider.process(prompt, systemInstruction))
     }
 
     private suspend fun selectProvider(): LlmProvider {

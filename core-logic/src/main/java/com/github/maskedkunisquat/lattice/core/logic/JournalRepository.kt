@@ -6,6 +6,7 @@ import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.JournalEntryRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -22,6 +23,12 @@ class JournalRepository(
     private val placeDao: PlaceDao,
 ) {
     /**
+     * Returns a lightweight flow of entry refs (id, tagIds, placeIds only).
+     * Use this for count-based UI operations that do not need entry content or embeddings.
+     */
+    fun getEntryRefs(): Flow<List<JournalEntryRef>> = journalDao.getEntryRefs()
+
+    /**
      * Returns a flow of journal entries with content unmasked for UI display.
      * This fulfills the Prime Directive: Local-First Persistence + PII Isolation.
      */
@@ -32,6 +39,24 @@ class JournalRepository(
             placeDao.getAll(),
         ) { entries, people, places ->
             entries.map { it.copy(content = it.content?.let { c -> PiiShield.unmask(c, people, places) }) }
+        }
+    }
+
+    /**
+     * Returns a flow of journal entries for a specific person, unmasked.
+     */
+    fun getEntriesForPerson(personId: UUID): Flow<List<JournalEntry>> {
+        return combine(
+            journalDao.getEntriesForPerson(personId),
+            personDao.getPersons(),
+            placeDao.getAll(),
+        ) { entries, people, places ->
+            entries.map {
+                it.copy(
+                    content         = it.content?.let { c -> PiiShield.unmask(c, people, places) },
+                    reframedContent = it.reframedContent?.let { r -> PiiShield.unmask(r, people, places) },
+                )
+            }
         }
     }
 

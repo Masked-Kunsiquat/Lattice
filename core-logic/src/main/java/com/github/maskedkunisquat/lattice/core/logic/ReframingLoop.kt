@@ -1,6 +1,5 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import android.util.Log
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
@@ -34,7 +33,14 @@ class ReframingLoop(
     private val searchRepository: SearchRepository? = null,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val embeddingProvider: EmbeddingProvider? = null,
-    private val affectiveMlp: AffectiveMlp? = null,
+    @Volatile var affectiveMlp: AffectiveMlp? = null,
+    @Volatile var distortionMlp: DistortionMlp? = null,
+    private val logger: Logger = object : Logger {
+        override fun debug(tag: String, msg: String) = Unit
+        override fun info(tag: String, msg: String) = Unit
+        override fun warn(tag: String, msg: String, throwable: Throwable?) = Unit
+        override fun error(tag: String, msg: String, throwable: Throwable?) = Unit
+    },
 ) {
 
     // ── Stage 1 ──────────────────────────────────────────────────────────────
@@ -61,7 +67,7 @@ class ReframingLoop(
                         val (v, a) = mlp.forward(embedding)
                         val vc = v.coerceIn(-1f, 1f)
                         val ac = a.coerceIn(-1f, 1f)
-                        Log.d(TAG, "Stage1: source=mlp")
+                        logger.debug(TAG, "Stage1: source=mlp")
                         AffectiveMapResult(
                             valence = vc,
                             arousal = ac,
@@ -69,15 +75,19 @@ class ReframingLoop(
                             source = AffectiveSource.MLP,
                         )
                     }.onFailure { e ->
-                        Log.w(TAG, "Stage1: MLP path threw, falling back to regex", e)
+                        logger.warn(TAG, "Stage1: MLP path threw, falling back to regex", e)
                     }.getOrNull()
                 } else null
 
                 mlpResult ?: run {
                     val raw = collectTokens(
-                        orchestrator.process(buildAffectivePrompt(maskedText), "affective_map")
+                        orchestrator.process(
+                            buildAffectivePrompt(maskedText),
+                            "affective_map",
+                            AFFECTIVE_SYSTEM,
+                        )
                     )
-                    Log.d(TAG, "Stage1: source=regex")
+                    logger.debug(TAG, "Stage1: source=regex")
                     parseAffectiveCoords(raw)
                 }
             }
@@ -87,12 +97,12 @@ class ReframingLoop(
     // ── Stage 2 ──────────────────────────────────────────────────────────────
 
     /**
-     * Diagnosis of Thought: runs a chain-of-thought facts-vs-beliefs analysis then
-     * identifies which of the 12 CBT [CognitiveDistortion]s are present.
+     * Diagnosis of Thought: classifies which of the 12 CBT [CognitiveDistortion]s are
+     * present in the journal text.
      *
-     * The model is asked to reason aloud (chain-of-thought) before emitting a final
-     * `DISTORTIONS:` sentinel line. The full reasoning is preserved in
-     * [DiagnosisResult.reasoning] for optional display or debugging.
+     * The model is asked to output only the `DISTORTIONS:` sentinel line — no chain-of-
+     * thought reasoning. This keeps latency low on small models (Gemma 3 1B) that tend
+     * to produce verbose, poorly-formatted reasoning when given multi-step instructions.
      *
      * @param maskedText PII-masked journal text.
      * @return [Result.success] with [DiagnosisResult], or [Result.failure] on model
@@ -101,10 +111,33 @@ class ReframingLoop(
     suspend fun runStage2DiagnosisOfThought(maskedText: String): Result<DiagnosisResult> =
         withContext(dispatcher) {
             runCatching {
-                val raw = collectTokens(
-                    orchestrator.process(buildDotPrompt(maskedText), "dot_diagnosis")
-                )
-                parseDotOutput(raw)
+                val mlp     = distortionMlp
+                val embedder = embeddingProvider
+                val mlpResult: DiagnosisResult? = if (mlp != null && embedder != null) {
+                    runCatching {
+                        val embedding  = embedder.generateEmbedding(maskedText)
+                        val labels     = mlp.forward(embedding)
+                        require(labels.size >= CognitiveDistortion.entries.size) {
+                            "MLP output size ${labels.size} < expected ${CognitiveDistortion.entries.size}"
+                        }
+                        val distortions = CognitiveDistortion.entries.filterIndexed { i, _ -> labels[i] }
+                        logger.debug(TAG, "Stage2: source=mlp, distortions=$distortions")
+                        DiagnosisResult(
+                            distortions = distortions,
+                            reasoning   = "MLP classifier (${distortions.size} classes active)",
+                            source      = DiagnosisSource.MLP,
+                        )
+                    }.onFailure { e ->
+                        logger.warn(TAG, "Stage2: MLP path threw, falling back to LLM", e)
+                    }.getOrNull()
+                } else null
+
+                mlpResult ?: run {
+                    val raw = collectTokens(
+                        orchestrator.process(buildDotPrompt(maskedText), "dot_diagnosis", DOT_SYSTEM)
+                    )
+                    parseDotOutput(raw)
+                }
             }
         }
 
@@ -153,7 +186,8 @@ class ReframingLoop(
                     buildInterventionPrompt(
                         maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
-                    "intervention"
+                    "intervention",
+                    INTERVENTION_SYSTEM,
                 )
             )
             if (reframe.isBlank()) throw IllegalStateException("Model returned an empty reframe.")
@@ -171,8 +205,8 @@ class ReframingLoop(
         val dao = activityHierarchyDao ?: return null
         val candidates = dao.getActivitiesByMaxDifficulty(BA_MAX_DIFFICULTY)
         if (candidates.isEmpty()) return null
-        val tokens = maskedText.lowercase().split(Regex("\\W+")).filter { it.isNotBlank() }.toSet()
-        return candidates.firstOrNull { it.valueCategory.lowercase() in tokens }
+        val tokens = maskedText.lowercase(java.util.Locale.ROOT).split(Regex("\\W+")).filter { it.isNotBlank() }.toSet()
+        return candidates.firstOrNull { it.valueCategory.lowercase(java.util.Locale.ROOT) in tokens }
             ?: candidates.first()
     }
 
@@ -192,36 +226,20 @@ class ReframingLoop(
     // ── Prompt builders ──────────────────────────────────────────────────────
 
     internal fun buildAffectivePrompt(maskedText: String): String =
-        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
-        "You are an affective computing assistant. " +
-        "Analyze text and output emotional coordinates only. " +
-        "Never include explanations or additional text." +
-        "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
         "Analyze the emotional content of the following text.\n" +
         "Output ONLY one line in this exact format: v=<number> a=<number>\n" +
         "  v = valence  : -1.0 (very negative) to 1.0 (very positive)\n" +
         "  a = arousal  : -1.0 (calm / passive) to 1.0 (excited / active)\n" +
         "Numbers must be between -1.0 and 1.0. No other text.\n\n" +
-        "Text: $maskedText" +
-        "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        "Text: $maskedText"
 
     internal fun buildDotPrompt(maskedText: String): String =
-        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
-        "You are a CBT therapist applying the Diagnosis of Thought (DoT) method. " +
-        "Reason step by step, then conclude with a DISTORTIONS line." +
-        "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
-        "Analyze the following text using the three-step Diagnosis of Thought:\n\n" +
-        "Step 1 — Facts vs. Beliefs:\n" +
-        "Separate what is objectively stated (facts) from what is interpreted, " +
-        "assumed, or felt (beliefs/thoughts).\n\n" +
-        "Step 2 — Contrastive Analysis:\n" +
-        "For each belief, identify the cognitive distortion from this list:\n" +
-        "${CognitiveDistortion.promptList}\n\n" +
-        "Step 3 — Final diagnosis:\n" +
-        "On the last line output ONLY:\n" +
-        "DISTORTIONS: <comma-separated distortion names, or NONE if none found>\n\n" +
-        "Text: $maskedText" +
-        "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        "Identify any cognitive distortions in the text below.\n" +
+        "Only use names from this list: ${CognitiveDistortion.promptList}\n\n" +
+        "Respond with only this line (no explanation, no markdown):\n" +
+        "DISTORTIONS: <comma-separated names from the list, or NONE>\n\n" +
+        "Text: $maskedText\n\n" +
+        "FINAL_DISTORTIONS:"
 
 
     internal fun buildInterventionPrompt(
@@ -231,65 +249,54 @@ class ReframingLoop(
         baActivity: ActivityHierarchy? = null,
         evidenceEntries: List<JournalEntry> = emptyList(),
     ): String {
-        val distortionContext = if (distortions.isEmpty())
-            "No specific cognitive distortions were identified."
-        else
-            "Identified cognitive distortions: ${distortions.joinToString(", ") { it.label }}"
-
-        val techniqueBlock = when (strategy) {
-            ReframeStrategy.SOCRATIC_REALITY_TESTING ->
-                "Use Socratic Reality Testing (probability calibration): write a 2–3 sentence " +
-                "reframe in the writer's own voice that:\n" +
-                "1. Names the core fear or assumption driving the thought.\n" +
-                "2. Questions its certainty — what is the actual probability this belief is true?\n" +
-                "3. Lands on a more balanced, realistic interpretation."
-
-            ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
-                val stepTwo = if (evidenceEntries.isNotEmpty())
-                    "2. Counters the belief with a specific past experience contrary to it " +
-                    "(draw from the Evidence for the Contrary provided above).\n"
-                else
-                    "2. Offers a realistic counterthought contrary to the belief — " +
-                    "acknowledge difficulty without inventing past journal evidence.\n"
-                val stepThree = if (baActivity != null)
-                    "3. Ends with one small concrete step: \"${baActivity.taskName}\" (value area: ${baActivity.valueCategory})."
-                else
-                    "3. Ends with one small concrete action to restore a sense of agency."
-                "Use Behavioral Activation: write a 2–3 sentence reframe in the writer's own voice that:\n" +
-                "1. Acknowledges the difficulty without catastrophising.\n" +
-                stepTwo +
-                stepThree
-            }
-
-            ReframeStrategy.STRENGTHS_AFFIRMATION ->
-                "Write a 2–3 sentence reframe in the writer's own voice that:\n" +
-                "1. Names the strength or effort the entry reveals.\n" +
-                "2. Connects it to a broader pattern or value.\n" +
-                "3. Anchors what made this moment meaningful."
-        }
+        val distortionLine = if (distortions.isEmpty()) ""
+        else "Distortions present: ${distortions.joinToString(", ") { it.label }}\n"
 
         val evidenceBullets = evidenceEntries.mapNotNull { entry ->
             val snippet = entry.content?.takeIf { it.isNotBlank() }?.let {
-                if (it.length > 200) it.take(200) + "…" else it
+                if (it.length > 150) it.take(150) + "…" else it
             } ?: return@mapNotNull null
             "- $snippet"
         }
         val evidenceBlock = if (evidenceBullets.isNotEmpty()) {
-            "\n\nEvidence for the Contrary (past journal moments that contradict this belief):\n" +
-                evidenceBullets.joinToString("\n")
+            "Past evidence that contradicts this belief:\n${evidenceBullets.joinToString("\n")}\n\n"
         } else ""
 
-        return "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n" +
-            "You are a CBT journaling assistant. Rewrite the journal entry as a concise " +
-            "first-person thought record — the writer challenging their own thought. " +
-            "Write in the writer's voice. No preamble, no advice, no therapist language. " +
-            "Output only the reframed thought." +
-            "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n" +
-            "Journal entry:\n\"$maskedText\"\n\n" +
-            "$distortionContext" +
-            "$evidenceBlock\n\n" +
-            "$techniqueBlock" +
-            "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        val techniqueBlock = when (strategy) {
+            ReframeStrategy.SOCRATIC_REALITY_TESTING ->
+                "Write exactly 2-3 sentences in first person that:\n" +
+                "1. Question whether the fear or assumption is definitely true.\n" +
+                "2. Offer a more balanced, realistic interpretation.\n" +
+                "3. Land on what you actually know."
+
+            ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
+                val evidenceStep = if (evidenceEntries.isNotEmpty())
+                    "2. Challenge the avoidance using one of the past moments listed above."
+                else
+                    "2. Reframe the gap between intention and action as inertia, not a character flaw."
+                val actionStep = if (baActivity != null)
+                    "3. End with this one concrete next step: \"${baActivity.taskName}\"."
+                else
+                    "3. End with one specific, minimal action that addresses what the entry actually describes — not a generic outdoor or mindfulness suggestion."
+                "Write exactly 2-3 sentences in first person.\n" +
+                "No motivational phrases. No invented details.\n" +
+                "1. Name the pattern (avoidance, low energy) as a temporary state, not a fixed trait.\n" +
+                "$evidenceStep\n" +
+                actionStep
+            }
+
+            ReframeStrategy.STRENGTHS_AFFIRMATION ->
+                "Write exactly 2-3 sentences in first person that:\n" +
+                "1. Name the strength or effort this entry shows.\n" +
+                "2. Connect it to a value or pattern that matters to you.\n" +
+                "3. Anchor what made this moment meaningful."
+        }
+
+        return "Journal entry: \"$maskedText\"\n\n" +
+            distortionLine +
+            evidenceBlock +
+            "$techniqueBlock\n\n" +
+            "Output only the reframe. No markdown, no asterisks, no ellipses."
     }
 
     // ── Parsers ──────────────────────────────────────────────────────────────
@@ -310,35 +317,39 @@ class ReframingLoop(
     }
 
     /**
-     * Finds the last `DISTORTIONS:` sentinel line in [raw] (the model may reason
-     * aloud and repeat itself before settling), splits the CSV, and resolves each
-     * token to a [CognitiveDistortion]. Unrecognised tokens are silently dropped.
+     * Finds the last `DISTORTIONS:` sentinel line in [raw], splits the CSV, and resolves
+     * each token to a [CognitiveDistortion]. Unrecognised tokens are silently dropped.
+     *
+     * If the sentinel is absent, returns an empty distortion list rather than attempting
+     * any greedy inference — callers should treat a missing sentinel as an unparseable response.
      */
     internal fun parseDotOutput(raw: String): DiagnosisResult {
-        val sentinelLine = raw.lines()
-            .lastOrNull { it.contains("DISTORTIONS:", ignoreCase = true) }
-            ?: throw IllegalStateException(
-                "No DISTORTIONS: sentinel in model output: \"$raw\""
-            )
+        // Prefer the unique FINAL_DISTORTIONS: sentinel (avoids confusion with the
+        // instruction-format line); fall back to legacy DISTORTIONS: for robustness.
+        val lines = raw.lines()
+        val sentinelLine = lines.lastOrNull { it.contains("FINAL_DISTORTIONS:", ignoreCase = true) }
+            ?: lines.lastOrNull { it.contains("DISTORTIONS:", ignoreCase = true) }
 
-        val colonIdx = sentinelLine.indexOf("DISTORTIONS:", ignoreCase = true)
-        val csv = sentinelLine.substring(colonIdx + "DISTORTIONS:".length).trim()
+        if (sentinelLine == null) {
+            logger.debug(TAG, "parseDotOutput: no sentinel in output — returning empty distortions")
+            return DiagnosisResult(distortions = emptyList(), reasoning = raw)
+        }
+
+        val sentinel = if (sentinelLine.contains("FINAL_DISTORTIONS:", ignoreCase = true)) "FINAL_DISTORTIONS:" else "DISTORTIONS:"
+        val colonIdx = sentinelLine.indexOf(sentinel, ignoreCase = true)
+        val csv = sentinelLine.substring(colonIdx + sentinel.length).trim()
 
         if (csv.equals("NONE", ignoreCase = true) || csv.isEmpty()) {
             return DiagnosisResult(distortions = emptyList(), reasoning = raw)
         }
 
-        val recognized = mutableListOf<CognitiveDistortion>()
-        val unrecognized = mutableListOf<String>()
-        for (label in csv.split(",")) {
-            val distortion = CognitiveDistortion.fromLabel(label)
-            if (distortion != null) recognized.add(distortion)
-            else unrecognized.add(label.trim())
-        }
+        val commaTokens = csv.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val fromCommas = commaTokens.mapNotNull { CognitiveDistortion.fromLabel(it) }
+        val unrecognized = commaTokens.filter { CognitiveDistortion.fromLabel(it) == null }
         if (unrecognized.isNotEmpty()) {
-            Log.d(TAG, "parseDotOutput: unrecognized labels $unrecognized in csv=\"$csv\"")
+            logger.debug(TAG, "parseDotOutput: unrecognized tokens $unrecognized in csv=\"$csv\"")
         }
-        return DiagnosisResult(distortions = recognized, reasoning = raw)
+        return DiagnosisResult(distortions = fromCommas, reasoning = raw)
     }
 
     /**
@@ -371,7 +382,8 @@ class ReframingLoop(
                     buildInterventionPrompt(
                         maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
-                    "intervention"
+                    "intervention",
+                    INTERVENTION_SYSTEM,
                 )
                 Pair(strategy, flow)
             }
@@ -392,6 +404,14 @@ class ReframingLoop(
     }
 
     // ── Result types ─────────────────────────────────────────────────────────
+
+    /** Source of the distortion classification in Stage 2. */
+    enum class DiagnosisSource {
+        /** Distortions produced by the on-device [DistortionMlp] head. */
+        MLP,
+        /** Distortions parsed from the LLM's `DISTORTIONS:` sentinel output. */
+        LLM,
+    }
 
     /** Source of the affective coordinates in Stage 1. */
     enum class AffectiveSource {
@@ -423,7 +443,8 @@ class ReframingLoop(
      */
     data class DiagnosisResult(
         val distortions: List<CognitiveDistortion>,
-        val reasoning: String
+        val reasoning: String,
+        val source: DiagnosisSource = DiagnosisSource.LLM,
     )
 
     /**
@@ -453,6 +474,24 @@ class ReframingLoop(
         private const val TAG = "ReframingLoop"
         /** Maximum activity difficulty included in the BA suggestion lookup (0–10 scale). */
         internal const val BA_MAX_DIFFICULTY = 5
+
+        internal const val AFFECTIVE_SYSTEM =
+            "You are an affective computing assistant. " +
+            "Analyze text and output emotional coordinates only. " +
+            "Never include explanations or additional text."
+
+        internal const val DOT_SYSTEM =
+            "You are a CBT thought classifier. Identify cognitive distortions concisely. " +
+            "Output only the DISTORTIONS line. No explanation, no markdown."
+
+        internal const val INTERVENTION_SYSTEM =
+            "You are a CBT journaling assistant. Write a brief, grounded first-person reframe. " +
+            "Interpret the entry literally — do not contradict what it says or invent details not in the text. " +
+            "Do NOT repeat or amplify the negative thought — reframe it. " +
+            "No motivational cheerleading (no 'I can do this', 'I've got this', 'I believe in myself'). " +
+            "Write in first person singular only (I, me, my). Never use 'we', 'let's', or 'you'. " +
+            "No mindfulness or outdoor activity suggestions unless the entry itself mentions them. " +
+            "No markdown, no asterisks, no ellipses, no therapist language."
 
         /**
          * Selects the intervention strategy based on circumplex quadrant.

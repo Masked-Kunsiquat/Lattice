@@ -33,7 +33,7 @@ class SettingsOrchestratorIntegrationTest {
     ) : LlmProvider {
         var callCount = 0
         override suspend fun isAvailable() = available
-        override fun process(prompt: String): Flow<LlmResult> {
+        override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> {
             callCount++
             return listOf(LlmResult.Complete).asFlow()
         }

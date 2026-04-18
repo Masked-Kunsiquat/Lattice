@@ -76,7 +76,6 @@ fun JournalEditorScreen(
     val privacyState by viewModel.privacyState.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
-    val copyProgress by viewModel.copyProgress.collectAsStateWithLifecycle()
 
     Box(modifier = modifier.fillMaxSize()) {
         JournalEditorContent(
@@ -100,7 +99,7 @@ fun JournalEditorScreen(
         )
 
         AnimatedVisibility(
-            visible = modelLoadState == ModelLoadState.COPYING_SHARDS
+            visible = modelLoadState == ModelLoadState.COPYING_MODEL
                    || modelLoadState == ModelLoadState.LOADING_SESSION,
             enter = fadeIn(),
             exit = fadeOut(),
@@ -110,24 +109,23 @@ fun JournalEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (modelLoadState == ModelLoadState.COPYING_SHARDS) {
-                    LinearProgressIndicator(
-                        progress = { copyProgress },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
                     text = when (modelLoadState) {
-                        ModelLoadState.COPYING_SHARDS ->
-                            "Preparing local model… ${(copyProgress * 100).toInt()}%"
+                        ModelLoadState.COPYING_MODEL ->
+                            "Preparing local model…"
                         else ->
-                            "Loading model session… (first launch may take several minutes)"
+                            "Loading model session… (first launch may take a few minutes)"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
+                )
+                Text(
+                    text = "Running entirely on-device — no network needed.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 1.dp),
                 )
             }
         }
@@ -354,6 +352,7 @@ private fun JournalEditorContent(
                 .weight(1f)
                 .onFocusChanged { focus -> if (!focus.isFocused) onMentionDismiss() },
             placeholder = { Text("What's on your mind?") },
+            supportingText = { Text("@name · #tag · !place") },
             visualTransformation = PiiHighlightTransformation(
                 highlightColor = MaterialTheme.colorScheme.tertiary,
                 tagHighlightColor = MaterialTheme.colorScheme.secondary,

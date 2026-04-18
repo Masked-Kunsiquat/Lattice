@@ -93,13 +93,13 @@ There is no DI framework. `LatticeApplication` holds all singletons as `by lazy`
 KeyProvider → LatticeDatabase (SQLCipher, encrypted) → DAOs
                                                       ↓
 SettingsRepository (DataStore) ──────────────────────→ LlmOrchestrator → ReframingLoop
-EmbeddingProvider (ONNX) ─────────────────────────────↗
-LocalFallbackProvider (ONNX, background init) ────────↗
+EmbeddingProvider (TFLite) ───────────────────────────↗
+LocalFallbackProvider (LiteRT-LM, background init) ───↗
 CloudProvider (Retrofit) ─────────────────────────────↗
 JournalRepository / SearchRepository ────────────────→ ReframingLoop
 ```
 
-On first launch, SQLCipher performs a one-time plaintext-to-encrypted migration (guarded by a SharedPreferences flag). `localFallbackProvider.initialize()` copies 3 ONNX shards from assets to `context.filesDir` on a background thread.
+On first launch, SQLCipher performs a one-time plaintext-to-encrypted migration (guarded by a SharedPreferences flag). `localFallbackProvider.initialize()` loads the Gemma 3 1B LiteRT model from assets on a background thread.
 
 ### Privacy Model
 
@@ -119,7 +119,7 @@ PII masking is enforced at every system boundary:
 Three-tier, local-first:
 
 1. **Nano** — Gemini on-device via Google AICore (API 35+, checked at runtime)
-2. **LocalFallback** — Llama-3.2-3B quantized via ONNX Runtime (all APIs, CPU + NNAPI)
+2. **LocalFallback** — Gemma 3 1B Instruct via LiteRT-LM Engine (all APIs — NPU/GPU/CPU backends)
 3. **Cloud** — Remote API via Retrofit (disabled by default, requires explicit user opt-in)
 
 When cloud is selected, `privacyState` transitions to `PrivacyLevel.CloudTransit` (amber UI border) and a `TransitEvent` is logged — **the prompt is never persisted**. A `SecurityException` blocks cloud dispatch if raw PII is detected in the prompt.
@@ -161,7 +161,7 @@ Seed JSON must satisfy:
 
 ### Embeddings
 
-`EmbeddingProvider` loads `snowflake-arctic-embed-xs.onnx` directly from assets (23 MB, int8, 384-dim). It does **not** copy to `filesDir` — reads from assets on every init. Fallback is a zero-vector `FloatArray(384)`.
+`EmbeddingProvider` loads `snowflake-arctic-embed-xs_float32.tflite` from assets (87 MB, float32, fixed seq_len=128, 384-dim) via `org.tensorflow.lite.Interpreter` (`com.google.ai.edge.litert:litert` AAR). Inputs are INT64; output `last_hidden_state` [1×128×384] is masked mean-pooled over `attention_mask==1` positions. Does **not** copy to `filesDir` — reads from assets on every init. Fallback is a zero-vector `FloatArray(384)`.
 
 Seed JSON files contain real 384-dim embeddings generated from the masked entry text via Arctic Embed XS.
 
@@ -169,28 +169,33 @@ Seed JSON files contain real 384-dim embeddings generated from the masked entry 
 
 ## Assets
 
-**Llama-3.2-3B model files** in `app/src/main/assets/` are gitignored. Fetch them once with:
+**Gemma 3 1B model files** in `app/src/main/assets/` are gitignored. Three hardware tiers
+are available; `downloadModels` fetches the right one automatically via ADB. Override with
+`-PdownloadTier=elite|ultra|universal` if no device is attached.
 
 ```bash
-./gradlew downloadModels
+./gradlew downloadModels                        # auto-detect connected device
+./gradlew downloadModels -PdownloadTier=elite   # force Elite tier
 ```
 
-| File | Size | Source |
-|---|---|---|
-| `model_q4.onnx` | 259 KB | HuggingFace (Llama repo) |
-| `model_q4.onnx_data` | 2.1 GB | HuggingFace (Llama repo) |
-| `model_q4.onnx_data_1` | 1.3 GB | HuggingFace (Llama repo) |
-| `tokenizer.json` | 11.5 MB | HuggingFace (Llama repo) |
-| `tokenizer_config.json` | 57 KB | HuggingFace (Llama repo) |
-| `config.json` | 1 KB | HuggingFace (Llama repo) |
-| `generation_config.json` | < 1 KB | HuggingFace (Llama repo) |
+Requires accepting Google's Gemma Terms of Use on HuggingFace. Authenticate with
+`huggingface-cli login` (or set `HF_TOKEN`) before running.
+
+| File | Tier | Target | Size |
+|---|---|---|---|
+| `gemma3-1b-it-elite.litertlm` | Elite | SM8750 (S25 Ultra) — Adreno 830 AOT kernels | ~800 MB |
+| `gemma3-1b-it-ultra.litertlm` | Ultra | SM8650 (S24 Ultra) — Adreno 750 AOT kernels | ~800 MB |
+| `gemma3-1b-it-int4.litertlm` | Universal | Any ARM64 — JIT / OpenCL fallback | ~800 MB |
+
+`LocalFallbackProvider` selects the tier at runtime via `Build.BOARD`: `kailua` → Elite,
+`kalama` → Ultra, anything else → Universal.
 
 HuggingFace repos:
-- **Llama model**: `https://huggingface.co/masked-kunsiquat/Llama-3.2-3B-Instruct-Q4`
+- **Gemma model**: `https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert`
 - **Embedding model**: `https://huggingface.co/masked-kunsiquat/snowflake-arctic-embed-xs`
 - **Clinical persona seeds (dataset)**: `https://huggingface.co/datasets/masked-kunsiquat/clinical-personas`
 
-`core-logic/src/main/assets/` contains the embedding model (`snowflake-arctic-embed-xs.onnx`, 23 MB) and `vocab.txt` — these **are** committed to git (small enough, needed by `:core-logic` tests without any download step).
+`core-logic/src/main/assets/` contains the embedding models (`snowflake-arctic-embed-xs_float32.tflite` 87 MB, `snowflake-arctic-embed-xs_float16.tflite` 44 MB) and `vocab.txt` — these **are** committed to git, needed by `:core-logic` tests without any download step. The float32 model is the production path; float16 has a MEAN op dtype issue from onnx2tf conversion and is unused.
 
 ---
 

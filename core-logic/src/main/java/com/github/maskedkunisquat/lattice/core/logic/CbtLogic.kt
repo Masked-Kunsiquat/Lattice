@@ -19,7 +19,7 @@ object CbtLogic {
      * Add new distortion types by extending the [rules] map.
      */
     fun detectDistortions(text: String): List<String> {
-        val words = text.lowercase().split(Regex("\\s+"))
+        val words = text.lowercase(java.util.Locale.ROOT).split(Regex("\\s+"))
             .map { it.replace(Regex("'s$"), "").replace(Regex("[^a-z]"), "") }
         return buildList {
             rules.forEach { (name, matches) -> if (matches(words)) add(name) }
