@@ -63,6 +63,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.github.maskedkunisquat.lattice.ui.theme.StatusAmber
+import com.github.maskedkunisquat.lattice.ui.theme.StatusGreen
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -408,7 +410,7 @@ private fun LocalModelSection(
         }
         // Only READY gets a distinct color; all other states use the neutral variant.
         val statusColor = if (modelLoadState == ModelLoadState.READY)
-            Color(0xFF2E7D32)
+            StatusGreen
         else
             MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -650,7 +652,7 @@ private fun SovereigntySection(
                 Text(
                     if (cloudEnabled) "Data may leave this device" else "All processing is local",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (cloudEnabled) Color(0xFFF59E0B)
+                    color = if (cloudEnabled) StatusAmber
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -782,7 +784,7 @@ private fun CloudEnableWarningDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFF59E0B))
+            Icon(Icons.Default.Warning, contentDescription = null, tint = StatusAmber)
         },
         title = { Text("Enable cloud processing?") },
         text = {
@@ -795,7 +797,7 @@ private fun CloudEnableWarningDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Enable", color = Color(0xFFF59E0B))
+                Text("Enable", color = StatusAmber)
             }
         },
         dismissButton = {

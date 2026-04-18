@@ -263,9 +263,14 @@ private fun EntryDetailContent(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    val primary = MaterialTheme.colorScheme.primary
+                    val secondary = MaterialTheme.colorScheme.secondary
+                    val tertiary = MaterialTheme.colorScheme.tertiary
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            content,
+                            remember(content, primary, secondary, tertiary) {
+                                buildHighlightedText(content, primary, secondary, tertiary)
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(16.dp),
                         )

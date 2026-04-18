@@ -113,7 +113,7 @@ Add a fourth tab between History and Settings:
 ### Entry detail & history
 
 - [x] **Journal entry editing** — `EntryDetailScreen` has only Reframe and Delete; no way to correct typos or update thoughts. Add an Edit action that opens the entry in `JournalEditorScreen` pre-populated with existing content and resolved mentions. Decide whether edits invalidate the existing embedding (re-embed on save) and how they interact with saved `reframedContent`.
-- [ ] **PII / mention highlighting** — person, place, and tag tokens are unmasked to plain text with no visual distinction. Add colored inline chips or highlights for resolved tokens in `JournalHistoryScreen` entry snippets and the `EntryDetailScreen` content body. *(grouped with Visual Polish — tackle alongside status colors and arc spacing)*
+- [x] **PII / mention highlighting** — person, place, and tag tokens are unmasked to plain text with no visual distinction. Add colored inline chips or highlights for resolved tokens in `JournalHistoryScreen` entry snippets and the `EntryDetailScreen` content body.
 - [x] **Entry detail title** — `TopAppBar` shows the bare string "Entry". Replace with the entry's formatted date/time or mood label for at-a-glance context.
 - [x] **Mood data prominence** — valence, arousal, and label are rendered small and secondary in `EntryDetailScreen`. Promote them to a visible card or header area.
 - [x] **Tagged entities section** — add a bottom section to `EntryDetailScreen` listing tagged people, places, and tags with tap-through navigation (→ `PersonDetailScreen`; future place/tag detail screens).
@@ -126,9 +126,9 @@ Add a fourth tab between History and Settings:
 
 ### Visual polish
 
-- [ ] **Centralize status colors** — `Color(0xFF2E7D32)`, `Color(0xFFB00020)`, `Color(0xFFF59E0B)` are hardcoded in `SettingsScreen.kt`. Move to named semantic aliases in `Color.kt`.
-- [ ] **NavBar second-tap → tab root** — `launchSingleTop + popUpTo` is already wired; verify on-device behavior. If the second tap is a no-op rather than a pop-to-root, fix `onNavigateToDestination` in `AppNavHost`.
-- [ ] **Person Detail arc spacing** — `VibeArcCard` canvas sits immediately below the `TopAppBar` with minimal breathing room. Add top padding so the semicircular arc doesn't crowd the header.
+- [x] **Centralize status colors** — `Color(0xFF2E7D32)`, `Color(0xFFB00020)`, `Color(0xFFF59E0B)` are hardcoded in `SettingsScreen.kt`. Move to named semantic aliases in `Color.kt`.
+- [x] **NavBar second-tap → tab root** — `launchSingleTop + popUpTo` is already wired; verify on-device behavior. If the second tap is a no-op rather than a pop-to-root, fix `onNavigateToDestination` in `AppNavHost`.
+- [x] **Person Detail arc spacing** — `VibeArcCard` canvas sits immediately below the `TopAppBar` with minimal breathing room. Add top padding so the semicircular arc doesn't crowd the header.
 
 ---
 

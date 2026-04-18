@@ -61,6 +61,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -74,6 +77,40 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+
+// ── PII highlight helper ──────────────────────────────────────────────────────
+
+private val PERSON_HIGHLIGHT_REGEX = Regex("@(?:[\\p{L}\\p{N}_]+ )*[\\p{L}\\p{N}_]+")
+private val PLACE_HIGHLIGHT_REGEX  = Regex("!(?:[\\p{L}\\p{N}_]+ )*[\\p{L}\\p{N}_]+")
+private val TAG_HIGHLIGHT_REGEX    = Regex("#[\\p{L}\\p{N}_]+")
+
+/**
+ * Returns an [AnnotatedString] where @person, !place, and #tag tokens are
+ * colored with the supplied colors and rendered at medium weight.
+ * If the text contains no tokens the result is equivalent to a plain string.
+ */
+fun buildHighlightedText(
+    text: String,
+    personColor: Color,
+    placeColor: Color,
+    tagColor: Color,
+) = buildAnnotatedString {
+    append(text)
+    fun highlight(regex: Regex, color: Color) {
+        regex.findAll(text).forEach { match ->
+            addStyle(
+                SpanStyle(color = color, fontWeight = FontWeight.Medium),
+                match.range.first,
+                match.range.last + 1,
+            )
+        }
+    }
+    highlight(PERSON_HIGHLIGHT_REGEX, personColor)
+    highlight(PLACE_HIGHLIGHT_REGEX, placeColor)
+    highlight(TAG_HIGHLIGHT_REGEX, tagColor)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -499,8 +536,14 @@ private fun EntryCard(
                     )
                 },
                 headlineContent = {
+                    val primary = MaterialTheme.colorScheme.primary
+                    val secondary = MaterialTheme.colorScheme.secondary
+                    val tertiary = MaterialTheme.colorScheme.tertiary
+                    val snippet = entry.content ?: "Mood log (no text)"
                     Text(
-                        entry.content?.let { if (it.length > 80) "${it.take(80)}…" else it } ?: "Mood log (no text)",
+                        remember(entry.id, entry.content, primary, secondary, tertiary) {
+                            buildHighlightedText(snippet, primary, secondary, tertiary)
+                        },
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )

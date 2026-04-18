@@ -63,12 +63,20 @@ fun AppNavHost(app: LatticeApplication) {
                             ?.hierarchy
                             ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true,
                         onClick = {
-                            navController.navigate(dest.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            val alreadySelected = currentDestination
+                                ?.hierarchy
+                                ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true
+                            if (alreadySelected) {
+                                // Second tap: pop back to this tab's root without recreating it.
+                                navController.popBackStack(dest.route, inclusive = false)
+                            } else {
+                                navController.navigate(dest.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         icon = { Icon(dest.icon, contentDescription = dest.label) },
