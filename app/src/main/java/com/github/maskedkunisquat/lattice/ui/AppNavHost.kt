@@ -124,7 +124,21 @@ fun AppNavHost(app: LatticeApplication) {
                     EntryDetailScreen(
                         viewModel = vm,
                         onBack = { navController.popBackStack() },
+                        onEdit = { navController.navigate("editor/$entryId") },
+                        onOpenPerson = { personId -> navController.navigate("people/$personId") },
                     )
+                }
+            }
+
+            composable("editor/{entryId}") { backStackEntry ->
+                val entryId = backStackEntry.arguments?.getString("entryId")
+                    ?.let { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
+                    ?: return@composable
+                val vm: JournalEditorViewModel = viewModel(
+                    factory = JournalEditorViewModel.factory(app, entryId),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:editor-edit")) {
+                    JournalEditorScreen(viewModel = vm)
                 }
             }
 

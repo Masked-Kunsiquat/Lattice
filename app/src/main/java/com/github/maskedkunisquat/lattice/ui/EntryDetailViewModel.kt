@@ -5,14 +5,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.lattice.LatticeApplication
+import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TagDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,10 +28,18 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
+
+data class EntryTagsData(
+    val people: List<Person> = emptyList(),
+    val places: List<Place> = emptyList(),
+    val tags: List<Tag> = emptyList(),
+)
 
 sealed class EntryDetailState {
     object Loading : EntryDetailState()
@@ -37,6 +53,10 @@ class EntryDetailViewModel(
     private val transitEventDao: TransitEventDao,
     val modelLoadState: StateFlow<ModelLoadState>,
     private val entryId: UUID,
+    private val mentionDao: MentionDao,
+    private val personDao: PersonDao,
+    private val placeDao: PlaceDao,
+    private val tagDao: TagDao,
 ) : ViewModel() {
 
     /** Live entry state — distinguishes initial loading from a missing entry. */
@@ -51,7 +71,26 @@ class EntryDetailViewModel(
     private val _deletedEvent = MutableSharedFlow<Unit>()
     val deletedEvent = _deletedEvent.asSharedFlow()
 
+    private val _tagsData = MutableStateFlow(EntryTagsData())
+    val tagsData: StateFlow<EntryTagsData> = _tagsData.asStateFlow()
+
     private var reframeJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            entryState.collect { state ->
+                val entry = (state as? EntryDetailState.Found)?.entry ?: return@collect
+                withContext(Dispatchers.IO) {
+                    val mentions = mentionDao.getMentionsByEntry(entry.id)
+                    val people = mentions
+                        .mapNotNull { mention -> personDao.getPersonById(mention.personId).first() }
+                    val places = entry.placeIds.mapNotNull { placeDao.getById(it) }
+                    val tags = entry.tagIds.mapNotNull { tagDao.getById(it) }
+                    _tagsData.value = EntryTagsData(people, places, tags)
+                }
+            }
+        }
+    }
 
     /**
      * Runs the three-stage reframe pipeline against the current entry content.
@@ -186,6 +225,10 @@ class EntryDetailViewModel(
                         transitEventDao   = app.database.transitEventDao(),
                         modelLoadState    = app.localFallbackProvider.modelLoadState,
                         entryId           = entryId,
+                        mentionDao        = app.database.mentionDao(),
+                        personDao         = app.database.personDao(),
+                        placeDao          = app.database.placeDao(),
+                        tagDao            = app.database.tagDao(),
                     ) as T
             }
     }

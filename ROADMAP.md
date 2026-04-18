@@ -112,11 +112,11 @@ Add a fourth tab between History and Settings:
 
 ### Entry detail & history
 
-- [ ] **Journal entry editing** — `EntryDetailScreen` has only Reframe and Delete; no way to correct typos or update thoughts. Add an Edit action that opens the entry in `JournalEditorScreen` pre-populated with existing content and resolved mentions. Decide whether edits invalidate the existing embedding (re-embed on save) and how they interact with saved `reframedContent`.
+- [x] **Journal entry editing** — `EntryDetailScreen` has only Reframe and Delete; no way to correct typos or update thoughts. Add an Edit action that opens the entry in `JournalEditorScreen` pre-populated with existing content and resolved mentions. Decide whether edits invalidate the existing embedding (re-embed on save) and how they interact with saved `reframedContent`.
 - [ ] **PII / mention highlighting** — person, place, and tag tokens are unmasked to plain text with no visual distinction. Add colored inline chips or highlights for resolved tokens in `JournalHistoryScreen` entry snippets and the `EntryDetailScreen` content body.
-- [ ] **Entry detail title** — `TopAppBar` shows the bare string "Entry". Replace with the entry's formatted date/time or mood label for at-a-glance context.
-- [ ] **Mood data prominence** — valence, arousal, and label are rendered small and secondary in `EntryDetailScreen`. Promote them to a visible card or header area.
-- [ ] **Tagged entities section** — add a bottom section to `EntryDetailScreen` listing tagged people, places, and tags with tap-through navigation (→ `PersonDetailScreen`; future place/tag detail screens).
+- [x] **Entry detail title** — `TopAppBar` shows the bare string "Entry". Replace with the entry's formatted date/time or mood label for at-a-glance context.
+- [x] **Mood data prominence** — valence, arousal, and label are rendered small and secondary in `EntryDetailScreen`. Promote them to a visible card or header area.
+- [x] **Tagged entities section** — add a bottom section to `EntryDetailScreen` listing tagged people, places, and tags with tap-through navigation (→ `PersonDetailScreen`; future place/tag detail screens).
 
 ### Settings
 
