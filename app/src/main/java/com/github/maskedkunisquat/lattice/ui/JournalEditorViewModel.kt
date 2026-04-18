@@ -356,7 +356,7 @@ class JournalEditorViewModel(
         val reframe = (_uiState.value.reframeState as? ReframeState.Done)?.text ?: return
         viewModelScope.launch {
             try {
-                val entryId = savedEntryId ?: persistEntry()
+                val entryId = persistEntry()
                 journalRepository.updateReframedContent(entryId.toString(), reframe)
                 _uiState.update { it.copy(reframeState = ReframeState.Idle) }
             } catch (e: CancellationException) {

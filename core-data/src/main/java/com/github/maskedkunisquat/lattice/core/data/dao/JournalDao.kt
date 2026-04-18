@@ -25,10 +25,9 @@ interface JournalDao {
     fun getEntries(): Flow<List<JournalEntry>>
 
     @Query("""
-        SELECT je.* FROM journal_entries je
-        INNER JOIN mentions m ON je.id = m.entryId
-        WHERE m.personId = :personId
-        ORDER BY je.timestamp DESC
+        SELECT * FROM journal_entries
+        WHERE id IN (SELECT entryId FROM mentions WHERE personId = :personId)
+        ORDER BY timestamp DESC
     """)
     fun getEntriesForPerson(personId: UUID): Flow<List<JournalEntry>>
 
