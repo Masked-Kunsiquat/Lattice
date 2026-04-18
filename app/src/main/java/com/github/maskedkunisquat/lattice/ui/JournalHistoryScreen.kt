@@ -128,7 +128,11 @@ fun JournalHistoryScreen(
                         onQueryChange = { searchViewModel.onQueryChange(it) },
                         onSearch = {},
                         expanded = searchState.expanded,
-                        onExpandedChange = { searchViewModel.onExpandedChange(it) },
+                        // Only allow the InputField to EXPAND the overlay (focus gain → true).
+                        // Collapsing is handled by the outer SearchBar (scrim tap) and the
+                        // BackHandler — preventing focus-loss events from prematurely dismissing
+                        // the overlay while the user is typing.
+                        onExpandedChange = { if (it) searchViewModel.onExpandedChange(true) },
                         placeholder = { Text("Search entries, people, places, tags") },
                         leadingIcon = {
                             Icon(Icons.Filled.Search, contentDescription = null)
