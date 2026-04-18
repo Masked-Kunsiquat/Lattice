@@ -6,15 +6,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
@@ -22,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -41,6 +47,8 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +58,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -121,87 +134,41 @@ fun JournalHistoryScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            SearchBar(
-                inputField = {
-                    SearchBarDefaults.InputField(
-                        query = searchState.query,
-                        onQueryChange = { searchViewModel.onQueryChange(it) },
-                        onSearch = {},
-                        expanded = searchState.expanded,
-                        // Only allow the InputField to EXPAND the overlay (focus gain → true).
-                        // Collapsing is handled by the outer SearchBar (scrim tap) and the
-                        // BackHandler — preventing focus-loss events from prematurely dismissing
-                        // the overlay while the user is typing.
-                        onExpandedChange = { if (it) searchViewModel.onExpandedChange(true) },
-                        placeholder = { Text("Search entries, people, places, tags") },
-                        leadingIcon = {
-                            Icon(Icons.Filled.Search, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            if (searchState.expanded && searchState.query.isNotEmpty()) {
-                                IconButton(onClick = { searchViewModel.onQueryChange("") }) {
-                                    Icon(Icons.Filled.Close, contentDescription = "Clear query")
-                                }
-                            }
-                        },
-                    )
-                },
-                expanded = searchState.expanded,
-                onExpandedChange = { searchViewModel.onExpandedChange(it) },
-                modifier = if (searchState.expanded) {
-                    Modifier.fillMaxSize()
-                } else {
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                },
-            ) {
-                // ── Tab row ──────────────────────────────────────────────────
-                val tabs = SearchTab.entries
-                TabRow(selectedTabIndex = searchState.activeTab.ordinal) {
-                    tabs.forEach { tab ->
-                        Tab(
-                            selected = tab == searchState.activeTab,
-                            onClick = { searchViewModel.onTabChange(tab) },
-                            text = {
-                                Text(tab.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) })
-                            },
+            if (searchState.expanded) {
+                // ── Search overlay — fully self-contained, avoids M3 SearchBar
+                // expanded-state quirks (centering, premature onExpandedChange(false) on
+                // keyboard show, silent onSearch). Input stays pinned at the top; results
+                // stream below the TabRow.
+                SearchOverlay(
+                    state       = searchState,
+                    onQueryChange = searchViewModel::onQueryChange,
+                    onTabChange   = searchViewModel::onTabChange,
+                    onCollapse    = searchViewModel::collapse,
+                    onOpenEntry   = onOpenEntry,
+                    onOpenPerson  = onOpenPerson,
+                )
+            } else {
+                // ── Collapsed search pill ─────────────────────────────────────
+                SearchBar(
+                    inputField = {
+                        SearchBarDefaults.InputField(
+                            query = "",
+                            onQueryChange = {},
+                            onSearch = {},
+                            expanded = false,
+                            onExpandedChange = { if (it) searchViewModel.onExpandedChange(true) },
+                            placeholder = { Text("Search entries, people, places, tags") },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                         )
-                    }
-                }
+                    },
+                    expanded = false,
+                    onExpandedChange = { if (it) searchViewModel.onExpandedChange(true) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {}
 
-                if (searchState.isLoading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-
-                // ── Tab content ───────────────────────────────────────────────
-                when (searchState.activeTab) {
-                    SearchTab.ENTRIES -> SearchEntryResults(
-                        results = searchState.entryResults,
-                        isLoading = searchState.isLoading,
-                        query = searchState.query,
-                        onOpenEntry = onOpenEntry,
-                        onCollapse = { searchViewModel.onExpandedChange(false) },
-                    )
-                    SearchTab.PEOPLE -> SearchPeopleResults(
-                        results = searchState.peopleResults,
-                        query = searchState.query,
-                        onOpenPerson = onOpenPerson,
-                        onCollapse = { searchViewModel.onExpandedChange(false) },
-                    )
-                    SearchTab.PLACES -> SearchPlaceResults(
-                        results = searchState.placeResults,
-                        query = searchState.query,
-                    )
-                    SearchTab.TAGS -> SearchTagResults(
-                        results = searchState.tagResults,
-                        query = searchState.query,
-                    )
-                }
-            }
-
-            // ── History list (hidden while search overlay is open) ────────────
-            if (!searchState.expanded) {
+                // ── History list ──────────────────────────────────────────────
                 if (entries.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -228,7 +195,117 @@ fun JournalHistoryScreen(
                         }
                     }
                 }
+            } // end else (collapsed)
+        }
+    }
+}
+
+// ── Search overlay ────────────────────────────────────────────────────────────
+
+/**
+ * Full-screen search UI shown when the search bar is expanded. Replaces the
+ * Material3 SearchBar expanded-state slot to avoid its positioning quirks
+ * (input centering, premature onExpandedChange(false) on keyboard events,
+ * silent onSearch). The input is pinned at the top; tabs and results stream below.
+ */
+@Composable
+private fun SearchOverlay(
+    state: SearchUiState,
+    onQueryChange: (String) -> Unit,
+    onTabChange: (SearchTab) -> Unit,
+    onCollapse: () -> Unit,
+    onOpenEntry: (UUID) -> Unit,
+    onOpenPerson: (UUID) -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Auto-focus the text field when the overlay first appears.
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // ── Input row ────────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .padding(end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { keyboardController?.hide(); onCollapse() }) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Close search",
+                )
             }
+            TextField(
+                value = state.query,
+                onValueChange = onQueryChange,
+                placeholder = { Text("Search entries, people, places, tags") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                // Search button on the keyboard hides the IME but keeps results visible.
+                keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor   = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor   = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester),
+            )
+            if (state.query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Clear query")
+                }
+            }
+        }
+        HorizontalDivider()
+
+        // ── Tab row ──────────────────────────────────────────────────────────
+        TabRow(selectedTabIndex = state.activeTab.ordinal) {
+            SearchTab.entries.forEach { tab ->
+                Tab(
+                    selected = tab == state.activeTab,
+                    onClick  = { onTabChange(tab) },
+                    text = {
+                        Text(
+                            tab.name.lowercase(Locale.ROOT)
+                                .replaceFirstChar { it.uppercase(Locale.ROOT) }
+                        )
+                    },
+                )
+            }
+        }
+        if (state.isLoading) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+
+        // ── Tab content ───────────────────────────────────────────────────────
+        when (state.activeTab) {
+            SearchTab.ENTRIES -> SearchEntryResults(
+                results   = state.entryResults,
+                isLoading = state.isLoading,
+                query     = state.query,
+                onOpenEntry = onOpenEntry,
+                onCollapse  = { keyboardController?.hide(); onCollapse() },
+            )
+            SearchTab.PEOPLE -> SearchPeopleResults(
+                results      = state.peopleResults,
+                query        = state.query,
+                onOpenPerson = onOpenPerson,
+                onCollapse   = { keyboardController?.hide(); onCollapse() },
+            )
+            SearchTab.PLACES -> SearchPlaceResults(
+                results = state.placeResults,
+                query   = state.query,
+            )
+            SearchTab.TAGS -> SearchTagResults(
+                results = state.tagResults,
+                query   = state.query,
+            )
         }
     }
 }
