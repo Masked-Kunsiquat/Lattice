@@ -58,17 +58,23 @@ fun AppNavHost(app: LatticeApplication) {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
                 bottomNavDests.forEach { dest ->
+                    val isInDestHierarchy = currentDestination
+                        ?.hierarchy
+                        ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true
                     NavigationBarItem(
-                        selected = currentDestination
-                            ?.hierarchy
-                            ?.any { it.route == dest.route || it.route?.startsWith(dest.route + "/") == true } == true,
+                        selected = isInDestHierarchy,
                         onClick = {
-                            navController.navigate(dest.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            if (isInDestHierarchy) {
+                                // Second tap: pop back to this tab's root without recreating it.
+                                navController.popBackStack(dest.route, inclusive = false)
+                            } else {
+                                navController.navigate(dest.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         icon = { Icon(dest.icon, contentDescription = dest.label) },
@@ -124,7 +130,21 @@ fun AppNavHost(app: LatticeApplication) {
                     EntryDetailScreen(
                         viewModel = vm,
                         onBack = { navController.popBackStack() },
+                        onEdit = { navController.navigate("editor/$entryId") },
+                        onOpenPerson = { personId -> navController.navigate("people/$personId") },
                     )
+                }
+            }
+
+            composable("editor/{entryId}") { backStackEntry ->
+                val entryId = backStackEntry.arguments?.getString("entryId")
+                    ?.let { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
+                    ?: return@composable
+                val vm: JournalEditorViewModel = viewModel(
+                    factory = JournalEditorViewModel.factory(app, entryId),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:editor-edit")) {
+                    JournalEditorScreen(viewModel = vm)
                 }
             }
 
@@ -167,9 +187,48 @@ fun AppNavHost(app: LatticeApplication) {
                 Box(Modifier.fillMaxSize().testTag("screen:settings")) {
                     SettingsScreen(
                         viewModel = vm,
-                        onNavigateToAudit = { navController.navigate("settings/audit") },
-                        onNavigateToActivities = { navController.navigate("settings/activities") },
+                        onNavigateToInference = { navController.navigate("settings/inference") },
+                        onNavigateToPersonalization = { navController.navigate("settings/personalization") },
+                        onNavigateToPrivacy = { navController.navigate("settings/privacy") },
                         onNavigateToDebugSeed = { navController.navigate("settings/debug/seed") },
+                    )
+                }
+            }
+
+            composable("settings/inference") {
+                val vm: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:settings-inference")) {
+                    InferenceSettingsScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+            }
+
+            composable("settings/personalization") {
+                val vm: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:settings-personalization")) {
+                    PersonalizationSettingsScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                        onNavigateToActivities = { navController.navigate("settings/activities") },
+                    )
+                }
+            }
+
+            composable("settings/privacy") {
+                val vm: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.factory(app),
+                )
+                Box(Modifier.fillMaxSize().testTag("screen:settings-privacy")) {
+                    PrivacyDataSettingsScreen(
+                        viewModel = vm,
+                        onBack = { navController.popBackStack() },
+                        onNavigateToAudit = { navController.navigate("settings/audit") },
                     )
                 }
             }

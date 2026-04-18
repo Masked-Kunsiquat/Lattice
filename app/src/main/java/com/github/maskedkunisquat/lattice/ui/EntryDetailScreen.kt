@@ -3,16 +3,17 @@ package com.github.maskedkunisquat.lattice.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -27,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,10 +56,13 @@ import java.util.UUID
 fun EntryDetailScreen(
     viewModel: EntryDetailViewModel,
     onBack: () -> Unit,
+    onEdit: () -> Unit,
+    onOpenPerson: (UUID) -> Unit,
 ) {
     val entryState by viewModel.entryState.collectAsStateWithLifecycle()
     val reframeState by viewModel.reframeState.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
+    val tagsData by viewModel.tagsData.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.deletedEvent.collect { onBack() }
@@ -70,12 +76,15 @@ fun EntryDetailScreen(
         entryState = entryState,
         reframeState = reframeState,
         modelLoadState = modelLoadState,
+        tagsData = tagsData,
         onBack = onBack,
+        onEdit = onEdit,
         onDelete = viewModel::deleteEntry,
         onReframe = viewModel::requestReframe,
         onApplyReframe = viewModel::acceptReframe,
         onDismissReframe = viewModel::dismissReframe,
         onConfirmMood = viewModel::confirmMoodCoordinates,
+        onOpenPerson = onOpenPerson,
     )
 }
 
@@ -87,16 +96,21 @@ private fun EntryDetailContent(
     entryState: EntryDetailState,
     reframeState: ReframeState,
     modelLoadState: ModelLoadState,
+    tagsData: EntryTagsData,
     onBack: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     onReframe: () -> Unit,
     onApplyReframe: (String) -> Unit,
     onDismissReframe: () -> Unit,
     onConfirmMood: (valence: Float, arousal: Float) -> Unit,
+    onOpenPerson: (UUID) -> Unit,
 ) {
     val entry = (entryState as? EntryDetailState.Found)?.entry
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var moodGridSkipped by remember(entry?.id) { mutableStateOf(false) }
+    val fmt = remember { SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault()) }
+    val titleText = entry?.let { fmt.format(Date(it.timestamp)) } ?: "Entry"
 
     if (showDeleteConfirm) {
         AlertDialog(
@@ -123,13 +137,16 @@ private fun EntryDetailContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Entry") },
+                title = { Text(titleText, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Filled.Edit, contentDescription = "Edit entry")
+                    }
                     IconButton(onClick = { showDeleteConfirm = true }) {
                         Icon(
                             Icons.Filled.Delete,
@@ -169,35 +186,74 @@ private fun EntryDetailContent(
                 CircularProgressIndicator()
             }
         } else if (entry != null) {
-            val fmt = remember { SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault()) }
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(innerPadding)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    fmt.format(Date(entry.timestamp)),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    entry.moodLabel.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                if (entry.cognitiveDistortions.isNotEmpty()) {
-                    Text(
-                        entry.cognitiveDistortions.joinToString(", "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                // Mood card — label prominent, coordinates + distortions as supporting text
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            entry.moodLabel.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) },
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            "v: ${"%.2f".format(entry.valence)}  a: ${"%.2f".format(entry.arousal)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (entry.cognitiveDistortions.isNotEmpty()) {
+                            Text(
+                                entry.cognitiveDistortions.joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                // Tagged entity chips — people are tappable (navigate to PersonDetail),
+                // places and tags are display-only for this release.
+                val hasEntities = tagsData.people.isNotEmpty()
+                    || tagsData.places.isNotEmpty()
+                    || tagsData.tags.isNotEmpty()
+                if (hasEntities) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(tagsData.people) { person ->
+                            val name = person.nickname
+                                ?: listOfNotNull(person.firstName, person.lastName).joinToString(" ")
+                            SuggestionChip(
+                                onClick = { onOpenPerson(person.id) },
+                                label = { Text("@$name") },
+                            )
+                        }
+                        items(tagsData.places) { place ->
+                            SuggestionChip(
+                                onClick = {},
+                                label = { Text("!${place.name}") },
+                            )
+                        }
+                        items(tagsData.tags) { tag ->
+                            SuggestionChip(
+                                onClick = {},
+                                label = { Text("#${tag.name}") },
+                            )
+                        }
+                    }
+                }
 
                 // Original entry text
                 val content = entry.content
@@ -207,10 +263,14 @@ private fun EntryDetailContent(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(4.dp))
+                    val primary = MaterialTheme.colorScheme.primary
+                    val secondary = MaterialTheme.colorScheme.secondary
+                    val tertiary = MaterialTheme.colorScheme.tertiary
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            content,
+                            remember(content, primary, secondary, tertiary) {
+                                buildHighlightedText(content, primary, secondary, tertiary)
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(16.dp),
                         )
@@ -225,13 +285,11 @@ private fun EntryDetailContent(
 
                 // Persisted reframe (written by Apply)
                 entry.reframedContent?.let { reframe ->
-                    Spacer(Modifier.height(8.dp))
                     Text(
                         "Reframe",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
-                    Spacer(Modifier.height(4.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -249,7 +307,6 @@ private fun EntryDetailContent(
                     // Mood grid — shown once after reframe, until user confirms or skips.
                     // Disappears permanently once userValence is written (entry reloads from DB).
                     if (entry.userValence == null && !moodGridSkipped) {
-                        Spacer(Modifier.height(16.dp))
                         CircumplexGrid(
                             onConfirm = { v, a -> onConfirmMood(v, a) },
                             onSkip = { moodGridSkipped = true },
@@ -257,8 +314,6 @@ private fun EntryDetailContent(
                         )
                     }
                 }
-
-                Spacer(Modifier.height(8.dp))
             }
         }
     }
@@ -293,12 +348,15 @@ private fun PreviewOriginalOnly() {
             entryState = EntryDetailState.Found(previewEntry),
             reframeState = ReframeState.Idle,
             modelLoadState = ModelLoadState.READY,
+            tagsData = EntryTagsData(),
             onBack = {},
+            onEdit = {},
             onDelete = {},
             onReframe = {},
             onApplyReframe = { _ -> },
             onDismissReframe = {},
             onConfirmMood = { _, _ -> },
+            onOpenPerson = {},
         )
     }
 }
@@ -313,12 +371,15 @@ private fun PreviewWithReframe() {
             )),
             reframeState = ReframeState.Idle,
             modelLoadState = ModelLoadState.READY,
+            tagsData = EntryTagsData(),
             onBack = {},
+            onEdit = {},
             onDelete = {},
             onReframe = {},
             onApplyReframe = { _ -> },
             onDismissReframe = {},
             onConfirmMood = { _, _ -> },
+            onOpenPerson = {},
         )
     }
 }
@@ -331,12 +392,15 @@ private fun PreviewModelLoading() {
             entryState = EntryDetailState.Found(previewEntry),
             reframeState = ReframeState.Idle,
             modelLoadState = ModelLoadState.LOADING_SESSION,
+            tagsData = EntryTagsData(),
             onBack = {},
+            onEdit = {},
             onDelete = {},
             onReframe = {},
             onApplyReframe = { _ -> },
             onDismissReframe = {},
             onConfirmMood = { _, _ -> },
+            onOpenPerson = {},
         )
     }
 }
@@ -349,12 +413,15 @@ private fun PreviewMoodLog() {
             entryState = EntryDetailState.Found(previewEntry.copy(content = null, cognitiveDistortions = emptyList())),
             reframeState = ReframeState.Idle,
             modelLoadState = ModelLoadState.READY,
+            tagsData = EntryTagsData(),
             onBack = {},
+            onEdit = {},
             onDelete = {},
             onReframe = {},
             onApplyReframe = { _ -> },
             onDismissReframe = {},
             onConfirmMood = { _, _ -> },
+            onOpenPerson = {},
         )
     }
 }

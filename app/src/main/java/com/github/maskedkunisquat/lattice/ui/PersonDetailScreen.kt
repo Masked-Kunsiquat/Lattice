@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.lattice.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -196,7 +197,7 @@ private fun PersonDetailContent(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // Vibe score arc card
@@ -300,7 +301,7 @@ private fun VibeArcCard(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp),
+                .aspectRatio(2f),
         ) {
             val strokeWidth = 14.dp.toPx()
             val radius = (size.width / 2f) * 0.75f
