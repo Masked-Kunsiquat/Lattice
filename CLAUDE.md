@@ -185,7 +185,7 @@ Requires accepting Google's Gemma Terms of Use on HuggingFace. Authenticate with
 |---|---|---|---|
 | `gemma3-1b-it-elite.litertlm` | Elite | SM8750 (S25 Ultra) — Adreno 830 AOT kernels | ~800 MB |
 | `gemma3-1b-it-ultra.litertlm` | Ultra | SM8650 (S24 Ultra) — Adreno 750 AOT kernels | ~800 MB |
-| `gemma3-1b-it-universal.task` | Universal | Any ARM64 — JIT / OpenCL fallback | ~800 MB |
+| `gemma3-1b-it-int4.litertlm` | Universal | Any ARM64 — JIT / OpenCL fallback | ~800 MB |
 
 `LocalFallbackProvider` selects the tier at runtime via `Build.BOARD`: `kailua` → Elite,
 `kalama` → Ultra, anything else → Universal.

@@ -76,11 +76,10 @@ class EmbeddingBenchmark {
     }
 
     /**
-     * Cosine similarity check: ONNX output must agree with the pre-computed seed
-     * embeddings to ≥ 0.99.
-     *
-     * Also serves as the correctness gate for any future TFLite migration (Track B):
-     * re-enable with the TFLite provider once a valid conversion is available.
+     * Cosine similarity check: the TFLite [EmbeddingProvider] output must agree with the
+     * pre-computed seed embeddings (generated offline from the same Arctic Embed XS model)
+     * to ≥ 0.99. Serves as a regression gate — failures indicate a bad model conversion,
+     * wrong tensor index order, or input dtype mismatch.
      *
      * Reads the first 5 entries with both content and embeddingBase64 from each persona.
      */
@@ -103,6 +102,9 @@ class EmbeddingBenchmark {
                 val b64 = entry.optString("embeddingBase64").takeIf { it.isNotBlank() } ?: continue
 
                 val reference = decodeEmbedding(b64)
+                require(reference.size == EmbeddingProvider.EMBEDDING_DIM) {
+                    "Seed embedding in $assetPath (index $i) has ${reference.size} dims; expected ${EmbeddingProvider.EMBEDDING_DIM}"
+                }
                 val tflite = runBlocking { provider.generateEmbedding(content) }
 
                 val sim = cosineSimilarity(reference, tflite)

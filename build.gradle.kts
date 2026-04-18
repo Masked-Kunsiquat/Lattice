@@ -17,7 +17,7 @@ plugins {
 //
 //   elite     gemma3-1b-it-elite.litertlm   SM8750 (S25 Ultra) — Adreno 830 AOT kernels
 //   ultra     gemma3-1b-it-ultra.litertlm   SM8650 (S24 Ultra) — Adreno 750 AOT kernels
-//   universal gemma3-1b-it-universal.task   Any ARM64           — JIT / OpenCL fallback
+//   universal gemma3-1b-it-int4.litertlm    Any ARM64           — JIT / OpenCL fallback
 //
 // Source: https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert
 // NOTE: Requires accepting Google's Gemma Terms of Use. Authenticate with
@@ -71,7 +71,7 @@ tasks.register("downloadModels") {
         val modelFile = when (tier) {
             "elite" -> "gemma3-1b-it-elite.litertlm"
             "ultra" -> "gemma3-1b-it-ultra.litertlm"
-            else    -> "gemma3-1b-it-universal.task"
+            else    -> "gemma3-1b-it-int4.litertlm"
         }
 
         // ── Download ──────────────────────────────────────────────────────────
