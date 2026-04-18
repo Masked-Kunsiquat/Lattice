@@ -95,7 +95,44 @@ Add a fourth tab between History and Settings:
 
 ---
 
-## M7 · History Enhancements
+## M7 · Bug Fixes
+
+**Goal:** correct functional regressions and data integrity issues found during first debug testing.
+
+- [x] **Mention records never persisted** — `JournalRepository.saveEntry()` computes person/place UUIDs from masked content but never calls `mentionDao.insertMention()`. Insert a `Mention` row for each `[PERSON_<uuid>]` token found in `maskedContent` so `PersonDetailViewModel` can surface linked entries and vibe score accumulation works.
+- [x] **Investigate: favorite toggle deletes linked journal entries** — `toggleFavorite` only calls `peopleRepository.savePerson()` with a flipped flag; no cascade delete is triggered by design. Likely a seed-data artifact or a UI handler accidentally wired to a delete action. Audit and fix.
+- [x] **@mention re-trigger after pill resolution** — `onMentionSelected` keeps `@Name` in the raw text; subsequent typing (e.g. ` and @Person 2`) causes the end-anchored `MENTION_REGEX` to match `@Name and` as a new query, showing a spurious "Create 'Name and'" suggestion. After a pill is resolved, the `@` prefix must no longer be treated as an active trigger (e.g. strip the `@`, replace with a non-triggering display token, or exclude already-resolved spans from the regex).
+- [x] **SearchBar: live results and tab visibility** — results don't appear while typing; the `TabRow` flashes briefly only on exit. Investigate `onExpandedChange` / Compose recomposition timing in `JournalHistoryScreen`; ensure `SearchHistoryViewModel.query` StateFlow drives the composable without prematurely collapsing `expanded`.
+
+---
+
+## M8 · Entry Experience & Settings Polish
+
+**Goal:** fill gaps in the journaling core UX and address Settings/UI issues that surfaced in the first real-use session.
+
+### Entry detail & history
+
+- [ ] **Journal entry editing** — `EntryDetailScreen` has only Reframe and Delete; no way to correct typos or update thoughts. Add an Edit action that opens the entry in `JournalEditorScreen` pre-populated with existing content and resolved mentions. Decide whether edits invalidate the existing embedding (re-embed on save) and how they interact with saved `reframedContent`.
+- [ ] **PII / mention highlighting** — person, place, and tag tokens are unmasked to plain text with no visual distinction. Add colored inline chips or highlights for resolved tokens in `JournalHistoryScreen` entry snippets and the `EntryDetailScreen` content body.
+- [ ] **Entry detail title** — `TopAppBar` shows the bare string "Entry". Replace with the entry's formatted date/time or mood label for at-a-glance context.
+- [ ] **Mood data prominence** — valence, arousal, and label are rendered small and secondary in `EntryDetailScreen`. Promote them to a visible card or header area.
+- [ ] **Tagged entities section** — add a bottom section to `EntryDetailScreen` listing tagged people, places, and tags with tap-through navigation (→ `PersonDetailScreen`; future place/tag detail screens).
+
+### Settings
+
+- [ ] **Sub-page navigation** — the flat 8-section `LazyColumn` will grow. Group into top-level categories (Inference, Personalization, Privacy & Data, About) with nested routes, following the pattern already used for Audit Trail and Activities.
+- [ ] **Model download: feature framing, not error framing** — `IDLE` and `ERROR` states use red styling and error-like copy. Since the model is intentionally not bundled, the not-downloaded state should read "Download to enable local inference" with neutral/informational styling.
+- [ ] **Model download notification** — progress notifications don't appear during download. Verify `POST_NOTIFICATIONS` runtime permission is requested before `ModelDownloadWorker` is enqueued, and that the notification channel is created before the first notification is posted.
+
+### Visual polish
+
+- [ ] **Centralize status colors** — `Color(0xFF2E7D32)`, `Color(0xFFB00020)`, `Color(0xFFF59E0B)` are hardcoded in `SettingsScreen.kt`. Move to named semantic aliases in `Color.kt`.
+- [ ] **NavBar second-tap → tab root** — `launchSingleTop + popUpTo` is already wired; verify on-device behavior. If the second tap is a no-op rather than a pop-to-root, fix `onNavigateToDestination` in `AppNavHost`.
+- [ ] **Person Detail arc spacing** — `VibeArcCard` canvas sits immediately below the `TopAppBar` with minimal breathing room. Add top padding so the semicircular arc doesn't crowd the header.
+
+---
+
+## M9 · History Enhancements
 
 Depends on M5 (SearchBar already in place).
 
@@ -106,7 +143,7 @@ Depends on M5 (SearchBar already in place).
 
 ---
 
-## M8 · Export
+## M10 · Export
 
 `ExportManager` in `:core-logic` is complete. This milestone is purely UI wiring.
 
@@ -115,7 +152,7 @@ Depends on M5 (SearchBar already in place).
 
 ---
 
-## M9 · On-Device Inference Upgrade (Gemma 3 1B + LiteRT)
+## M11 · On-Device Inference Upgrade (Gemma 3 1B + LiteRT)
 
 **Goal:** replace the ORT-based local inference stack with a hardware-accelerated
 one that runs at GPU speed on the S25 Ultra (and equivalent devices) — cutting
@@ -185,7 +222,7 @@ HuggingFace dataset (`masked-kunsiquat/clinical-personas`) at any time.
 
 ---
 
-## M10 · Distortion MLP Head
+## M12 · Distortion MLP Head
 
 **Goal:** replace the Stage 2 LLM call (Diagnosis of Thought) with a deterministic
 multi-label MLP classifier. Eliminates hallucination risk, drops Stage 2 latency to
