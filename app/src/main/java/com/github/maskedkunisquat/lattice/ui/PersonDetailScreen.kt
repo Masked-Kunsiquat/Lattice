@@ -300,7 +300,7 @@ private fun VibeArcCard(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp),
+                .aspectRatio(2f),
         ) {
             val strokeWidth = 14.dp.toPx()
             val radius = (size.width / 2f) * 0.75f
