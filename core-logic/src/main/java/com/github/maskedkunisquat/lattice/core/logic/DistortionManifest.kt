@@ -124,7 +124,9 @@ object DistortionManifestStore {
         val obj = JSONObject(json)
         val threshArr = obj.optJSONArray("thresholds")
         val thresholds = if (threshArr != null && threshArr.length() == DistortionMlp.OUT2) {
-            FloatArray(threshArr.length()) { threshArr.getDouble(it).toFloat() }
+            val parsed = FloatArray(threshArr.length()) { threshArr.getDouble(it).toFloat() }
+            if (parsed.all { it.isFinite() && it >= 0f && it <= 1f }) parsed
+            else FloatArray(DistortionMlp.OUT2) { DistortionMlp.DEFAULT_THRESHOLD }
         } else {
             FloatArray(DistortionMlp.OUT2) { DistortionMlp.DEFAULT_THRESHOLD }
         }

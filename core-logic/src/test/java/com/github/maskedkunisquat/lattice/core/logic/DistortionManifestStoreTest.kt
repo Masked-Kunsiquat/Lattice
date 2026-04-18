@@ -100,6 +100,29 @@ class DistortionManifestStoreTest {
     }
 
     @Test
+    fun `fromJson replaces thresholds with defaults when any value overflows to non-finite float`() {
+        // 1e39 is a valid JSON double but overflows to Float.POSITIVE_INFINITY on toFloat().
+        // The isFinite() guard must catch this and fall back to defaults.
+        val arr = org.json.JSONArray().also { a -> repeat(12) { a.put(1.0e39) } }
+        val manifest = fromJson(JSONObject().put("thresholds", arr).toString())
+        manifest.thresholds.forEach { t ->
+            assertEquals(DistortionMlp.DEFAULT_THRESHOLD, t, 1e-6f)
+        }
+    }
+
+    @Test
+    fun `fromJson replaces thresholds with defaults when any value is out of range`() {
+        val arr = org.json.JSONArray().also { i ->
+            repeat(11) { i.put(0.5) }
+            i.put(2.0) // out of [0, 1]
+        }
+        val manifest = fromJson(JSONObject().put("thresholds", arr).toString())
+        manifest.thresholds.forEach { t ->
+            assertEquals(DistortionMlp.DEFAULT_THRESHOLD, t, 1e-6f)
+        }
+    }
+
+    @Test
     fun `fromJson tolerates extra unknown keys`() {
         val json = """{"schemaVersion":1,"baseModelHash":"sha256:x","headPath":"d.bin",
             "trainedOnCount":100,"lastTrainingTimestamp":42,"corpusVersion":"v2",
