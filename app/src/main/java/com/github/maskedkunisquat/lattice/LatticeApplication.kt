@@ -178,7 +178,7 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
             reframingLoop.affectiveMlp = AffectiveMlp.load(this@LatticeApplication)
         }
         applicationScope.launch(Dispatchers.IO) {
-            reframingLoop.distortionMlp = DistortionMlp.load(this@LatticeApplication)
+            reframingLoop.distortionMlp = DistortionMlpLoader.load(this@LatticeApplication)
         }
 
         // Warm-start the affective head from the GoEmotions base layer on first launch.

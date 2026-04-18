@@ -16,7 +16,7 @@ import java.util.UUID
  *
  * ## Routing priority (local-first)
  * 1. [nanoProvider]          — Gemini Nano via AICore (API 35+, on-device)
- * 2. [localFallbackProvider] — Gemma 3 1B via MediaPipe Tasks GenAI (on-device, all API levels)
+ * 2. [localFallbackProvider] — Gemma 3 1B via LiteRT-LM (on-device, all API levels)
  * 3. [cloudProvider]         — Remote API (**only** when [cloudEnabled] = true)
  *
  * ## Sovereignty Gate

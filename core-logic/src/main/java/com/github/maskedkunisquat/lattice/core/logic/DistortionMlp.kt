@@ -1,6 +1,5 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
@@ -54,6 +53,9 @@ class DistortionMlp(
         require(b1.all { it.isFinite() }) { "b1 contains non-finite values" }
         require(w2.all { it.isFinite() }) { "w2 contains non-finite values" }
         require(b2.all { it.isFinite() }) { "b2 contains non-finite values" }
+        require(thresholds.all { it.isFinite() && it in 0f..1f }) {
+            "thresholds must all be finite and in [0, 1]"
+        }
     }
 
     /**
@@ -65,6 +67,7 @@ class DistortionMlp(
      */
     fun forward(embedding: FloatArray): BooleanArray {
         require(embedding.size == IN) { "Expected $IN-dim embedding, got ${embedding.size}" }
+        require(embedding.all { it.isFinite() }) { "embedding contains non-finite values" }
         val logits = rawLogits(embedding)
         return BooleanArray(OUT2) { i -> logits[i] >= thresholds[i] }
     }
@@ -123,49 +126,6 @@ class DistortionMlp(
         val WEIGHT_COUNT = OUT1 * IN + OUT1 + OUT2 * OUT1 + OUT2  // 50 828
         val WEIGHT_BYTES = WEIGHT_COUNT * Float.SIZE_BYTES          // 203 312
 
-        private const val TAG = "DistortionMlp"
-
-        /**
-         * Loads [DistortionMlp] from the manifest stored in SharedPreferences.
-         * Returns null if no manifest exists, the weight file is absent/wrong-size,
-         * or the embedding model hash has changed since training.
-         */
-        fun load(context: android.content.Context): DistortionMlp? {
-            val prefs = context.getSharedPreferences(
-                DistortionManifestStore.PREFS_NAME, android.content.Context.MODE_PRIVATE
-            )
-            val manifest = DistortionManifestStore.read(prefs) ?: return null
-
-            if (manifest.schemaVersion != CURRENT_SCHEMA_VERSION) {
-                Log.w(TAG, "Manifest schema v${manifest.schemaVersion} != $CURRENT_SCHEMA_VERSION — discarding")
-                context.filesDir.resolve(manifest.headPath).delete()
-                DistortionManifestStore.reset(prefs)
-                return null
-            }
-
-            val currentHash = try {
-                "sha256:${context.assets.open(EMBEDDING_ASSET).use { sha256Hex(it) }}"
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to hash $EMBEDDING_ASSET — cannot verify manifest", e)
-                return null
-            }
-            if (manifest.baseModelHash != currentHash) {
-                Log.w(TAG, "Embedding model hash mismatch — discarding stale distortion head")
-                context.filesDir.resolve(manifest.headPath).delete()
-                DistortionManifestStore.reset(prefs)
-                return null
-            }
-
-            val weightFile = context.filesDir.resolve(manifest.headPath)
-            if (!weightFile.exists() || weightFile.length() != WEIGHT_BYTES.toLong()) return null
-            return runCatching { loadWeights(weightFile, manifest.thresholds) }.getOrElse { e ->
-                Log.e(TAG, "Failed to load weights — deleting stale head", e)
-                weightFile.delete()
-                DistortionManifestStore.reset(prefs)
-                null
-            }
-        }
-
         /**
          * Loads weights from [file] and returns a ready-to-use [DistortionMlp].
          *
@@ -215,9 +175,9 @@ class DistortionMlp(
             )
         }
 
-        const val CURRENT_SCHEMA_VERSION = 1
-        const val WEIGHT_FILE            = "distortion_mlp.bin"
-        private const val EMBEDDING_ASSET = "snowflake-arctic-embed-xs_float32.tflite"
+        const val CURRENT_SCHEMA_VERSION  = 1
+        const val WEIGHT_FILE             = "distortion_mlp.bin"
+        const val EMBEDDING_ASSET         = "snowflake-arctic-embed-xs_float32.tflite"
     }
 }
 

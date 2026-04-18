@@ -1,26 +1,20 @@
 ## Running commit message
 
 ```
-fix: address inline review findings from m4-stability (part 3)
+fix: address inline review findings from m4-stability (part 4)
 
-- LatticeApplication: remove runBlocking for AffectiveMlp/DistortionMlp load;
-  construct reframingLoop with null heads and hot-swap via applicationScope.launch(IO)
-- SearchHistoryViewModel: replace full-entry cache (allEntriesState) with lightweight
-  JournalEntryRef projection (id/tagIds/placeIds only); add JournalEntryRef model,
-  JournalDao.getEntryRefs query, and JournalRepository.getEntryRefs exposure
-- SearchHistoryViewModel: clear stale results immediately on dispatchSearch for
-  non-blank queries so cancelled jobs don't leave misleading results visible
-- build.gradle.kts: call proc.waitFor(5s) before readText() on ADB getprop so
-  the stream read cannot block indefinitely; destroy process on timeout
-- DistortionDatasetLoader: introduce Logger and AssetSource interfaces (no android.util.Log
-  or Context); change load() to accept (assetSource, cacheFile, embeddingProvider, logger)
-- DistortionDatasetLoader: wrap cache read in try/catch; delete corrupt cache and fall
-  through to regeneration path on any IOException/IllegalArgumentException
-- DistortionDatasetLoader: guard serialize() behind skipCacheWrite flag when
-  embeddingProvider is uninitialised so zero-vector embeddings are never persisted
-- DistortionDatasetLoader: call PiiShield.mask(text, emptyList()) before generateEmbedding
-  to enforce the masked-text-only embedding contract
-- (stream already closed via .use {}; header size already validated — skipped)
+- DistortionMlp: remove android.util.Log and Context.load(); move Android-specific
+  manifest/hash/file loading to DistortionMlpLoader in :app; make sha256Hex public;
+  EMBEDDING_ASSET promoted to public const for loader access
+- DistortionMlp: validate thresholds are finite and in [0,1] in init block;
+  validate embedding finiteness in forward() before rawLogits
+- LlmProvider/LlmOrchestrator KDoc: replace "MediaPipe Tasks GenAI" with "LiteRT-LM"
+- LocalFallbackProvider: add MODEL_SHA256 companion map; pass KEY_SHA256 via
+  Data.Builder in downloadModel() when hash is non-null
+- LocalFallbackProvider: add "kailua" (Pixel 9 Pro SM8750) to Elite branch in
+  selectModelAndBackends() so it routes to MODEL_FILE_ELITE with Backend.NPU
+- LocalFallbackProvider (build.gradle finding): else branch already uses
+  gemma3-1b-it-int4.litertlm — verified, no change needed
 ```
 
 ---
@@ -156,7 +150,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   exception type and a helpful error message.
 -----
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/DistortionMlp.kt`
   at line 3, DistortionMlp currently depends on Android (import android.util.Log
   and usage of Context/assets/filesDir/SharedPreferences) which must be removed;
@@ -171,7 +165,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   interface, and add a minimal storage abstraction to be implemented in :app for
   Android specifics.
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/DistortionMlp.kt`
   around lines 47 - 69, The model currently trusts thresholds and inference
   embeddings without guarding against NaN/Inf or out-of-range values; add
@@ -184,7 +178,7 @@ references (alternatively move all asset/cache I/O and logging code into the
 
 -----
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/LlmProvider.kt`
   at line 10, Update the KDoc references that incorrectly say "MediaPipe Tasks
   GenAI" to "LiteRT-LM" so comments match the implementation: change the
@@ -196,7 +190,7 @@ references (alternatively move all asset/cache I/O and logging code into the
 
 -----
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/LocalFallbackProvider.kt`
   around lines 94 - 111, downloadModel() never passes the expected SHA-256 to
   ModelDownloadWorker so integrity verification is skipped; add a companion map
@@ -206,7 +200,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   selectModelAndBackends()); keep existing HF_BASE_URL/KEY_URL wiring and only add
   the KEY_SHA256 entry so ModelDownloadWorker can verify the downloaded blob.
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/LocalFallbackProvider.kt`
   around lines 264 - 295, The selectModelAndBackends logic incorrectly omits
   Build.BOARD == "kailua" from the Elite branch; update the condition in
@@ -216,7 +210,7 @@ references (alternatively move all asset/cache I/O and logging code into the
   board == "kailua" (and keep dispatchLibAvailable check) so Pixel 9 Pro devices
   route to MODEL_FILE_ELITE with Backend.NPU(nativeLibraryDir = nativeLibDir).
 
-- [] In
+- [x] In
   `@core-logic/src/main/java/com/github/maskedkunisquat/lattice/core/logic/LocalFallbackProvider.kt`
   around lines 300 - 314, The build script still references the removed
   gemma3-1b-it-universal.task which 404s; update the fallback else branch in

@@ -94,12 +94,16 @@ class LocalFallbackProvider(
     fun downloadModel() {
         val workManager = WorkManager.getInstance(context)
         val (modelFile, _) = selectModelAndBackends()
+        val sha256 = MODEL_SHA256[modelFile]
+
+        val inputData = androidx.work.Data.Builder()
+            .putString(ModelDownloadWorker.KEY_MODEL_ASSET, modelFile)
+            .putString(ModelDownloadWorker.KEY_URL, "$HF_BASE_URL/$modelFile")
+            .also { if (sha256 != null) it.putString(ModelDownloadWorker.KEY_SHA256, sha256) }
+            .build()
 
         val downloadRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
-            .setInputData(workDataOf(
-                ModelDownloadWorker.KEY_MODEL_ASSET to modelFile,
-                ModelDownloadWorker.KEY_URL to "$HF_BASE_URL/$modelFile"
-            ))
+            .setInputData(inputData)
             .addTag(ModelDownloadWorker.UNIQUE_WORK_NAME)
             .build()
 
@@ -270,8 +274,9 @@ class LocalFallbackProvider(
         }
         return when {
             // SM8750 (S25 Ultra / Pixel 9 Pro) — NPU-compiled elite model.
+            // "kailua" is the SM8750 board name on Pixel 9 Pro devices.
             // libpenguin.so must be present in nativeLibDir; if absent LiteRT aborts (SIGABRT).
-            (board == "sun" || board.startsWith("sm8750")) && dispatchLibAvailable ->
+            (board == "sun" || board == "kailua" || board.startsWith("sm8750")) && dispatchLibAvailable ->
                 MODEL_FILE_ELITE to listOf(Backend.NPU(nativeLibraryDir = nativeLibDir))
             // SM8650 (S24 Ultra) — NPU-compiled ultra model.
             (board == "kalama" || board.startsWith("sm8650")) && dispatchLibAvailable ->
@@ -312,5 +317,16 @@ class LocalFallbackProvider(
         // Convenience alias — the file this device will download/use.
         // (Used by external callers that don't have a Context to call selectModelAndBackends.)
         const val MODEL_FILE = MODEL_FILE_INT4
+
+        /**
+         * Expected SHA-256 digests for each model file (hex, lowercase).
+         * Null entries mean integrity verification is skipped for that tier.
+         * Populate from the HuggingFace model card checksums before shipping.
+         */
+        internal val MODEL_SHA256: Map<String, String?> = mapOf(
+            MODEL_FILE_ELITE to null, // TODO: populate from HF model card
+            MODEL_FILE_ULTRA to null, // TODO: populate from HF model card
+            MODEL_FILE_INT4  to null, // TODO: populate from HF model card
+        )
     }
 }

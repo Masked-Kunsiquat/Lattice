@@ -137,7 +137,7 @@ fun AffectiveManifest.toEntity() = TrainingManifestEntity(
  *
  * The stream is consumed but **not** closed by this function.
  */
-internal fun sha256Hex(stream: InputStream): String {
+fun sha256Hex(stream: InputStream): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val buf = ByteArray(8192)
     var read: Int
