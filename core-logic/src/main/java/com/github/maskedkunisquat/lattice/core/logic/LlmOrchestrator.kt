@@ -80,12 +80,15 @@ class LlmOrchestrator(
         systemInstruction: String? = null,
     ): Flow<LlmResult> = flow {
         val provider = selectProvider()
-        val piiDetected = provider === cloudProvider && runCatching { piiDetector?.invoke(prompt) ?: false }.getOrDefault(true)
+        val piiDetected = provider === cloudProvider && runCatching {
+            (piiDetector?.invoke(prompt) ?: false) ||
+            (systemInstruction != null && piiDetector?.invoke(systemInstruction) ?: false)
+        }.getOrDefault(true)
         if (piiDetected) {
             emit(
                 LlmResult.Error(
                     SecurityException(
-                        "Cloud dispatch blocked: raw PII detected in prompt. " +
+                        "Cloud dispatch blocked: raw PII detected in prompt or system instruction. " +
                         "Mask all personal data via PiiShield before routing to cloud."
                     )
                 )

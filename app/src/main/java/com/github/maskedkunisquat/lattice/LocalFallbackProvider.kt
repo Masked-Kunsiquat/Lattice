@@ -91,6 +91,9 @@ class LocalFallbackProvider(
     override fun downloadModel() {
         val (modelFile, _) = selectModelAndBackends()
         val sha256 = MODEL_SHA256[modelFile]
+        check(sha256 != null || BuildConfig.DEBUG) {
+            "SHA-256 digest for $modelFile is not set. Populate MODEL_SHA256 before shipping a release build."
+        }
         modelDownloader.enqueue(modelFile, "$HF_BASE_URL/$modelFile", sha256)
     }
 

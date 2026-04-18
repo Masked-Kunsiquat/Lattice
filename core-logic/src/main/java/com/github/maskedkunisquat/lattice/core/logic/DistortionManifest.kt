@@ -1,6 +1,5 @@
 package com.github.maskedkunisquat.lattice.core.logic
 
-import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -69,7 +68,7 @@ data class DistortionManifest(
 }
 
 /**
- * Reads and writes [DistortionManifest] to/from SharedPreferences as a JSON string.
+ * Reads and writes [DistortionManifest] to/from a [KeyValueStore] as a JSON string.
  *
  * Uses the `"lattice_training"` prefs file so all model manifests are co-located.
  */
@@ -82,27 +81,29 @@ object DistortionManifestStore {
      * Returns the stored [DistortionManifest], or `null` if none has been written yet
      * or if the stored value cannot be parsed.
      */
-    fun read(prefs: SharedPreferences): DistortionManifest? {
-        val raw = prefs.getString(PREF_KEY, null) ?: return null
+    fun read(store: KeyValueStore): DistortionManifest? {
+        val raw = store.getString(PREF_KEY) ?: return null
         return runCatching { fromJson(raw) }.getOrNull()
     }
 
     /**
      * Serialises [manifest] and durably stores it under [PREF_KEY].
      *
-     * Uses [SharedPreferences.Editor.commit] (synchronous) so callers can detect failure.
+     * Callers must use a [KeyValueStore] whose [KeyValueStore.putString] is synchronous
+     * (e.g. backed by [android.content.SharedPreferences.Editor.commit]) so that failures
+     * are detectable via the return value.
      *
      * @return `true` if the value was written successfully, `false` otherwise.
      */
-    fun write(prefs: SharedPreferences, manifest: DistortionManifest): Boolean =
-        prefs.edit().putString(PREF_KEY, manifest.toJson()).commit()
+    fun write(store: KeyValueStore, manifest: DistortionManifest): Boolean =
+        store.putString(PREF_KEY, manifest.toJson())
 
     /**
      * Clears the manifest so [DistortionMlp.load] returns `null` on the next call,
      * forcing retraining on the next training run.
      */
-    fun reset(prefs: SharedPreferences) {
-        prefs.edit().remove(PREF_KEY).apply()
+    fun reset(store: KeyValueStore) {
+        store.remove(PREF_KEY)
     }
 
     // ── Serialisation helpers (internal so they can be exercised by unit tests) ──

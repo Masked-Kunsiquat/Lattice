@@ -20,6 +20,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Set to false for no-INTERNET build variants (e.g. enterprise sideload builds)
+        // to prevent WorkManager from enqueuing network model downloads.
+        buildConfigField("boolean", "BUILD_HAS_NETWORK", "true")
     }
 
     buildTypes {

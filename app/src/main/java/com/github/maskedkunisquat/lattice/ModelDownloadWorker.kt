@@ -162,6 +162,7 @@ class ModelDownloadWorker(
                     return@repeat
                 }
 
+                if (code in 400..499) throw PermanentDownloadException("HTTP $code from $location")
                 if (code != 200) throw IOException("HTTP $code from $location")
 
                 val total = conn.contentLengthLong

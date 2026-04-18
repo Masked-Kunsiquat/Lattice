@@ -1,4 +1,4 @@
-package com.github.maskedkunisquat.lattice.core.logic
+package com.github.maskedkunisquat.lattice
 
 import android.content.Context
 import android.os.Debug
@@ -12,6 +12,13 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.github.maskedkunisquat.lattice.core.data.LatticeDatabase
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedManager
 import com.github.maskedkunisquat.lattice.core.data.seed.SeedPersona
+import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
+import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
+import com.github.maskedkunisquat.lattice.core.logic.LlmProvider
+import com.github.maskedkunisquat.lattice.core.logic.LlmResult
+import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
+import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
+import com.github.maskedkunisquat.lattice.core.logic.SearchRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf

@@ -19,15 +19,15 @@ private const val TAG = "DistortionMlpLoader"
 object DistortionMlpLoader {
 
     fun load(context: Context): DistortionMlp? {
-        val prefs = context.getSharedPreferences(
-            DistortionManifestStore.PREFS_NAME, Context.MODE_PRIVATE
+        val store = SharedPreferencesKeyValueStore(
+            context.getSharedPreferences(DistortionManifestStore.PREFS_NAME, Context.MODE_PRIVATE)
         )
-        val manifest = DistortionManifestStore.read(prefs) ?: return null
+        val manifest = DistortionManifestStore.read(store) ?: return null
 
         if (manifest.schemaVersion != DistortionMlp.CURRENT_SCHEMA_VERSION) {
             Log.w(TAG, "Manifest schema v${manifest.schemaVersion} != ${DistortionMlp.CURRENT_SCHEMA_VERSION} — discarding")
             context.filesDir.resolve(manifest.headPath).delete()
-            DistortionManifestStore.reset(prefs)
+            DistortionManifestStore.reset(store)
             return null
         }
 
@@ -40,23 +40,24 @@ object DistortionMlpLoader {
         if (manifest.baseModelHash != currentHash) {
             Log.w(TAG, "Embedding model hash mismatch — discarding stale distortion head")
             context.filesDir.resolve(manifest.headPath).delete()
-            DistortionManifestStore.reset(prefs)
+            DistortionManifestStore.reset(store)
             return null
         }
 
-        // Clean up any staging file left behind by a crash between manifest commit and rename.
+        // Clean up any staging or backup files left behind by a crash mid-checkpoint.
         context.filesDir.resolve("${manifest.headPath}.staged").delete()
+        context.filesDir.resolve("${manifest.headPath}.bak").delete()
 
         val weightFile = context.filesDir.resolve(manifest.headPath)
         if (!weightFile.exists() || weightFile.length() != DistortionMlp.WEIGHT_BYTES.toLong()) {
             weightFile.delete()
-            DistortionManifestStore.reset(prefs)
+            DistortionManifestStore.reset(store)
             return null
         }
         return runCatching { DistortionMlp.loadWeights(weightFile, manifest.thresholds) }.getOrElse { e ->
             Log.e(TAG, "Failed to load weights — deleting stale head", e)
             weightFile.delete()
-            DistortionManifestStore.reset(prefs)
+            DistortionManifestStore.reset(store)
             null
         }
     }

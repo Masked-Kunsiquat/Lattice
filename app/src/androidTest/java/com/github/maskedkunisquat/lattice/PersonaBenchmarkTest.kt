@@ -76,12 +76,12 @@ class PersonaBenchmarkTest {
         get() = context.getSharedPreferences("lattice_seed_manager", Context.MODE_PRIVATE)
 
     /**
-     * True only when all ONNX model shards are loaded and the session is ready.
+     * True only when the Gemma 3 1B LiteRT model is loaded and the engine is ready.
      *
      * The benchmark does NOT call [LocalFallbackProvider.initialize] in setUp — doing so
-     * synchronously on the test thread would attempt to load a 3 GB ONNX model, causing
-     * an OOM kill after ~25 s. Instead this flag reflects whatever the application's
-     * background init thread has already loaded. In CI (no model files) it is always false
+     * synchronously on the test thread would attempt to load the ~1.5 GB LiteRT model,
+     * causing an OOM kill. Instead this flag reflects the state set by the application's
+     * background MediaPipe Engine init thread. In CI (no model files) it is always false
      * and inference assertions are skipped cleanly.
      */
     private val modelLoaded: Boolean

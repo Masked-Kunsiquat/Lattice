@@ -137,14 +137,16 @@ class SearchHistoryViewModel(
                 _uiState.update { it.copy(isSemanticLoading = true) }
                 val results = searchRepository.findSimilarEntries(localQuery, limit = 20)
                 // Guard against a stale result landing after the query has changed.
+                // Only clear isSemanticLoading when the result is still current; a newer
+                // job is already in flight for a changed query and will clear it itself.
                 if (_uiState.value.query == localQuery) {
                     _uiState.update { it.copy(entryResults = results, isSemanticLoading = false) }
-                } else {
-                    _uiState.update { it.copy(isSemanticLoading = false) }
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _uiState.update { it.copy(isSemanticLoading = false) }
+                if (_uiState.value.query == localQuery) {
+                    _uiState.update { it.copy(isSemanticLoading = false) }
+                }
             }
         }
 
@@ -158,16 +160,20 @@ class SearchHistoryViewModel(
                 val places = placeRepository.searchPlaces(localQuery)
                 val tags = tagRepository.searchTags(localQuery)
 
-                // Entry counts from lightweight ref snapshot; avoids loading content/embeddings.
-                val entryRefs = entryRefsState.value
-                val placeResults = places.map { place ->
-                    PlaceResult(place, entryRefs.count { place.id in it.placeIds })
-                }
-                val tagResults = tags.map { tag ->
-                    TagResult(tag, entryRefs.count { tag.id in it.tagIds })
-                }
                 // Guard against a stale result landing after the query has changed.
+                // Re-read entryRefsState inside the guard so counts reflect the latest
+                // Room snapshot rather than one taken at search start.
+                // Only clear isLikeLoading when the result is still current; a newer job
+                // is already in flight for a changed query and will clear it itself.
                 if (_uiState.value.query == localQuery) {
+                    // Entry counts from lightweight ref snapshot; avoids loading content/embeddings.
+                    val entryRefs = entryRefsState.value
+                    val placeResults = places.map { place ->
+                        PlaceResult(place, entryRefs.count { place.id in it.placeIds })
+                    }
+                    val tagResults = tags.map { tag ->
+                        TagResult(tag, entryRefs.count { tag.id in it.tagIds })
+                    }
                     _uiState.update {
                         it.copy(
                             peopleResults = people,
@@ -176,12 +182,12 @@ class SearchHistoryViewModel(
                             isLikeLoading = false,
                         )
                     }
-                } else {
-                    _uiState.update { it.copy(isLikeLoading = false) }
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _uiState.update { it.copy(isLikeLoading = false) }
+                if (_uiState.value.query == localQuery) {
+                    _uiState.update { it.copy(isLikeLoading = false) }
+                }
             }
         }
     }

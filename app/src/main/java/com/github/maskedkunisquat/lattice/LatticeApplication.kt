@@ -176,22 +176,28 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
 
         // Load trained MLP heads from disk without blocking startup. reframingLoop starts
         // with null heads and degrades safely until each model is hot-swapped in.
+        //
+        // AffectiveMlp: load and first-launch init are sequential in the same coroutine so
+        // the async load cannot overwrite a freshly trained head (race from the old two-launch
+        // pattern). If a saved head exists it is installed directly; only when none is found
+        // does maybeInitialize run (guarded by SharedPreferences, so it is a no-op on all
+        // subsequent launches).
         applicationScope.launch(Dispatchers.IO) {
-            reframingLoop.affectiveMlp = AffectiveMlp.load(this@LatticeApplication)
+            val loaded = AffectiveMlp.load(this@LatticeApplication)
+            if (loaded != null) {
+                if (reframingLoop.affectiveMlp == null) reframingLoop.affectiveMlp = loaded
+            } else {
+                affectiveMlpInitializer.maybeInitialize(
+                    context   = this@LatticeApplication,
+                    mlp       = AffectiveMlp(),
+                    scope     = applicationScope,
+                    onTrained = { trained -> reframingLoop.affectiveMlp = trained },
+                )
+            }
         }
         applicationScope.launch(Dispatchers.IO) {
             reframingLoop.distortionMlp = DistortionMlpLoader.load(this@LatticeApplication)
         }
-
-        // Warm-start the affective head from the GoEmotions base layer on first launch.
-        // No-op on subsequent launches (guarded by SharedPreferences). Once trained,
-        // hot-swaps the live reference in reframingLoop so Stage 1 starts using the MLP.
-        affectiveMlpInitializer.maybeInitialize(
-            context   = this,
-            mlp       = reframingLoop.affectiveMlp ?: AffectiveMlp(),
-            scope     = applicationScope,
-            onTrained = { trained -> reframingLoop.affectiveMlp = trained },
-        )
 
         // Schedule periodic MLP refinement (no-op if already enqueued) and observe
         // the personalization toggle so the job is cancelled/re-enqueued reactively.

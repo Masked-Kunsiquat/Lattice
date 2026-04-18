@@ -290,6 +290,9 @@ class JournalEditorViewModel(
         // from history) → fresh UUID (brand-new entry). This ensures repeated Save presses
         // update the same row rather than inserting duplicates.
         val newId = savedEntryId ?: initialEntryId ?: UUID.randomUUID()
+        // Assign before the first suspend point so concurrent invocations see the same id
+        // and do not each generate a fresh UUID, which would create duplicate entries.
+        savedEntryId = newId
         // Collect UUIDs for #tag tokens still present in the text
         val tagIds = TAG_WORD_REGEX.findAll(state.text)
             .mapNotNull { state.resolvedTags[it.groupValues[1]] }
@@ -331,7 +334,6 @@ class JournalEditorViewModel(
                 placeIds = placeIds,
             )
         )
-        savedEntryId = newId
         return newId
     }
 

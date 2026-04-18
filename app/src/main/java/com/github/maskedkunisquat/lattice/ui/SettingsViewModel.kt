@@ -2,6 +2,7 @@ package com.github.maskedkunisquat.lattice.ui
 
 import android.content.Intent
 import androidx.lifecycle.ViewModel
+import com.github.maskedkunisquat.lattice.BuildConfig
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
@@ -184,6 +185,11 @@ class SettingsViewModel(
     }
 
     fun downloadModel() {
+        if (!BuildConfig.BUILD_HAS_NETWORK) {
+            // No-INTERNET build variant — network model download is disabled.
+            // TODO: route to a sideload/ADB-import flow when offline delivery is implemented.
+            return
+        }
         localFallbackProvider.downloadModel()
     }
 
