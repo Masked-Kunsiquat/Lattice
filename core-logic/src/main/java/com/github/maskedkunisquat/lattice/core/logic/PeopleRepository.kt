@@ -54,7 +54,7 @@ class PeopleRepository(
 
     suspend fun savePerson(person: Person, phoneNumbers: List<PhoneNumber>) {
         transact {
-            personDao.insertPerson(person)
+            personDao.updatePerson(person)
             phoneNumberDao.deleteByPersonId(person.id)
             phoneNumberDao.insertPhoneNumbers(phoneNumbers)
         }
