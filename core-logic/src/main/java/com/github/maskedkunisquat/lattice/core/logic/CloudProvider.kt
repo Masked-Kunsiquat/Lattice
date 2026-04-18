@@ -111,7 +111,7 @@ class CloudProvider(
             .put("model", MODEL)
             .put("max_tokens", MAX_TOKENS)
             .put("stream", true)
-            .apply { if (systemInstruction != null) put("system", systemInstruction) }
+            .apply { if (!systemInstruction.isNullOrBlank()) put("system", systemInstruction) }
             .put("messages", JSONArray().apply {
                 put(JSONObject().put("role", "user").put("content", prompt))
             })

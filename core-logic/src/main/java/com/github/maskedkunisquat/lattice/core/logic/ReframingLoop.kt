@@ -112,6 +112,9 @@ class ReframingLoop(
                     runCatching {
                         val embedding  = embedder.generateEmbedding(maskedText)
                         val labels     = mlp.forward(embedding)
+                        require(labels.size >= CognitiveDistortion.entries.size) {
+                            "MLP output size ${labels.size} < expected ${CognitiveDistortion.entries.size}"
+                        }
                         val distortions = CognitiveDistortion.entries.filterIndexed { i, _ -> labels[i] }
                         Log.d(TAG, "Stage2: source=mlp, distortions=$distortions")
                         DiagnosisResult(

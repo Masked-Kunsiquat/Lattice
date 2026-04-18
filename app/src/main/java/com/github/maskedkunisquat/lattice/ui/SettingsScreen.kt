@@ -255,13 +255,11 @@ private fun LocalModelSection(
             downloadWorkInfo?.state == WorkInfo.State.ENQUEUED
 
     val context = LocalContext.current
-    val notificationsBlocked = remember(isDownloading) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                context, Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        } else false
-    }
+    val notificationsBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS
+        ) != PackageManager.PERMISSION_GRANTED
+    } else false
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val statusText = when {

@@ -93,7 +93,7 @@ class EmbeddingBenchmark {
         var checked = 0
 
         for (assetPath in personas) {
-            val root = JSONObject(context.assets.open(assetPath).bufferedReader().readText())
+            val root = JSONObject(context.assets.open(assetPath).bufferedReader().use { it.readText() })
             val entries = root.getJSONArray("journalEntries")
             var perPersona = 0
             for (i in 0 until entries.length()) {
@@ -129,6 +129,7 @@ class EmbeddingBenchmark {
     }
 
     private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
+        require(a.size == b.size) { "Embedding size mismatch: ${a.size} vs ${b.size}" }
         var dot = 0f; var normA = 0f; var normB = 0f
         for (i in a.indices) {
             dot  += a[i] * b[i]

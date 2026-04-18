@@ -31,6 +31,7 @@ import com.github.maskedkunisquat.lattice.core.logic.TrainingDependencies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -144,8 +145,8 @@ class LatticeApplication : Application(), TrainingDependencies, DownloadDependen
             activityHierarchyDao = database.activityHierarchyDao(),
             searchRepository     = searchRepository,
             embeddingProvider    = embeddingProvider,
-            affectiveMlp         = AffectiveMlp.load(this),
-            distortionMlp        = DistortionMlp.load(this),
+            affectiveMlp         = runBlocking(Dispatchers.IO) { AffectiveMlp.load(this@LatticeApplication) },
+            distortionMlp        = runBlocking(Dispatchers.IO) { DistortionMlp.load(this@LatticeApplication) },
         )
     }
 

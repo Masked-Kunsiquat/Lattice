@@ -123,8 +123,8 @@ class SearchHistoryViewModel(
                 val results = searchRepository.findSimilarEntries(query, limit = 20)
                 _uiState.update { it.copy(entryResults = results, isSemanticLoading = false) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSemanticLoading = false) }
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                _uiState.update { it.copy(isSemanticLoading = false) }
             }
         }
 
@@ -154,8 +154,8 @@ class SearchHistoryViewModel(
                     )
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLikeLoading = false) }
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                _uiState.update { it.copy(isLikeLoading = false) }
             }
         }
     }

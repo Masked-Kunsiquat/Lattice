@@ -57,7 +57,7 @@ object DistortionCorpusMapper {
      */
     fun toLabels(dominant: String, secondary: String? = null): BooleanArray {
         val labels = BooleanArray(CognitiveDistortion.entries.size)
-        for (raw in listOfNotNull(dominant, secondary?.takeIf { it.isNotBlank() })) {
+        for (raw in listOfNotNull(dominant.takeIf { it.isNotBlank() }, secondary?.takeIf { it.isNotBlank() })) {
             map(raw).getOrNull()?.let { labels[it.ordinal] = true }
         }
         return labels

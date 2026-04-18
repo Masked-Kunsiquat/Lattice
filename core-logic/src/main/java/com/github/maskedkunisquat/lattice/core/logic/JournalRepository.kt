@@ -44,7 +44,12 @@ class JournalRepository(
             personDao.getPersons(),
             placeDao.getAll(),
         ) { entries, people, places ->
-            entries.map { it.copy(content = it.content?.let { c -> PiiShield.unmask(c, people, places) }) }
+            entries.map {
+                it.copy(
+                    content         = it.content?.let { c -> PiiShield.unmask(c, people, places) },
+                    reframedContent = it.reframedContent?.let { r -> PiiShield.unmask(r, people, places) },
+                )
+            }
         }
     }
 

@@ -68,7 +68,7 @@ object DistortionDatasetLoader {
         val samples = mutableListOf<DistortionSample>()
 
         for (assetPath in ASSET_PATHS) {
-            val rows = context.assets.open(assetPath).bufferedReader().readLines()
+            val rows = context.assets.open(assetPath).bufferedReader().use { it.readLines() }
                 .filter { it.isNotBlank() }
             Log.i(TAG, "Embedding $assetPath (${rows.size} rows)…")
 
@@ -122,6 +122,9 @@ object DistortionDatasetLoader {
      */
     internal fun deserialize(stream: InputStream): List<DistortionSample> {
         val bytes = stream.readBytes()
+        require(bytes.size >= 12) {
+            "Cache stream too short: ${bytes.size} bytes, need at least 12 for header"
+        }
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
 
         val count      = buf.int

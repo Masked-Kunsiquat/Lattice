@@ -22,9 +22,11 @@ class LlmOrchestratorTest {
         private val results: List<LlmResult> = listOf(LlmResult.Complete)
     ) : LlmProvider {
         var processCallCount = 0
+        var lastSystemInstruction: String? = null
         override suspend fun isAvailable() = available
         override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> {
             processCallCount++
+            lastSystemInstruction = systemInstruction
             return results.asFlow()
         }
     }
@@ -162,6 +164,13 @@ class LlmOrchestratorTest {
 
         assertTrue("Expected complete result", results.any { it is LlmResult.Complete })
         assertEquals("Cloud should be called for masked prompt", 1, cloud.processCallCount)
+    }
+
+    @Test
+    fun `systemInstruction is forwarded to provider`() = runTest {
+        val (orch, nano, _) = orchestrator(nanoAvailable = true)
+        orch.process("hello", systemInstruction = "be concise").toList()
+        assertEquals("be concise", nano.lastSystemInstruction)
     }
 
     @Test

@@ -93,6 +93,9 @@ fun PersonDetailScreen(
     LaunchedEffect(Unit) {
         viewModel.deletedEvent.collect { onBack() }
     }
+    LaunchedEffect(state) {
+        if (state is PersonDetailState.NotFound) onBack()
+    }
 
     when (val s = state) {
         is PersonDetailState.Loading -> {
@@ -494,12 +497,13 @@ private fun EditPersonSheet(
                 IconButton(
                     onClick = {
                         val raw = newPhoneNumber.trim()
-                        if (raw.isNotBlank()) {
+                        val normalized = raw.filter { it.isDigit() || it == '+' }
+                        if (normalized.isNotBlank()) {
                             phones = phones + PhoneNumber(
                                 id = UUID.randomUUID(),
                                 personId = person.id,
                                 rawNumber = raw,
-                                normalizedNumber = raw.filter { it.isDigit() || it == '+' },
+                                normalizedNumber = normalized,
                             )
                             newPhoneNumber = ""
                         }

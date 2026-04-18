@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -241,7 +242,7 @@ private fun SearchEntryResults(
     when {
         query.isBlank() -> SearchEmptyHint("Start typing to search entries")
         !isLoading && results.isEmpty() -> SearchEmptyHint("No entries found")
-        else -> LazyColumn {
+        else -> LazyColumn(modifier = Modifier.fillMaxHeight()) {
             items(results, key = { it.id }) { entry ->
                 ListItem(
                     overlineContent = {
@@ -278,7 +279,7 @@ private fun SearchPeopleResults(
     when {
         query.isBlank() -> SearchEmptyHint("Start typing to search people")
         results.isEmpty() -> SearchEmptyHint("No people found")
-        else -> LazyColumn {
+        else -> LazyColumn(modifier = Modifier.fillMaxHeight()) {
             items(results, key = { it.id }) { person ->
                 val displayName = person.nickname
                     ?: listOfNotNull(person.firstName, person.lastName).joinToString(" ")
@@ -322,7 +323,7 @@ private fun SearchPlaceResults(
     when {
         query.isBlank() -> SearchEmptyHint("Start typing to search places")
         results.isEmpty() -> SearchEmptyHint("No places found")
-        else -> LazyColumn {
+        else -> LazyColumn(modifier = Modifier.fillMaxHeight()) {
             items(results, key = { it.place.id }) { (place, count) ->
                 ListItem(
                     headlineContent = { Text(place.name) },
@@ -347,7 +348,7 @@ private fun SearchTagResults(
     when {
         query.isBlank() -> SearchEmptyHint("Start typing to search tags")
         results.isEmpty() -> SearchEmptyHint("No tags found")
-        else -> LazyColumn {
+        else -> LazyColumn(modifier = Modifier.fillMaxHeight()) {
             items(results, key = { it.tag.id }) { (tag, count) ->
                 ListItem(
                     headlineContent = { Text("#${tag.name}") },
