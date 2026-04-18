@@ -576,7 +576,7 @@ class ReframingLoopTest {
         )
         assertTrue(prompt.contains("Overgeneralization"))
         assertTrue(prompt.contains("avoidance", ignoreCase = true))
-        assertTrue(prompt.contains("temporary state", ignoreCase = true))
+        assertTrue(prompt.contains("temporary", ignoreCase = true))
     }
 
     @Test
@@ -602,6 +602,35 @@ class ReframingLoopTest {
         )
         // When distortions is empty, no distortion line is injected into the prompt.
         assertFalse(prompt.contains("Distortions present:"))
+    }
+
+    @Test
+    fun `buildInterventionPrompt - anchor line injected when anchorText provided`() {
+        val prompt = loop.buildInterventionPrompt(
+            maskedText = "Hanging out later.",
+            strategy = ReframingLoop.ReframeStrategy.REFLECTION,
+            distortions = emptyList(),
+            anchorText = "making plans to see a friend.",
+        )
+        assertTrue(prompt.contains("The person is: making plans to see a friend."))
+    }
+
+    @Test
+    fun `buildInterventionPrompt - no anchor line when anchorText is null`() {
+        val prompt = loop.buildInterventionPrompt(
+            maskedText = "Hanging out later.",
+            strategy = ReframingLoop.ReframeStrategy.REFLECTION,
+            distortions = emptyList(),
+            anchorText = null,
+        )
+        assertFalse(prompt.contains("The person is:"))
+    }
+
+    @Test
+    fun `buildAnchorPrompt - contains entry text and instruction`() {
+        val prompt = loop.buildAnchorPrompt("meeting up with @JJ later.")
+        assertTrue(prompt.contains("meeting up with @JJ later."))
+        assertTrue(prompt.contains("one sentence", ignoreCase = true))
     }
 
     // ── buildDisplayText ─────────────────────────────────────────────────────

@@ -189,10 +189,13 @@ class ReframingLoop(
             // Everything upstream (stages 1 & 2, evidence retrieval, storage) uses maskedText.
             val displayText = buildDisplayText(maskedText, personById, placeById)
 
+            // Anchor call: one-sentence description grounds the reframe in what was literally written.
+            val anchorText = runAnchorCall(displayText)
+
             val reframe = collectTokens(
                 orchestrator.process(
                     buildInterventionPrompt(
-                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries, anchorText
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -256,7 +259,10 @@ class ReframingLoop(
         distortions: List<CognitiveDistortion>,
         baActivity: ActivityHierarchy? = null,
         evidenceEntries: List<JournalEntry> = emptyList(),
+        anchorText: String? = null,
     ): String {
+        val anchorLine = if (anchorText != null) "The person is: $anchorText\n\n" else ""
+
         val distortionLine = if (distortions.isEmpty()) ""
         else "Distortions present: ${distortions.joinToString(", ") { it.label }}\n"
 
@@ -272,45 +278,29 @@ class ReframingLoop(
 
         val techniqueBlock = when (strategy) {
             ReframeStrategy.SOCRATIC_REALITY_TESTING ->
-                "Write exactly 2-3 sentences in first person that:\n" +
-                "1. Question whether the fear or assumption is definitely true.\n" +
-                "2. Offer a more balanced, realistic interpretation.\n" +
-                "3. Land on what you actually know."
+                "Question whether the fear or assumption is definitely true, then land on a more balanced reading."
 
             ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
-                val evidenceStep = if (evidenceEntries.isNotEmpty())
-                    "2. Challenge the avoidance using one of the past moments listed above."
-                else
-                    "2. Reframe the gap between intention and action as inertia, not a character flaw."
                 val actionStep = if (baActivity != null)
-                    "3. End with this one concrete next step: \"${baActivity.taskName}\"."
+                    " End with this one concrete next step: \"${baActivity.taskName}\"."
                 else
-                    "3. End with one specific, minimal action that addresses what the entry actually describes — not a generic outdoor or mindfulness suggestion."
-                "Write exactly 2-3 sentences in first person.\n" +
-                "No motivational phrases. No invented details.\n" +
-                "1. Name the pattern (avoidance, low energy) as a temporary state, not a fixed trait.\n" +
-                "$evidenceStep\n" +
-                actionStep
+                    " End with one specific, minimal action that addresses what the entry actually describes."
+                "Name the low-energy or avoidance pattern as temporary, not a fixed trait.$actionStep"
             }
 
             ReframeStrategy.REFLECTION ->
-                "Write exactly 2-3 sentences in first person that:\n" +
-                "1. Notice what this entry reveals about what matters to you.\n" +
-                "2. Name the value, relationship, or aspiration the entry points to — without inventing effort or achievement that isn't there.\n" +
-                "3. Leave the observation open rather than resolved — no uplifting conclusion."
+                "Notice what this entry reveals about what matters to you — name the value or relationship it points to."
 
             ReframeStrategy.STRENGTHS_AFFIRMATION ->
-                "Write exactly 2-3 sentences in first person that:\n" +
-                "1. Name the strength or effort this entry shows.\n" +
-                "2. Connect it to a value or pattern that matters to you.\n" +
-                "3. Anchor what made this moment meaningful."
+                "Name the strength or effort this entry shows and connect it to what matters to you."
         }
 
         return "Journal entry: \"$maskedText\"\n\n" +
+            anchorLine +
             distortionLine +
             evidenceBlock +
             "$techniqueBlock\n\n" +
-            "Output only the reframe. No markdown, no asterisks, no ellipses."
+            "Output only the reframe."
     }
 
     /**
@@ -341,6 +331,24 @@ class ReframingLoop(
         }
         return result
     }
+
+    internal fun buildAnchorPrompt(displayText: String): String =
+        "In one sentence, describe concretely what this journal entry is about.\n\n" +
+        "Entry: $displayText"
+
+    /**
+     * Runs a short (~20 token) LLM call to produce a one-sentence description of [displayText].
+     * The result is injected at the top of the Stage 3 prompt as `"The person is: …"` so the
+     * model commits to what the entry literally says before generating the reframe.
+     *
+     * Returns null if the call fails or the result is blank — Stage 3 proceeds without an anchor.
+     */
+    private suspend fun runAnchorCall(displayText: String): String? = runCatching {
+        val raw = collectTokens(
+            orchestrator.process(buildAnchorPrompt(displayText), "anchor", ANCHOR_SYSTEM)
+        )
+        raw.ifBlank { null }
+    }.getOrNull()
 
     // ── Parsers ──────────────────────────────────────────────────────────────
 
@@ -425,9 +433,13 @@ class ReframingLoop(
                 } else emptyList()
                 // Convert UUID placeholders to pseudonymous display names for the prompt only.
                 val displayText = buildDisplayText(maskedText, personById, placeById)
+
+                // Anchor call: one-sentence description grounds the reframe in what was literally written.
+                val anchorText = runAnchorCall(displayText)
+
                 val flow = orchestrator.process(
                     buildInterventionPrompt(
-                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries, anchorText
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -541,13 +553,17 @@ class ReframingLoop(
             "Output only the DISTORTIONS line. No explanation, no markdown."
 
         internal const val INTERVENTION_SYSTEM =
-            "You are a CBT journaling assistant. Write a brief, grounded first-person reframe. " +
+            "You are a CBT journaling assistant. " +
+            "Write exactly 2-3 sentences as a brief, grounded, first-person reframe. " +
             "Interpret the entry literally — do not contradict what it says or invent details not in the text. " +
-            "Do NOT repeat or amplify the negative thought — reframe it. " +
-            "No motivational cheerleading (no 'I can do this', 'I've got this', 'I believe in myself'). " +
+            "Never repeat or amplify the negative thought. " +
+            "No motivational cheerleading. " +
             "Write in first person singular only (I, me, my). Never use 'we', 'let's', or 'you'. " +
-            "No mindfulness or outdoor activity suggestions unless the entry itself mentions them. " +
             "No markdown, no asterisks, no ellipses, no therapist language."
+
+        /** System prompt for the anchor pre-call that grounds Stage 3 in the entry's literal content. */
+        internal const val ANCHOR_SYSTEM =
+            "Summarize journal entries in one concrete sentence. No opinions, no interpretations."
 
         /**
          * Selects the intervention strategy based on circumplex quadrant and valence band.
