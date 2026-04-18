@@ -7,6 +7,9 @@ import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntryRef
+import com.github.maskedkunisquat.lattice.core.data.model.Mention
+import com.github.maskedkunisquat.lattice.core.data.model.MentionSource
+import com.github.maskedkunisquat.lattice.core.data.model.MentionStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -146,19 +149,42 @@ class JournalRepository(
             embedding = embedding
         )
 
+        // Extract unique person UUIDs from [PERSON_UUID] placeholders
+        val mentionedPersonIds = maskedContent?.let { PERSON_PLACEHOLDER.findAll(it) }
+            ?.map { UUID.fromString(it.groupValues[1]) }
+            ?.distinct()
+            ?.toList()
+            ?: emptyList()
+
+        // Snapshot existing mentions BEFORE insertEntry: REPLACE cascades-deletes them,
+        // so querying after would always yield an empty set.
+        val previousMentionPersonIds = mentionDao.getMentionsByEntry(entryToSave.id)
+            .map { it.personId }
+            .toSet()
+
         journalDao.insertEntry(entryToSave)
 
-        // Vibe Evolution: Update vibe scores for mentioned persons
-        // Extract UUIDs from [PERSON_UUID] placeholders
-        val mentions = maskedContent?.let { PERSON_PLACEHOLDER.findAll(it) }
-            ?.map { it.groupValues[1] }
-            ?.distinct()
-            ?.map { UUID.fromString(it) }
-            ?: emptySequence()
+        // Persist Mention rows so PersonDetailViewModel can surface linked entries.
+        // insertMention uses REPLACE, so re-saves are idempotent.
+        mentionedPersonIds.forEach { personId ->
+            mentionDao.insertMention(
+                Mention(
+                    entryId  = entryToSave.id,
+                    personId = personId,
+                    source   = MentionSource.MANUAL,
+                    status   = MentionStatus.CONFIRMED,
+                )
+            )
+        }
 
+        // Vibe Evolution: only adjust scores for the diff to avoid double-counting on re-saves.
+        val newMentionSet = mentionedPersonIds.toSet()
         val delta = entry.valence * 0.1f
-        mentions.forEach { personId ->
+        (newMentionSet - previousMentionPersonIds).forEach { personId ->
             personDao.incrementVibeScore(personId, delta)
+        }
+        (previousMentionPersonIds - newMentionSet).forEach { personId ->
+            personDao.incrementVibeScore(personId, -delta)
         }
     }
 

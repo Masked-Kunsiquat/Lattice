@@ -2,6 +2,7 @@ package com.github.maskedkunisquat.lattice.core.logic
 
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -18,6 +19,7 @@ import kotlin.math.sqrt
 class SearchRepository(
     private val journalDao: JournalDao,
     private val personDao: PersonDao,
+    private val placeDao: PlaceDao,
     private val embeddingProvider: EmbeddingProvider
 ) {
     /**
@@ -35,9 +37,10 @@ class SearchRepository(
     suspend fun findSimilarEntries(queryText: String, limit: Int): List<JournalEntry> =
         withContext(Dispatchers.Default) {
             val people = personDao.getPersons().first()
+            val places = placeDao.getAll().first()
 
             // Privacy: mask PII in the query so it aligns with masked stored embeddings
-            val maskedQuery = PiiShield.mask(queryText, people)
+            val maskedQuery = PiiShield.mask(queryText, people, places)
             val queryEmbedding = embeddingProvider.generateEmbedding(maskedQuery)
 
             val entries = journalDao.getAllEntries()
@@ -47,7 +50,7 @@ class SearchRepository(
                 .filter { scores[it].isFinite() && scores[it] > 0f }
                 .sortedByDescending { scores[it] }
                 .take(limit)
-                .map { i -> entries[i].copy(content = entries[i].content?.let { PiiShield.unmask(it, people) }) }
+                .map { i -> entries[i].copy(content = entries[i].content?.let { PiiShield.unmask(it, people, places) }) }
         }
 
     /**

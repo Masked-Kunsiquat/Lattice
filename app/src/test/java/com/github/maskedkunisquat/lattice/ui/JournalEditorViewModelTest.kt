@@ -11,6 +11,7 @@ import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Mention
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
+import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
 import com.github.maskedkunisquat.lattice.core.data.model.Place
 import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
@@ -322,6 +323,38 @@ class JournalEditorViewModelTest {
         assertTrue(
             "reframeState must be Done after successful local reframe",
             vm.uiState.value.reframeState is ReframeState.Done
+        )
+    }
+
+    @Test
+    fun `typing after resolved mention does not re-trigger autocomplete`() = runTest {
+        val alice = Person(
+            id               = UUID.randomUUID(),
+            firstName        = "Alice",
+            lastName         = null,
+            nickname         = null,
+            relationshipType = RelationshipType.FRIEND,
+        )
+        val vm = makeViewModel(FakeJournalDao())
+
+        // Type @Ali — triggers SuggestingPerson
+        vm.onTextChanged("@Ali")
+        assertTrue(
+            "Expected SuggestingPerson after @Ali, got: ${vm.uiState.value.mentionState}",
+            vm.uiState.value.mentionState is MentionState.SuggestingPerson,
+        )
+
+        // Resolve the mention — replaces @Ali with @Alice, records resolvedPersons["Alice"]
+        vm.onMentionSelected(alice)
+        assertEquals(MentionState.Idle, vm.uiState.value.mentionState)
+        assertEquals("@Alice", vm.uiState.value.text)
+
+        // Type " and" — without the fix, MENTION_REGEX captures "Alice and" and fires autocomplete
+        vm.onTextChanged("@Alice and")
+        assertEquals(
+            "mentionState must stay Idle when typing words after a resolved @mention",
+            MentionState.Idle,
+            vm.uiState.value.mentionState,
         )
     }
 
