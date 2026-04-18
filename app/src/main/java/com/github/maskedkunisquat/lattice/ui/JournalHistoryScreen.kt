@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -60,6 +61,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -68,11 +70,12 @@ import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Person
 import com.github.maskedkunisquat.lattice.ui.theme.LatticeTheme
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun JournalHistoryScreen(
     viewModel: JournalHistoryViewModel,
@@ -170,23 +173,42 @@ fun JournalHistoryScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "No entries yet. Start writing in the Journal tab.",
+                            text = "No entries yet\n\nSwitch to the Journal tab to start writing.\nMention @people, tag #topics, and note !places as you go.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(32.dp),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(40.dp),
                         )
                     }
                 } else {
+                    val historyItems = remember(entries) { entries.toHistoryItems() }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 16.dp),
                     ) {
-                        items(entries, key = { it.id }) { entry ->
-                            EntryCard(
-                                entry = entry,
-                                onTap = { onOpenEntry(entry.id) },
-                                onDeleteRequest = { pendingDeleteEntry = entry },
-                            )
+                        historyItems.forEach { historyItem ->
+                            when (historyItem) {
+                                is HistoryListItem.DateHeader -> stickyHeader(key = "date_${historyItem.label}") {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.background,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Text(
+                                            text = historyItem.label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                        )
+                                    }
+                                }
+                                is HistoryListItem.EntryItem -> item(key = historyItem.entry.id.toString()) {
+                                    EntryCard(
+                                        entry = historyItem.entry,
+                                        onTap = { onOpenEntry(historyItem.entry.id) },
+                                        onDeleteRequest = { pendingDeleteEntry = historyItem.entry },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -512,6 +534,57 @@ private fun EntryCard(
             )
         }
     }
+}
+
+// ── Date grouping ─────────────────────────────────────────────────────────────
+
+private sealed class HistoryListItem {
+    data class DateHeader(val label: String) : HistoryListItem()
+    data class EntryItem(val entry: JournalEntry) : HistoryListItem()
+}
+
+/** Compact Long key for a calendar day: yyyyMMdd. Avoids Triple allocation. */
+private fun Calendar.dateKey(): Long =
+    get(Calendar.YEAR) * 10_000L + get(Calendar.MONTH) * 100L + get(Calendar.DAY_OF_MONTH)
+
+/**
+ * Transforms an already-sorted (newest-first) entry list into a flat list of
+ * [HistoryListItem]s with a [HistoryListItem.DateHeader] injected at each day boundary.
+ * Today/Yesterday labels are computed relative to the call-site clock.
+ */
+private fun List<JournalEntry>.toHistoryItems(): List<HistoryListItem> {
+    if (isEmpty()) return emptyList()
+    val cal = Calendar.getInstance()
+    val now = System.currentTimeMillis()
+    val todayKey = Calendar.getInstance().also { it.timeInMillis = now }.dateKey()
+    val yesterdayKey = Calendar.getInstance().also {
+        it.timeInMillis = now
+        it.add(Calendar.DAY_OF_YEAR, -1)
+    }.dateKey()
+    val thisYear = Calendar.getInstance().also { it.timeInMillis = now }.get(Calendar.YEAR)
+    val fmtShort = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+    val fmtLong  = SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault())
+
+    val result   = mutableListOf<HistoryListItem>()
+    var lastKey  = -1L
+    for (entry in this) {
+        cal.timeInMillis = entry.timestamp
+        val key = cal.dateKey()
+        if (key != lastKey) {
+            val label = when (key) {
+                todayKey     -> "Today"
+                yesterdayKey -> "Yesterday"
+                else         -> if (cal.get(Calendar.YEAR) == thisYear)
+                    fmtShort.format(Date(entry.timestamp))
+                else
+                    fmtLong.format(Date(entry.timestamp))
+            }
+            result += HistoryListItem.DateHeader(label)
+            lastKey = key
+        }
+        result += HistoryListItem.EntryItem(entry)
+    }
+    return result
 }
 
 // ── Previews ──────────────────────────────────────────────────────────────────

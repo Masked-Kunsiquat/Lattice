@@ -132,18 +132,45 @@ Add a fourth tab between History and Settings:
 
 ---
 
-## M9 · History Enhancements
+## M9 · CBT Pipeline Quality
 
-Depends on M5 (SearchBar already in place).
+**Goal:** fix the reframe pipeline's quality failures exposed by real-world testing on Gemma 3 1B. The original three-stage loop was designed around Llama 3.2-3B's instruction-following capacity. With Stages 1 and 2 now handled by on-device MLPs, the only remaining LLM call is Stage 3 text generation — and the prompt structure that worked for a 3B model actively hurts a 1B model: it can't hold six simultaneous constraints in attention, so it pattern-matches to "CBT-sounding text" and ignores the actual entry.
 
-- [ ] **Date grouping** — group `LazyColumn` items by calendar day with `stickyHeader {}` date labels
-- [ ] **Mood filter chips** — horizontal chip row below SearchBar: `All · Positive · Negative · Neutral`; filter `entries` flow client-side by valence range
-- [ ] **Person filter chip** — opens a person picker bottom sheet; filters to entries containing `[PERSON_<id>]` in stored masked content
-- [ ] **Empty-state copy** — replace plain "No entries yet" text with more descriptive instructional copy
+> **Root cause (confirmed):** real-world entry `"meeting up with @P1 later. might go to !The Park and see @P2 at his performance later."` was labelled **ALIVE** (v≥0, a≥0, v≥a) and routed to `STRENGTHS_AFFIRMATION`. The model received opaque UUID placeholders it couldn't parse and a 6-constraint prompt it couldn't fully satisfy, and fabricated a completely unrelated reframe about "being focused" and "seeing my own strengths."
+
+### Prompt-level fixes (near-term)
+
+- [ ] **REFLECTION strategy for neutral/low-positive entries** — `selectStrategy()` maps every `v≥0` to `STRENGTHS_AFFIRMATION`. The primary at-risk label is **ALIVE** (`v≥0, a≥0, v≥a`), which covers everything from barely-positive diary notes to genuinely meaningful moments; most casual social/plans entries land here. Add a fourth `ReframeStrategy.REFLECTION` for the low-positive band (`0f ≤ v < AFFIRMATION_THRESHOLD`, default `0.4f`). Its prompt asks the model to notice what the entry reveals about what matters to the writer — no fabricated strength or effort. `STRENGTHS_AFFIRMATION` narrows to `v ≥ AFFIRMATION_THRESHOLD`, covering EXCITED entries and high-valence ALIVE. Threshold is a named companion-object constant so it can be tuned without code changes.
+
+- [ ] **Replace UUID tokens with pseudonymous display names in Stage 3 prompts** — `[PERSON_3f2a1b…]` and `[PLACE_uuid]` are semantically opaque; the model abandons all entity references and generates generic text. Add `buildDisplayText(maskedText, personById, placeById)` in `ReframingLoop` that converts placeholders to `@{nickname ?: firstName}` / `!{placeName}` for use in `buildInterventionPrompt` only. Everything upstream (Stage 1, Stage 2, evidence retrieval, storage) continues to receive UUID-masked text. Thread `personById: Map<UUID, Person>` and `placeById: Map<UUID, Place>` through `streamStage3Intervention` / `runStage3Intervention` from the call sites (`JournalEditorViewModel`, `EntryDetailViewModel`).
+
+- [ ] **Anchor call before reframe generation** — add a short first LLM call (~20 tokens out) with a single instruction: `"In one sentence, describe concretely what this journal entry is about."` Inject the model-produced anchor as a `"The person is: …"` line at the top of the reframe prompt. This forces the model to commit to what the entry actually says before generating the reframe, preventing the drift to generic CBT-speak. Latency impact: ~+0.5–1 s. Add `anchorText: String?` parameter to `buildInterventionPrompt`; add a private `runAnchorCall(displayText)` suspend function in `ReframingLoop`.
+
+- [ ] **Compact per-strategy prompts** — replace the current single prompt with multiple simultaneous constraints with one short, focused instruction per strategy. Hard constraints (first-person, entry-grounded, no cheerleading) move permanently to `INTERVENTION_SYSTEM` as character; per-call instructions reduce to the single most important directive for each strategy. A 1B model reliably follows one instruction per call; it does not reliably follow six.
+
+### Model-level fix (long-term)
+
+- [ ] **CBT LoRA fine-tune** — fine-tune a LoRA adapter on top of Gemma 3 1B specifically for CBT reframing. LoRA weights are ~10–50 MB and load on top of existing Gemma weights; LiteRT-LM supports adapter loading. This is the structural fix that eliminates prompt-engineering fragility entirely. Requires:
+  - Training data curation: generate `(entry, strategy, distortions) → reframe` pairs using Claude as the labeler with the exact CBT guidelines as the system prompt (appropriate use of a frontier model to label data for a smaller model's fine-tune)
+  - Offline fine-tuning script (Python, LoRA via HuggingFace PEFT)
+  - Adapter packaging and upload to HuggingFace (`masked-kunsiquat/` repo)
+  - `LocalFallbackProvider` adapter-loading support
+  - `ModelDownloadWorker` extended to optionally fetch and validate the adapter file alongside the base model
 
 ---
 
-## M10 · Export
+## M10 · History Enhancements
+
+Depends on M5 (SearchBar already in place). Can run in parallel with M9.
+
+- [x] **Date grouping** — group `LazyColumn` items by calendar day with `stickyHeader {}` date labels; Today/Yesterday labels, falling back to "EEE, MMM d" (same year) or "EEE, MMM d, yyyy" (prior years)
+- [x] **Empty-state copy** — replaced bare "No entries yet" with a two-line hint explaining @people, #topics, !places syntax
+- ~~**Mood filter chips**~~ — deferred; a permanent chip row above the history list adds visual clutter without earning it. Mood filtering will live inside the search overlay's Entries section as inline filter chips (scoped to search results, not the full list). See M9 search overlay enhancement.
+- ~~**Person filter chip**~~ — deferred; `PersonDetailScreen` already shows all entries mentioning a person, and the search overlay People section navigates there directly. Redundant at the history list level.
+
+---
+
+## M11 · Export
 
 `ExportManager` in `:core-logic` is complete. This milestone is purely UI wiring.
 
@@ -152,7 +179,7 @@ Depends on M5 (SearchBar already in place).
 
 ---
 
-## M11 · On-Device Inference Upgrade (Gemma 3 1B + LiteRT)
+## M12 · On-Device Inference Upgrade (Gemma 3 1B + LiteRT)
 
 **Goal:** replace the ORT-based local inference stack with a hardware-accelerated
 one that runs at GPU speed on the S25 Ultra (and equivalent devices) — cutting
@@ -222,7 +249,7 @@ HuggingFace dataset (`masked-kunsiquat/clinical-personas`) at any time.
 
 ---
 
-## M12 · Distortion MLP Head
+## M13 · Distortion MLP Head
 
 **Goal:** replace the Stage 2 LLM call (Diagnosis of Thought) with a deterministic
 multi-label MLP classifier. Eliminates hallucination risk, drops Stage 2 latency to
