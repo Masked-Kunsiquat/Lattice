@@ -151,9 +151,15 @@ class ModelDownloadWorker(
                         ?: throw IOException("Redirect $code with no Location header from $location")
                     val resolved = URI(location).resolve(raw)
                     val originalHost = URI(url).host
-                    if (resolved.scheme != "https" ||
-                        (resolved.host != originalHost && resolved.host?.endsWith(".huggingface.co") != true)
-                    ) {
+                    val resolvedHost = resolved.host ?: ""
+                    // Trust redirects within huggingface.co and hf.co (covers the XetHub CDN
+                    // at cas-bridge.xethub.hf.co that HuggingFace now uses for large files).
+                    val trusted = resolved.scheme == "https" && (
+                        resolvedHost == originalHost ||
+                        resolvedHost.endsWith(".huggingface.co") ||
+                        resolvedHost.endsWith(".hf.co")
+                    )
+                    if (!trusted) {
                         throw PermanentDownloadException(
                             "Redirect to untrusted location '${resolved}' rejected"
                         )
