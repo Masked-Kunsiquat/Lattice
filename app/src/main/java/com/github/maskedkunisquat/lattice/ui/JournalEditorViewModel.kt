@@ -121,6 +121,9 @@ class JournalEditorViewModel(
      */
     fun onTextChanged(newText: String) {
         reframeJob?.cancel()
+        // Snapshot resolved maps before updating state — used below to suppress re-triggers.
+        val resolvedPersons = _uiState.value.resolvedPersons
+        val resolvedPlaces  = _uiState.value.resolvedPlaces
         _uiState.update { it.copy(text = newText, reframeState = ReframeState.Idle) }
 
         val personMatch = MENTION_REGEX.find(newText)
@@ -128,7 +131,11 @@ class JournalEditorViewModel(
         val placeMatch  = PLACE_REGEX.find(newText)
         currentMentionJob?.cancel()
         when {
-            personMatch != null -> {
+            // Guard: if the matched query starts with an already-resolved name followed by a
+            // space, the multi-word regex has spilled over into subsequent words (e.g. "@Alice"
+            // resolved, user types " and" → regex matches "@Alice and"). Skip the trigger so
+            // "Create 'Alice and'" is never shown.
+            personMatch != null && resolvedPersons.keys.none { personMatch.groupValues[1].startsWith("$it ") } -> {
                 val query = personMatch.groupValues[1]
                 currentMentionJob = viewModelScope.launch {
                     val results = peopleRepository.searchByName(query)
@@ -142,7 +149,8 @@ class JournalEditorViewModel(
                     _uiState.update { it.copy(mentionState = MentionState.SuggestingTag(query, results)) }
                 }
             }
-            placeMatch != null -> {
+            // Same re-trigger guard for places — PLACE_REGEX has the same multi-word pattern.
+            placeMatch != null && resolvedPlaces.keys.none { placeMatch.groupValues[1].startsWith("$it ") } -> {
                 val query = placeMatch.groupValues[1]
                 currentMentionJob = viewModelScope.launch {
                     val results = placeRepository.searchPlaces(query)
