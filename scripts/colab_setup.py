@@ -17,13 +17,13 @@ import sys
 
 
 def _run(cmd: list[str], label: str) -> None:
-    print(f"{label} …")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0 and result.stderr:
-        # Non-fatal — uninstalls may warn if package wasn't present
-        print(f"  [warn] {result.stderr.strip()[:200]}")
-    else:
-        print(f"  OK")
+    print(f"\n{'─'*60}")
+    print(f"{label}")
+    print(f"{'─'*60}")
+    # Stream output so failures are visible immediately
+    result = subprocess.run(cmd, text=True)
+    if result.returncode != 0:
+        print(f"  [warn] exit code {result.returncode} — may be non-fatal for uninstalls")
 
 
 # ── 1. Remove Colab's pre-installed TF stack ──────────────────────────────────
@@ -36,12 +36,16 @@ _run(
     "Removing system TensorFlow",
 )
 
-# ── 2. Pin torchao to the version litert-torch expects, then install ──────────
-# litert-torch requires torchao with the pt2e submodule; the default Colab
-# torchao version is too new and removed pt2e in favour of a different API.
+# ── 2. Pin torchao BEFORE installing litert-torch ────────────────────────────
+# litert-torch requires torchao.quantization.pt2e which was removed in ~0.5.x.
+# Must uninstall the pre-installed version first — pip won't downgrade otherwise.
 _run(
-    [sys.executable, "-m", "pip", "install", "-q", "torchao==0.9.0"],
-    "Pinning torchao==0.9.0",
+    [sys.executable, "-m", "pip", "uninstall", "-y", "torchao"],
+    "Removing pre-installed torchao",
+)
+_run(
+    [sys.executable, "-m", "pip", "install", "-q", "torchao==0.3.1"],
+    "Installing torchao==0.3.1",
 )
 _run(
     [sys.executable, "-m", "pip", "install", "-q",
