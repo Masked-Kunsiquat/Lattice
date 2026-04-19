@@ -162,9 +162,17 @@ def _inject_torchao_stubs() -> None:
             return mod
 
         def exec_module(self, module):
-            # Any attribute not explicitly set returns a MagicMock, so calls
-            # like HistogramObserver.with_args(...) work without error.
-            module.__getattr__ = lambda name: MagicMock()
+            def _make_cls(name):
+                return type(name, (), {
+                    "__class_getitem__": classmethod(lambda c, *a, **kw: c),
+                    "with_args":         classmethod(lambda c, *a, **kw: c),
+                    "__call__":          lambda self, *a, **kw: None,
+                })
+            def _getattr(name):
+                cls = _make_cls(name)
+                setattr(module, name, cls)
+                return cls
+            module.__getattr__ = _getattr
 
     # Only install if colab_setup.py hasn't already done so
     if not any(isinstance(f, importlib.abc.MetaPathFinder)
@@ -175,9 +183,25 @@ def _inject_torchao_stubs() -> None:
     import importlib as _il
     _gu = _il.import_module("torchao.quantization.pt2e.graph_utils")
     _qt = _il.import_module("torchao.quantization.pt2e.quantizer")
-    _gu.find_sequential_partitions = MagicMock()
-    _qt.QuantizationAnnotation = MagicMock()
-    _qt.QuantizationSpec = MagicMock()
+    _gu.find_sequential_partitions = lambda *a, **kw: None
+    _qt.QuantizationAnnotation = type("QuantizationAnnotation", (), {
+        "__class_getitem__": classmethod(lambda c, *a, **kw: c),
+    })
+    _qt.QuantizationSpec = type("QuantizationSpec", (), {
+        "__class_getitem__": classmethod(lambda c, *a, **kw: c),
+        "with_args":         classmethod(lambda c, *a, **kw: c),
+    })
+
+    import typing as _typing
+    if not getattr(_typing.get_type_hints, "_lattice_patched", False):
+        _orig_gth = _typing.get_type_hints
+        def _safe_gth(obj, *a, **kw):
+            try:
+                return _orig_gth(obj, *a, **kw)
+            except (SyntaxError, AttributeError, NameError, TypeError):
+                return getattr(obj, "__annotations__", {})
+        _safe_gth._lattice_patched = True
+        _typing.get_type_hints = _safe_gth
 
 
 _inject_torchao_stubs()
@@ -245,11 +269,7 @@ def run_export_hf(
     # so the subprocess gets the same fix as the parent process.
     launcher = pathlib.Path("/tmp/_export_hf_launcher.py")
     launcher.write_text(
-        # Python 3.12-compatible torchao stub using find_spec / create_module /
-        # exec_module.  The old find_module / load_module API was silently dropped
-        # in 3.12 — that's why the previous hook did nothing on Kaggle.
-        "import sys, types, importlib.abc, importlib.util\n"
-        "from unittest.mock import MagicMock\n"
+        "import sys, types, importlib.abc, importlib.util, typing\n"
         "_needs_stub = False\n"
         "try:\n"
         "    from torchao.quantization.pt2e.graph_utils import find_sequential_partitions\n"
@@ -259,22 +279,34 @@ def run_export_hf(
         "    for _k in list(sys.modules.keys()):\n"
         "        if _k == 'torchao.quantization.pt2e' or _k.startswith('torchao.quantization.pt2e.'):\n"
         "            del sys.modules[_k]\n"
+        "    def _mk(n): return type(n,(),({\n"
+        "        '__class_getitem__':classmethod(lambda c,*a,**k:c),\n"
+        "        'with_args':classmethod(lambda c,*a,**k:c),\n"
+        "        '__call__':lambda self,*a,**k:None}))\n"
         "    class _S(importlib.abc.MetaPathFinder, importlib.abc.Loader):\n"
         "        _P = 'torchao.quantization.pt2e'\n"
-        "        def find_spec(self, n, path, target=None):\n"
-        "            return importlib.util.spec_from_loader(n, self, is_package=True) \\\n"
-        "                if (n == self._P or n.startswith(self._P + '.')) else None\n"
-        "        def create_module(self, spec):\n"
-        "            m = types.ModuleType(spec.name)\n"
-        "            m.__path__ = []; m.__package__ = spec.name\n"
-        "            m.__spec__ = spec; m.__loader__ = self; return m\n"
-        "        def exec_module(self, m): m.__getattr__ = lambda n: MagicMock()\n"
-        "    sys.meta_path.insert(0, _S())\n"
+        "        def find_spec(self,n,path,target=None):\n"
+        "            return importlib.util.spec_from_loader(n,self,is_package=True) if(n==self._P or n.startswith(self._P+'.'))\\\n"
+        "                else None\n"
+        "        def create_module(self,spec):\n"
+        "            m=types.ModuleType(spec.name);m.__path__=[];m.__package__=spec.name\n"
+        "            m.__spec__=spec;m.__loader__=self;return m\n"
+        "        def exec_module(self,m):\n"
+        "            def _ga(n):\n"
+        "                c=_mk(n);setattr(m,n,c);return c\n"
+        "            m.__getattr__=_ga\n"
+        "    sys.meta_path.insert(0,_S())\n"
         "    import importlib as _il\n"
-        "    _il.import_module('torchao.quantization.pt2e.graph_utils').find_sequential_partitions = MagicMock()\n"
-        "    _qt = _il.import_module('torchao.quantization.pt2e.quantizer')\n"
-        "    _qt.QuantizationAnnotation = MagicMock()\n"
-        "    _qt.QuantizationSpec = MagicMock()\n"
+        "    _il.import_module('torchao.quantization.pt2e.graph_utils').find_sequential_partitions=lambda*a,**k:None\n"
+        "    _qt=_il.import_module('torchao.quantization.pt2e.quantizer')\n"
+        "    _qt.QuantizationAnnotation=type('QuantizationAnnotation',(),{'__class_getitem__':classmethod(lambda c,*a,**k:c)})\n"
+        "    _qt.QuantizationSpec=type('QuantizationSpec',(),{'__class_getitem__':classmethod(lambda c,*a,**k:c),'with_args':classmethod(lambda c,*a,**k:c)})\n"
+        "    if not getattr(typing.get_type_hints,'_lp',False):\n"
+        "        _og=typing.get_type_hints\n"
+        "        def _sg(o,*a,**k):\n"
+        "            try: return _og(o,*a,**k)\n"
+        "            except (SyntaxError,AttributeError,NameError,TypeError): return getattr(o,'__annotations__',{})\n"
+        "        _sg._lp=True;typing.get_type_hints=_sg\n"
         "import runpy, sys as _sys\n"
         "_sys.argv = _sys.argv[1:]\n"
         "runpy.run_module('litert_torch.generative.export_hf', run_name='__main__')\n",

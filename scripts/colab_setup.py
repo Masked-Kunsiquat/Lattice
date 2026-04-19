@@ -101,19 +101,62 @@ if _torchao_broken:
             return mod
 
         def exec_module(self, module):
-            # Any attribute not explicitly set returns a MagicMock, so calls
-            # like HistogramObserver.with_args(...) work without error.
-            module.__getattr__ = lambda name: MagicMock()
+            # Return real empty classes (not MagicMock) for any attribute access.
+            #
+            # MagicMock mocks *everything*, including dunder methods. In Python
+            # 3.13, typing.get_type_hints() calls isinstance(hint, str) and
+            # MagicMock can satisfy that check, causing the ForwardRef evaluator
+            # to treat the mock as a string annotation and raise:
+            #   SyntaxError: Forward reference must be an expression -- got <MagicMock>
+            # A real class is never isinstance-compatible with str, so typing
+            # machinery skips it cleanly.
+            mod_name = module.__name__
+
+            def _make_cls(name):
+                return type(name, (), {
+                    "__class_getitem__": classmethod(lambda c, *a, **kw: c),
+                    "with_args":         classmethod(lambda c, *a, **kw: c),
+                    "__call__":          lambda self, *a, **kw: None,
+                })
+
+            def _getattr(name):
+                cls = _make_cls(name)
+                setattr(module, name, cls)
+                return cls
+
+            module.__getattr__ = _getattr
 
     sys.meta_path.insert(0, _Pt2eAutoStub())
 
-    # Pre-populate the specific names litert_torch actually accesses
+    # Pre-populate the specific names litert_torch actually accesses.
+    # Use real classes so they survive typing.get_type_hints() without error.
     import importlib as _il
+
     _graph_utils = _il.import_module("torchao.quantization.pt2e.graph_utils")
     _quantizer   = _il.import_module("torchao.quantization.pt2e.quantizer")
-    _graph_utils.find_sequential_partitions = MagicMock()
-    _quantizer.QuantizationAnnotation = MagicMock()
-    _quantizer.QuantizationSpec = MagicMock()
+
+    def _fn(*a, **kw): return None          # stand-in for find_sequential_partitions
+    _graph_utils.find_sequential_partitions = _fn
+    _quantizer.QuantizationAnnotation = type("QuantizationAnnotation", (), {
+        "__class_getitem__": classmethod(lambda c, *a, **kw: c),
+    })
+    _quantizer.QuantizationSpec = type("QuantizationSpec", (), {
+        "__class_getitem__": classmethod(lambda c, *a, **kw: c),
+        "with_args":         classmethod(lambda c, *a, **kw: c),
+    })
+
+    # Safety net: if typing.get_type_hints() still trips on a stub type,
+    # fall back to raw __annotations__ rather than propagating a SyntaxError.
+    import typing as _typing
+    if not getattr(_typing.get_type_hints, "_lattice_patched", False):
+        _orig_gth = _typing.get_type_hints
+        def _safe_gth(obj, *a, **kw):
+            try:
+                return _orig_gth(obj, *a, **kw)
+            except (SyntaxError, AttributeError, NameError, TypeError):
+                return getattr(obj, "__annotations__", {})
+        _safe_gth._lattice_patched = True
+        _typing.get_type_hints = _safe_gth
 
     print("  Import hook installed (Python 3.12-compatible find_spec API).")
 else:
