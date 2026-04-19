@@ -115,18 +115,18 @@ def hf_login() -> None:
 
 def _inject_torchao_stubs() -> None:
     """
-    Installs a sys.meta_path hook that auto-stubs any torchao.quantization.pt2e.*
-    import before litert_torch loads.
+    Installs a Python 3.12-compatible sys.meta_path hook that auto-stubs any
+    torchao.quantization.pt2e.* import before litert_torch loads.
 
-    Why a hook instead of static sys.modules entries:
-        MagicMock lacks __path__, so Python refuses to treat it as a package.
-        Any import of a deeper sub-module (e.g. quantizer.utils) raises
-        "is not a package". The hook returns a real ModuleType with __path__=[]
-        for every torchao.quantization.pt2e.* import, no matter how deep.
+    Uses find_spec / create_module / exec_module (the modern MetaPathFinder
+    protocol). The old find_module / load_module API was silently dropped in
+    Python 3.12, which is why the previous approach did nothing on Kaggle.
 
+    Safe to call after colab_setup.py — the hook checks sys.meta_path first.
     Must be called before any 'import litert_torch' statement.
-    Safe to call if colab_setup.py already ran — checks sys.meta_path first.
     """
+    import importlib.abc
+    import importlib.util
     import types
     from unittest.mock import MagicMock
 
@@ -139,32 +139,35 @@ def _inject_torchao_stubs() -> None:
     if not needs_stub:
         return
 
-    # Remove stale/partial pt2e entries so the hook starts clean
+    # Drop stale/partial pt2e entries so the hook starts with a clean slate
     for key in list(sys.modules.keys()):
         if key == "torchao.quantization.pt2e" or key.startswith("torchao.quantization.pt2e."):
             del sys.modules[key]
 
-    class _Pt2eAutoStub:
+    class _Pt2eAutoStub(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         _PREFIX = "torchao.quantization.pt2e"
 
-        def find_module(self, fullname, path=None):
+        def find_spec(self, fullname, path, target=None):
             if fullname == self._PREFIX or fullname.startswith(self._PREFIX + "."):
-                return self
+                return importlib.util.spec_from_loader(fullname, self,
+                                                       is_package=True)
             return None
 
-        def load_module(self, fullname):
-            if fullname in sys.modules:
-                return sys.modules[fullname]
-            mod = types.ModuleType(fullname)
+        def create_module(self, spec):
+            mod = types.ModuleType(spec.name)
             mod.__path__ = []
-            mod.__package__ = fullname
+            mod.__package__ = spec.name
+            mod.__spec__ = spec
             mod.__loader__ = self
-            mod.__spec__ = None
-            sys.modules[fullname] = mod
             return mod
 
-    # Only install if not already present (colab_setup.py may have done it)
-    if not any(type(f).__name__ == "_Pt2eAutoStub" for f in sys.meta_path):
+        def exec_module(self, module):
+            pass  # stub — nothing to execute
+
+    # Only install if colab_setup.py hasn't already done so
+    if not any(isinstance(f, importlib.abc.MetaPathFinder)
+               and type(f).__name__ == "_Pt2eAutoStub"
+               for f in sys.meta_path):
         sys.meta_path.insert(0, _Pt2eAutoStub())
 
     import importlib as _il
@@ -240,13 +243,11 @@ def run_export_hf(
     # so the subprocess gets the same fix as the parent process.
     launcher = pathlib.Path("/tmp/_export_hf_launcher.py")
     launcher.write_text(
-        "import sys, types\n"
+        # Python 3.12-compatible torchao stub using find_spec / create_module /
+        # exec_module.  The old find_module / load_module API was silently dropped
+        # in 3.12 — that's why the previous hook did nothing on Kaggle.
+        "import sys, types, importlib.abc, importlib.util\n"
         "from unittest.mock import MagicMock\n"
-        "\n"
-        "# Remove stale pt2e entries then install an auto-stub hook.\n"
-        "# MagicMock lacks __path__ so Python refuses to treat it as a package;\n"
-        "# the hook returns a real ModuleType for every torchao.quantization.pt2e.*\n"
-        "# import, no matter how many sub-levels deep litert_torch goes.\n"
         "_needs_stub = False\n"
         "try:\n"
         "    from torchao.quantization.pt2e.graph_utils import find_sequential_partitions\n"
@@ -256,21 +257,22 @@ def run_export_hf(
         "    for _k in list(sys.modules.keys()):\n"
         "        if _k == 'torchao.quantization.pt2e' or _k.startswith('torchao.quantization.pt2e.'):\n"
         "            del sys.modules[_k]\n"
-        "    class _Stub:\n"
+        "    class _S(importlib.abc.MetaPathFinder, importlib.abc.Loader):\n"
         "        _P = 'torchao.quantization.pt2e'\n"
-        "        def find_module(self, n, p=None):\n"
-        "            return self if (n == self._P or n.startswith(self._P + '.')) else None\n"
-        "        def load_module(self, n):\n"
-        "            if n in sys.modules: return sys.modules[n]\n"
-        "            m = types.ModuleType(n); m.__path__ = []; m.__package__ = n\n"
-        "            m.__loader__ = self; m.__spec__ = None; sys.modules[n] = m; return m\n"
-        "    sys.meta_path.insert(0, _Stub())\n"
+        "        def find_spec(self, n, path, target=None):\n"
+        "            return importlib.util.spec_from_loader(n, self, is_package=True) \\\n"
+        "                if (n == self._P or n.startswith(self._P + '.')) else None\n"
+        "        def create_module(self, spec):\n"
+        "            m = types.ModuleType(spec.name)\n"
+        "            m.__path__ = []; m.__package__ = spec.name\n"
+        "            m.__spec__ = spec; m.__loader__ = self; return m\n"
+        "        def exec_module(self, module): pass\n"
+        "    sys.meta_path.insert(0, _S())\n"
         "    import importlib as _il\n"
         "    _il.import_module('torchao.quantization.pt2e.graph_utils').find_sequential_partitions = MagicMock()\n"
         "    _qt = _il.import_module('torchao.quantization.pt2e.quantizer')\n"
         "    _qt.QuantizationAnnotation = MagicMock()\n"
         "    _qt.QuantizationSpec = MagicMock()\n"
-        "\n"
         "import runpy, sys as _sys\n"
         "_sys.argv = _sys.argv[1:]\n"
         "runpy.run_module('litert_torch.generative.export_hf', run_name='__main__')\n",

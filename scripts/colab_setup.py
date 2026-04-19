@@ -49,22 +49,20 @@ _run(
 )
 
 # ── 3. Stub broken torchao imports before litert_torch loads ─────────────────
-# litert_torch.quantize imports torchao.quantization.pt2e which was removed in
-# torchao ~0.5+. We never call the PT2E quantizer directly — it just gets
-# imported and crashes.
+# litert_torch imports torchao.quantization.pt2e which was removed in torchao
+# ~0.5+. We never call the PT2E quantizer — it just gets imported and crashes.
 #
-# Why an import hook instead of static sys.modules entries:
-#   MagicMock objects lack __path__, so Python refuses to treat them as packages.
-#   Any import of torchao.quantization.pt2e.quantizer.utils (or deeper) fails
-#   with "is not a package". An import hook intercepts every torchao.quantization.pt2e.*
-#   import — however deep — and returns a real ModuleType with __path__ = [],
-#   which Python accepts as a package.
+# Uses the Python 3.4+ MetaPathFinder protocol (find_spec / create_module /
+# exec_module). The old find_module / load_module API was removed in Python
+# 3.12, which is what Kaggle and recent Colab runtimes use — so the previous
+# hook silently did nothing on those platforms.
 #
-# This must happen before any 'import litert_torch' anywhere in this session.
+# Must happen before any 'import litert_torch' anywhere in this session.
+import importlib.abc
+import importlib.util
 import types
 from unittest.mock import MagicMock
 
-# Only stub if pt2e is broken
 _torchao_broken = False
 try:
     from torchao.quantization.pt2e.graph_utils import find_sequential_partitions  # noqa: F401
@@ -74,38 +72,40 @@ except (ImportError, RuntimeError, AttributeError):
 if _torchao_broken:
     print("\nApplying torchao stubs (pt2e submodule missing or broken) …")
 
-    # Remove any stale/partial pt2e entries so the hook starts clean
+    # Drop any stale/partial pt2e entries so the hook starts with a clean slate
     for _k in list(sys.modules.keys()):
         if _k == "torchao.quantization.pt2e" or _k.startswith("torchao.quantization.pt2e."):
             del sys.modules[_k]
 
-    class _Pt2eAutoStub:
+    class _Pt2eAutoStub(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         """
-        sys.meta_path finder+loader that auto-creates a stub ModuleType for any
-        torchao.quantization.pt2e.* import so litert_torch's import chain never
-        hits a 'not a package' error, regardless of how many sub-levels it imports.
+        Modern (Python 3.4+) meta-path hook.  Auto-creates a stub ModuleType
+        for every torchao.quantization.pt2e.* import — no matter how many
+        sub-levels deep litert_torch goes — so none of them ever raise
+        ModuleNotFoundError or 'not a package'.
         """
         _PREFIX = "torchao.quantization.pt2e"
 
-        def find_module(self, fullname, path=None):  # noqa: D401
+        def find_spec(self, fullname, path, target=None):
             if fullname == self._PREFIX or fullname.startswith(self._PREFIX + "."):
-                return self
+                return importlib.util.spec_from_loader(fullname, self,
+                                                       is_package=True)
             return None
 
-        def load_module(self, fullname):
-            if fullname in sys.modules:
-                return sys.modules[fullname]
-            mod = types.ModuleType(fullname)
-            mod.__path__ = []        # marks it as a package
-            mod.__package__ = fullname
+        def create_module(self, spec):
+            mod = types.ModuleType(spec.name)
+            mod.__path__ = []
+            mod.__package__ = spec.name
+            mod.__spec__ = spec
             mod.__loader__ = self
-            mod.__spec__ = None
-            sys.modules[fullname] = mod
             return mod
+
+        def exec_module(self, module):
+            pass  # stub — nothing to execute
 
     sys.meta_path.insert(0, _Pt2eAutoStub())
 
-    # Pre-populate the specific attributes litert_torch actually accesses
+    # Pre-populate the specific names litert_torch actually accesses
     import importlib as _il
     _graph_utils = _il.import_module("torchao.quantization.pt2e.graph_utils")
     _quantizer   = _il.import_module("torchao.quantization.pt2e.quantizer")
@@ -113,7 +113,7 @@ if _torchao_broken:
     _quantizer.QuantizationAnnotation = MagicMock()
     _quantizer.QuantizationSpec = MagicMock()
 
-    print("  Import hook installed (auto-stubs any torchao.quantization.pt2e.* import).")
+    print("  Import hook installed (Python 3.12-compatible find_spec API).")
 else:
     print("\ntorchao OK — no stubs needed.")
 
