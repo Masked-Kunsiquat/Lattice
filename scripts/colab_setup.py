@@ -36,7 +36,13 @@ _run(
     "Removing system TensorFlow",
 )
 
-# ── 2. Install litert-torch + huggingface_hub ─────────────────────────────────
+# ── 2. Pin torchao to the version litert-torch expects, then install ──────────
+# litert-torch requires torchao with the pt2e submodule; the default Colab
+# torchao version is too new and removed pt2e in favour of a different API.
+_run(
+    [sys.executable, "-m", "pip", "install", "-q", "torchao==0.9.0"],
+    "Pinning torchao==0.9.0",
+)
 _run(
     [sys.executable, "-m", "pip", "install", "-q",
      "litert-torch>=0.8.0", "huggingface_hub", "peft", "transformers"],
