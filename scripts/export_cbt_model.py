@@ -266,7 +266,11 @@ def _resolve_source(
     if not subfolder:
         return source, None
     from huggingface_hub import snapshot_download
-    local_cache = pathlib.Path("/tmp/_hf_model_cache")
+    # Use /kaggle/working (real disk) rather than /tmp (tmpfs, RAM-backed) so
+    # the 2 GB download doesn't compete with the model loader for RAM.
+    # Falls back to /tmp if not running on Kaggle.
+    kaggle_working = pathlib.Path("/kaggle/working")
+    local_cache = (kaggle_working if kaggle_working.exists() else pathlib.Path("/tmp")) / "_hf_model_cache"
     print(f"Downloading subfolder '{subfolder}' from {source} …")
     snapshot_download(
         repo_id=source,
@@ -422,7 +426,8 @@ def run_build_litertlm(
 
     # export_hf copies tokenizer.model next to the .tflite; also check the
     # resolved subfolder dir and the generic HF cache root.
-    _local_hf_cache = pathlib.Path("/tmp/_hf_model_cache")
+    _kaggle = pathlib.Path("/kaggle/working")
+    _local_hf_cache = (_kaggle if _kaggle.exists() else pathlib.Path("/tmp")) / "_hf_model_cache"
     tokenizer_search = [
         tflite_dir / "tokenizer.model",
         model_dir / "tokenizer.model",
