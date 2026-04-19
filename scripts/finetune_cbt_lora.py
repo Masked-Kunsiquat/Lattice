@@ -57,8 +57,16 @@ from typing import Optional
 _in_notebook = "__file__" not in dir()
 _SCRIPT_DIR  = pathlib.Path.cwd() if _in_notebook else pathlib.Path(__file__).parent
 
-DEFAULT_DATA_PATH   = _SCRIPT_DIR / "curate_cbt_training_data-output" / "gemma_ft_data.jsonl"
-DEFAULT_OUTPUT_DIR  = _SCRIPT_DIR / "finetune_cbt_lora-output"
+DEFAULT_DATA_PATH   = (
+    pathlib.Path("/content/output/gemma_ft_data.jsonl")
+    if _in_notebook
+    else _SCRIPT_DIR / "curate_cbt_training_data-output" / "gemma_ft_data.jsonl"
+)
+DEFAULT_OUTPUT_DIR  = (
+    pathlib.Path("/content/finetune-output")
+    if _in_notebook
+    else _SCRIPT_DIR / "finetune_cbt_lora-output"
+)
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 DEFAULT_MODEL       = "google/gemma-3-1b-it"
