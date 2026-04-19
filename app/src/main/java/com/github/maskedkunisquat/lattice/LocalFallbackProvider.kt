@@ -257,7 +257,9 @@ class LocalFallbackProvider(
      */
     private fun selectModelAndBackends(): Pair<String, List<Backend>> {
         // Prefer the CBT fine-tuned model when it has been downloaded.
-        // It is a standard INT4 model so GPU→CPU backends apply on all devices.
+        // It is a standard INT4 model so GPU→CPU backends apply on all devices,
+        // including SM8750/SM8650 flagships — the NPU-compiled elite/ultra models
+        // are bypassed when CBT is present.
         val cbtFile = File(context.filesDir, MODEL_FILE_CBT)
         if (cbtFile.exists() && cbtFile.length() > 100_000_000L) {
             val backends = if (!openClFailed) listOf(Backend.GPU(), Backend.CPU())

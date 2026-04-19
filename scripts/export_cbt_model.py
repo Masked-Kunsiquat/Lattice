@@ -144,7 +144,6 @@ def _inject_torchao_stubs() -> None:
     import importlib.abc
     import importlib.util
     import types
-    from unittest.mock import MagicMock
 
     needs_stub = False
     try:
@@ -252,14 +251,20 @@ def check_deps() -> None:
 # Step 1 — export_hf → .tflite
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _resolve_source(source: str, subfolder: str | None) -> str:
+def _resolve_source(
+    source: str, subfolder: str | None
+) -> tuple[str, pathlib.Path | None]:
     """
     export_hf passes --subfolder to its own CLI but does NOT forward it to
     from_pretrained(), so HF repos with the model in a subfolder fail.
     Workaround: download just that subfolder locally and return the local path.
+
+    Returns (resolved_source, local_model_dir).
+    local_model_dir is non-None only when a subfolder was downloaded; callers
+    should add it to their tokenizer search paths.
     """
     if not subfolder:
-        return source
+        return source, None
     from huggingface_hub import snapshot_download
     local_cache = pathlib.Path("/tmp/_hf_model_cache")
     print(f"Downloading subfolder '{subfolder}' from {source} …")
@@ -275,7 +280,7 @@ def _resolve_source(source: str, subfolder: str | None) -> str:
             f"Check that the subfolder '{subfolder}' exists in {source}."
         )
     print(f"  Resolved to local path: {local_model_dir}")
-    return str(local_model_dir)
+    return str(local_model_dir), local_model_dir
 
 
 def run_export_hf(
@@ -284,10 +289,12 @@ def run_export_hf(
     prefill: int,
     context: int,
     subfolder: str | None,
-) -> pathlib.Path:
+) -> tuple[pathlib.Path, pathlib.Path | None]:
     """
     Calls litert_torch.generative.export_hf as a subprocess.
-    Returns the path to the produced .tflite file.
+    Returns (tflite_path, local_model_dir).
+    local_model_dir is non-None when the model was downloaded from a HF subfolder;
+    callers should include it in tokenizer search paths.
 
     Flags used:
         -p              prefill sequence length
@@ -297,7 +304,7 @@ def run_export_hf(
         --use_jinja_template   required for Gemma 3 chat template
     """
     # Resolve HF subfolder → local path so export_hf can find the safetensors.
-    resolved_source = _resolve_source(source, subfolder)
+    resolved_source, local_model_dir = _resolve_source(source, subfolder)
 
     cmd = [
         sys.executable, "-m", "litert_torch.generative.export_hf",
@@ -383,7 +390,7 @@ def run_export_hf(
     tflite_path = candidates[0]
     size_mb = tflite_path.stat().st_size / 1e6
     print(f"  .tflite → {tflite_path.name}  ({size_mb:.0f} MB)")
-    return tflite_path
+    return tflite_path, local_model_dir
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -396,10 +403,15 @@ def run_build_litertlm(
     tflite_dir: pathlib.Path,
     out_path: pathlib.Path,
     context: int,
+    local_model_dir: pathlib.Path | None = None,
 ) -> None:
     """
     Bundles .tflite + tokenizer into a .litertlm archive.
     Searches for tokenizer.model in tflite_dir first, then model_dir.
+
+    local_model_dir: the directory snapshot_download wrote to when a HF
+    subfolder was resolved — its tokenizer.model is checked before the
+    generic HF cache root.
 
     litert-torch 0.8.0 API (different from earlier versions):
         - llm_model_type is now a string ('gemma3'), not an enum
@@ -409,13 +421,15 @@ def run_build_litertlm(
     from litert_torch.generative.utilities.litertlm_builder import build_litertlm
 
     # export_hf copies tokenizer.model next to the .tflite; also check the
-    # local HF cache in case the download put it there.
+    # resolved subfolder dir and the generic HF cache root.
     _local_hf_cache = pathlib.Path("/tmp/_hf_model_cache")
     tokenizer_search = [
         tflite_dir / "tokenizer.model",
         model_dir / "tokenizer.model",
-        _local_hf_cache / "tokenizer.model",
     ]
+    if local_model_dir is not None:
+        tokenizer_search.append(local_model_dir / "tokenizer.model")
+    tokenizer_search.append(_local_hf_cache / "tokenizer.model")
     tokenizer_path = next((p for p in tokenizer_search if p.exists()), None)
     if tokenizer_path is None:
         sys.exit(
@@ -512,7 +526,7 @@ def main() -> None:
     t0 = time.time()
 
     # Step 1
-    tflite_path = run_export_hf(
+    tflite_path, local_model_dir = run_export_hf(
         source=hf_source,
         tflite_dir=tflite_dir,
         prefill=args.prefill,
@@ -527,6 +541,7 @@ def main() -> None:
         tflite_dir=tflite_dir,
         out_path=out_path,
         context=args.context,
+        local_model_dir=local_model_dir,
     )
 
     elapsed = time.time() - t0

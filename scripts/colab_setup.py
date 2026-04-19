@@ -80,7 +80,6 @@ _run(
 import importlib.abc
 import importlib.util
 import types
-from unittest.mock import MagicMock
 
 _torchao_broken = False
 try:

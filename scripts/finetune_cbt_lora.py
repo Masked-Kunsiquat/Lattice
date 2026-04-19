@@ -3,7 +3,7 @@ finetune_cbt_lora.py
 ====================
 LoRA fine-tuning for the CBT reframing adapter on Gemma 3 1B Instruct.
 
-Reads  : scripts/curate_cbt_training_data-output/gemma_ft_data.jsonl
+Reads  : scripts/output/gemma_ft_data.jsonl
 Writes : scripts/finetune_cbt_lora-output/
            checkpoint-<step>/   — HuggingFace PEFT checkpoints
            merged/              — full merged model (ready for LiteRT INT4 export)
@@ -383,7 +383,9 @@ def train(args: argparse.Namespace) -> None:
 
     # ── Training args ─────────────────────────────────────────────────────────
     try:
-        from transformers import TrainingArguments, Trainer, DataCollatorForSeq2Seq
+        from transformers import (
+            TrainingArguments, Trainer, DataCollatorForSeq2Seq, TrainerCallback,
+        )
     except ImportError as e:
         sys.exit(f"Missing transformers: {e}")
 
@@ -416,7 +418,6 @@ def train(args: argparse.Namespace) -> None:
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         report_to="none",
-        resume_from_checkpoint=args.resume,
         dataloader_num_workers=0,
     )
 
@@ -429,24 +430,22 @@ def train(args: argparse.Namespace) -> None:
 
     loss_history: list[dict] = []
 
-    class LossCallback:
+    class LossCallback(TrainerCallback):
         """Captures per-step training and eval loss."""
-        from transformers import TrainerCallback as _CB
 
-        class _Inner(_CB):
-            def __init__(self, history):
-                self._history = history
+        def __init__(self, history: list[dict]) -> None:
+            self._history = history
 
-            def on_log(self, _args, state, _control, logs=None, **kwargs):
-                if logs is None:
-                    return
-                entry = {"step": state.global_step}
-                if "loss" in logs:
-                    entry["train_loss"] = round(logs["loss"], 4)
-                if "eval_loss" in logs:
-                    entry["eval_loss"] = round(logs["eval_loss"], 4)
-                if len(entry) > 1:
-                    self._history.append(entry)
+        def on_log(self, _args, state, _control, logs=None, **kwargs):
+            if logs is None:
+                return
+            entry = {"step": state.global_step}
+            if "loss" in logs:
+                entry["train_loss"] = round(logs["loss"], 4)
+            if "eval_loss" in logs:
+                entry["eval_loss"] = round(logs["eval_loss"], 4)
+            if len(entry) > 1:
+                self._history.append(entry)
 
     trainer = Trainer(
         model=model,
@@ -454,7 +453,7 @@ def train(args: argparse.Namespace) -> None:
         train_dataset=train_ds,
         eval_dataset=eval_ds,
         data_collator=data_collator,
-        callbacks=[LossCallback._Inner(loss_history)],
+        callbacks=[LossCallback(loss_history)],
     )
 
     # ── Train ─────────────────────────────────────────────────────────────────
