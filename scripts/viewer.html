@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CBT Training Data Viewer</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3e;
+    --accent: #6c8ef7;
+    --accent2: #a78bfa;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --entry-bg: #111827;
+    --tag-bg: #1e2433;
+
+    --q2: #f97316;
+    --q3: #3b82f6;
+    --sa: #22c55e;
+    --ref: #a78bfa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 820px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .counter {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 820px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 480px;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .strategy-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .SOCRATIC_REALITY_TESTING { background: rgba(249,115,22,0.15); color: var(--q2); border: 1px solid rgba(249,115,22,0.3); }
+  .BEHAVIORAL_ACTIVATION    { background: rgba(59,130,246,0.15); color: var(--q3); border: 1px solid rgba(59,130,246,0.3); }
+  .STRENGTHS_AFFIRMATION    { background: rgba(34,197,94,0.15);  color: var(--sa); border: 1px solid rgba(34,197,94,0.3); }
+  .REFLECTION               { background: rgba(167,139,250,0.15);color: var(--ref);border: 1px solid rgba(167,139,250,0.3); }
+
+  .meta-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .meta-chip {
+    font-size: 0.78rem;
+    color: var(--muted);
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 9px;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+
+  .meta-chip span { color: var(--text); font-weight: 500; }
+
+  .distortions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .distortion-tag {
+    font-size: 0.7rem;
+    background: rgba(108,142,247,0.1);
+    color: var(--accent);
+    border: 1px solid rgba(108,142,247,0.25);
+    border-radius: 4px;
+    padding: 2px 7px;
+  }
+
+  .section-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .text-block {
+    background: var(--entry-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .text-block.entry { border-left: 3px solid var(--muted); }
+  .text-block.instruction { border-left: 3px solid var(--accent); font-style: italic; }
+  .text-block.reframe { border-left: 3px solid var(--accent2); }
+
+  .source-line {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  .controls {
+    width: 100%;
+    max-width: 820px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  button:hover { background: #222540; border-color: var(--accent); }
+  button:disabled { opacity: 0.3; cursor: default; }
+
+  button.primary {
+    background: rgba(108,142,247,0.15);
+    border-color: rgba(108,142,247,0.4);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  button.primary:hover { background: rgba(108,142,247,0.25); }
+
+  .progress-bar {
+    width: 100%;
+    max-width: 820px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 14px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width 0.2s ease;
+  }
+
+  .filter-row {
+    width: 100%;
+    max-width: 820px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+
+  .filter-btn {
+    font-size: 0.72rem;
+    padding: 5px 12px;
+  }
+
+  .filter-btn.active { border-color: var(--accent); color: var(--accent); }
+
+  .index-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9rem;
+    padding: 9px 12px;
+    width: 80px;
+    text-align: center;
+    outline: none;
+  }
+  .index-input:focus { border-color: var(--accent); }
+
+  .empty-state {
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 60px 0;
+    flex: 1;
+  }
+
+  .load-area {
+    width: 100%;
+    max-width: 820px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 48px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.8;
+  }
+
+  .load-area input[type=file] { display: none; }
+
+  .load-area label {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 10px 24px;
+    background: rgba(108,142,247,0.12);
+    border: 1px solid rgba(108,142,247,0.35);
+    border-radius: 8px;
+    color: var(--accent);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.15s;
+  }
+
+  .load-area label:hover { background: rgba(108,142,247,0.22); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CBT Training Data</h1>
+  <div class="counter" id="counter">—</div>
+</header>
+
+<div class="filter-row" id="filterRow" style="display:none">
+  <button class="filter-btn active" data-filter="ALL">All</button>
+  <button class="filter-btn" data-filter="SOCRATIC_REALITY_TESTING">Reality Testing</button>
+  <button class="filter-btn" data-filter="BEHAVIORAL_ACTIVATION">BA</button>
+  <button class="filter-btn" data-filter="STRENGTHS_AFFIRMATION">Strengths</button>
+  <button class="filter-btn" data-filter="REFLECTION">Reflection</button>
+</div>
+
+<div id="loadArea" class="load-area">
+  <div>Drop <strong>cbt_training_data.jsonl</strong> here, or pick it below.</div>
+  <label>
+    <input type="file" id="fileInput" accept=".jsonl,.json,.txt">
+    Browse file
+  </label>
+  <div style="margin-top:10px;font-size:0.78rem">
+    (file stays local — nothing is uploaded)
+  </div>
+</div>
+
+<div class="card" id="card" style="display:none">
+  <div class="card-header">
+    <div>
+      <div class="section-label">Strategy</div>
+      <div class="strategy-badge" id="strategyBadge"></div>
+    </div>
+    <div class="meta-row" id="metaRow"></div>
+  </div>
+
+  <div id="distortionsSection">
+    <div class="section-label">Distortions</div>
+    <div class="distortions-row" id="distortionsRow"></div>
+  </div>
+
+  <div>
+    <div class="section-label">Journal Entry</div>
+    <div class="text-block entry" id="entryText"></div>
+  </div>
+
+  <div>
+    <div class="section-label">Instruction (Stage 3 prompt excerpt)</div>
+    <div class="text-block instruction" id="instructionText"></div>
+  </div>
+
+  <div>
+    <div class="section-label">Reframe</div>
+    <div class="text-block reframe" id="reframeText"></div>
+  </div>
+
+  <div class="source-line" id="sourceLine"></div>
+</div>
+
+<div class="controls" id="controls" style="display:none">
+  <button id="prevBtn" onclick="nav(-1)">← Prev</button>
+  <button class="primary" onclick="random()">Random</button>
+  <input class="index-input" id="indexInput" type="number" min="1" title="Jump to entry #">
+  <button id="nextBtn" onclick="nav(1)">Next →</button>
+</div>
+
+<div class="progress-bar" id="progressBar" style="display:none">
+  <div class="progress-fill" id="progressFill"></div>
+</div>
+
+<script>
+  let allEntries = [];
+  let filtered  = [];
+  let cursor    = 0;
+  let activeFilter = 'ALL';
+
+  // ── file loading ────────────────────────────────────────────────────────────
+
+  const fileInput = document.getElementById('fileInput');
+  fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+
+  const loadArea = document.getElementById('loadArea');
+  loadArea.addEventListener('dragover', e => { e.preventDefault(); loadArea.style.borderColor='#6c8ef7'; });
+  loadArea.addEventListener('dragleave', () => { loadArea.style.borderColor=''; });
+  loadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    loadArea.style.borderColor = '';
+    loadFile(e.dataTransfer.files[0]);
+  });
+
+  function loadFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const lines = e.target.result.trim().split('\n');
+      allEntries = lines.flatMap(l => {
+        try { return [JSON.parse(l)]; } catch { return []; }
+      });
+      applyFilter(activeFilter);
+      showUI();
+      random();
+    };
+    reader.readAsText(file);
+  }
+
+  function showUI() {
+    document.getElementById('loadArea').style.display = 'none';
+    document.getElementById('card').style.display     = 'flex';
+    document.getElementById('controls').style.display = 'flex';
+    document.getElementById('progressBar').style.display = 'block';
+    document.getElementById('filterRow').style.display   = 'flex';
+  }
+
+  // ── filter ──────────────────────────────────────────────────────────────────
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.filter;
+      applyFilter(activeFilter);
+      cursor = 0;
+      render();
+    });
+  });
+
+  function applyFilter(f) {
+    filtered = f === 'ALL' ? allEntries : allEntries.filter(e => e.strategy === f);
+    cursor = 0;
+  }
+
+  // ── navigation ───────────────────────────────────────────────────────────────
+
+  function nav(delta) {
+    cursor = Math.max(0, Math.min(filtered.length - 1, cursor + delta));
+    render();
+  }
+
+  function random() {
+    cursor = Math.floor(Math.random() * filtered.length);
+    render();
+  }
+
+  const indexInput = document.getElementById('indexInput');
+  indexInput.addEventListener('change', () => {
+    const v = parseInt(indexInput.value, 10);
+    if (!isNaN(v) && v >= 1 && v <= filtered.length) {
+      cursor = v - 1;
+      render();
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (document.activeElement === indexInput) return;
+    if (e.key === 'ArrowLeft'  || e.key === 'a') nav(-1);
+    if (e.key === 'ArrowRight' || e.key === 'd') nav(1);
+    if (e.key === 'r') random();
+  });
+
+  // ── render ───────────────────────────────────────────────────────────────────
+
+  function strategyShort(s) {
+    const map = {
+      SOCRATIC_REALITY_TESTING: 'SOCRATIC REALITY TESTING',
+      BEHAVIORAL_ACTIVATION:    'BEHAVIORAL ACTIVATION',
+      STRENGTHS_AFFIRMATION:    'STRENGTHS AFFIRMATION',
+      REFLECTION:               'REFLECTION',
+    };
+    return map[s] || s;
+  }
+
+  function render() {
+    if (!filtered.length) {
+      document.getElementById('entryText').textContent      = '';
+      document.getElementById('instructionText').textContent = '';
+      document.getElementById('reframeText').textContent    = '';
+      document.getElementById('strategyBadge').textContent  = '—';
+      document.getElementById('counter').textContent        = '0 / 0';
+      return;
+    }
+
+    const rec = filtered[cursor];
+
+    // strategy
+    const badge = document.getElementById('strategyBadge');
+    badge.textContent = strategyShort(rec.strategy);
+    badge.className   = `strategy-badge ${rec.strategy}`;
+
+    // meta
+    const metaRow = document.getElementById('metaRow');
+    metaRow.innerHTML = `
+      <div class="meta-chip">v <span>${rec.valence != null ? rec.valence.toFixed(2) : '—'}</span></div>
+      <div class="meta-chip">a <span>${rec.arousal  != null ? rec.arousal.toFixed(2)  : '—'}</span></div>
+    `;
+
+    // distortions
+    const distSec = document.getElementById('distortionsSection');
+    const distRow = document.getElementById('distortionsRow');
+    const dists = (rec.distortions || []).filter(Boolean);
+    if (dists.length) {
+      distSec.style.display = 'block';
+      distRow.innerHTML = dists.map(d => `<span class="distortion-tag">${d}</span>`).join('');
+    } else {
+      distSec.style.display = 'none';
+    }
+
+    // text blocks
+    document.getElementById('entryText').textContent       = rec.entry       || '—';
+    document.getElementById('instructionText').textContent = rec.instruction  || '—';
+    document.getElementById('reframeText').textContent     = rec.reframe      || '—';
+
+    // source
+    document.getElementById('sourceLine').textContent = rec.source ? `source: ${rec.source}` : '';
+
+    // counter + index input
+    document.getElementById('counter').textContent = `${cursor + 1} / ${filtered.length}`;
+    indexInput.value = cursor + 1;
+    indexInput.max   = filtered.length;
+
+    // nav buttons
+    document.getElementById('prevBtn').disabled = cursor === 0;
+    document.getElementById('nextBtn').disabled = cursor === filtered.length - 1;
+
+    // progress bar
+    const pct = filtered.length > 1 ? (cursor / (filtered.length - 1)) * 100 : 100;
+    document.getElementById('progressFill').style.width = pct + '%';
+  }
+</script>
+</body>
+</html>
