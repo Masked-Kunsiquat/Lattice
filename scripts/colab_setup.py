@@ -101,7 +101,9 @@ if _torchao_broken:
             return mod
 
         def exec_module(self, module):
-            pass  # stub — nothing to execute
+            # Any attribute not explicitly set returns a MagicMock, so calls
+            # like HistogramObserver.with_args(...) work without error.
+            module.__getattr__ = lambda name: MagicMock()
 
     sys.meta_path.insert(0, _Pt2eAutoStub())
 

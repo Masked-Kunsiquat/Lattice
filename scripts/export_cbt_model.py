@@ -162,7 +162,9 @@ def _inject_torchao_stubs() -> None:
             return mod
 
         def exec_module(self, module):
-            pass  # stub — nothing to execute
+            # Any attribute not explicitly set returns a MagicMock, so calls
+            # like HistogramObserver.with_args(...) work without error.
+            module.__getattr__ = lambda name: MagicMock()
 
     # Only install if colab_setup.py hasn't already done so
     if not any(isinstance(f, importlib.abc.MetaPathFinder)
@@ -266,7 +268,7 @@ def run_export_hf(
         "            m = types.ModuleType(spec.name)\n"
         "            m.__path__ = []; m.__package__ = spec.name\n"
         "            m.__spec__ = spec; m.__loader__ = self; return m\n"
-        "        def exec_module(self, module): pass\n"
+        "        def exec_module(self, m): m.__getattr__ = lambda n: MagicMock()\n"
         "    sys.meta_path.insert(0, _S())\n"
         "    import importlib as _il\n"
         "    _il.import_module('torchao.quantization.pt2e.graph_utils').find_sequential_partitions = MagicMock()\n"
