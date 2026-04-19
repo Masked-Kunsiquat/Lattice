@@ -159,6 +159,7 @@ def _inject_torchao_stubs() -> None:
             mod.__package__ = spec.name
             mod.__spec__ = spec
             mod.__loader__ = self
+            mod.__file__ = f"/stub/{spec.name.replace('.', '/')}.py"
             return mod
 
         def exec_module(self, module):
@@ -292,7 +293,8 @@ def run_export_hf(
         "                else None\n"
         "        def create_module(self,spec):\n"
         "            m=types.ModuleType(spec.name);m.__path__=[];m.__package__=spec.name\n"
-        "            m.__spec__=spec;m.__loader__=self;return m\n"
+        "            m.__spec__=spec;m.__loader__=self\n"
+        "            m.__file__=f'/stub/{spec.name.replace(\".\",\"/\")}.py';return m\n"
         "        def exec_module(self,m):\n"
         "            def _ga(n):\n"
         "                c=_mk(n);setattr(m,n,c);return c\n"

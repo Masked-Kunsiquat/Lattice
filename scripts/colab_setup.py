@@ -98,6 +98,10 @@ if _torchao_broken:
             mod.__package__ = spec.name
             mod.__spec__ = spec
             mod.__loader__ = self
+            # Set __file__ to a real string so code that does
+            # module.__file__.endswith('.py') doesn't go through __getattr__
+            # and get a class back instead of a string.
+            mod.__file__ = f"/stub/{spec.name.replace('.', '/')}.py"
             return mod
 
         def exec_module(self, module):
