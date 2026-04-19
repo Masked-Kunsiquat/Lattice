@@ -60,7 +60,7 @@ _SCRIPT_DIR  = pathlib.Path.cwd() if _in_notebook else pathlib.Path(__file__).pa
 DEFAULT_DATA_PATH   = (
     pathlib.Path("/content/output/gemma_ft_data.jsonl")
     if _in_notebook
-    else _SCRIPT_DIR / "curate_cbt_training_data-output" / "gemma_ft_data.jsonl"
+    else _SCRIPT_DIR / "output" / "gemma_ft_data.jsonl"
 )
 DEFAULT_OUTPUT_DIR  = (
     pathlib.Path("/content/finetune-output")
@@ -187,6 +187,7 @@ def tokenize_and_mask(examples: dict, tokenizer, max_seq: int) -> dict:
         prefix_len = len(prefix_ids)
 
         # Tokenize full text
+        # (guard against prefix overflowing the full sequence — checked below)
         full = tokenizer(
             text,
             add_special_tokens=False,
@@ -196,6 +197,11 @@ def tokenize_and_mask(examples: dict, tokenizer, max_seq: int) -> dict:
         )
         ids  = full["input_ids"]
         mask = full["attention_mask"]
+
+        # Skip examples where the prompt fills or overflows max_seq — all labels
+        # would be -100 and the row contributes no training signal.
+        if prefix_len >= len(ids):
+            continue
 
         # Build labels: -100 for prompt tokens, real ids for response tokens
         labels = [-100] * prefix_len + ids[prefix_len:]
@@ -321,6 +327,9 @@ def train(args: argparse.Namespace) -> None:
     if args.dry_run:
         print("[dry-run] Data OK — exiting before model load.")
         return
+
+    if len(valid) < 2:
+        sys.exit(f"Too few valid records ({len(valid)}) to produce train and eval splits. Check data file.")
 
     train_records, eval_records = split_train_eval(valid)
     print(f"  Train: {len(train_records)}   Eval: {len(eval_records)}")

@@ -449,11 +449,17 @@
 
   function render() {
     if (!filtered.length) {
-      document.getElementById('entryText').textContent      = '';
+      document.getElementById('entryText').textContent       = '';
       document.getElementById('instructionText').textContent = '';
-      document.getElementById('reframeText').textContent    = '';
-      document.getElementById('strategyBadge').textContent  = '—';
-      document.getElementById('counter').textContent        = '0 / 0';
+      document.getElementById('reframeText').textContent     = '';
+      document.getElementById('strategyBadge').textContent   = '—';
+      document.getElementById('sourceLine').textContent      = '';
+      document.getElementById('counter').textContent         = '0 / 0';
+      document.getElementById('distortionsSection').style.display = 'none';
+      document.getElementById('distortionsRow').textContent  = '';
+      document.getElementById('prevBtn').disabled = true;
+      document.getElementById('nextBtn').disabled = true;
+      document.getElementById('progressFill').style.width   = '0%';
       return;
     }
 
@@ -475,9 +481,15 @@
     const distSec = document.getElementById('distortionsSection');
     const distRow = document.getElementById('distortionsRow');
     const dists = (rec.distortions || []).filter(Boolean);
+    distRow.textContent = '';
     if (dists.length) {
       distSec.style.display = 'block';
-      distRow.innerHTML = dists.map(d => `<span class="distortion-tag">${d}</span>`).join('');
+      dists.forEach(d => {
+        const span = document.createElement('span');
+        span.className = 'distortion-tag';
+        span.textContent = d;
+        distRow.appendChild(span);
+      });
     } else {
       distSec.style.display = 'none';
     }

@@ -104,7 +104,11 @@ class LocalFallbackProvider(
      * of any in-progress base model download.
      */
     fun downloadCbtModel() {
-        modelDownloader.enqueue(MODEL_FILE_CBT, "$HF_BASE_URL/$MODEL_FILE_CBT", MODEL_SHA256[MODEL_FILE_CBT])
+        val sha256 = MODEL_SHA256[MODEL_FILE_CBT]
+        check(sha256 != null || BuildConfig.DEBUG) {
+            "SHA-256 digest for $MODEL_FILE_CBT is not set. Populate MODEL_SHA256 before shipping a release build."
+        }
+        modelDownloader.enqueue(MODEL_FILE_CBT, "$HF_BASE_URL/$MODEL_FILE_CBT", sha256)
     }
 
     /**

@@ -6,7 +6,7 @@ A private, on-device CBT journaling app for Android. You write. The model thinks
 
 ## What it does
 
-Lattice lets you log journal entries with a mood coordinate (valence × arousal on the circumplex model), automatically masks the names of people you mention with stable per-person UUIDs, and runs a three-stage cognitive reframing pipeline locally using a Gemma 3 1B model via MediaPipe. The reframe is streamed token-by-token to the UI. You can accept it (it persists to the entry) or dismiss it.
+Lattice lets you log journal entries with a mood coordinate (valence × arousal on the circumplex model), automatically masks the names of people you mention with stable per-person UUIDs, and runs a three-stage cognitive reframing pipeline locally using a Gemma 3 1B model via LiteRT-LM. The reframe is streamed token-by-token to the UI. You can accept it (it persists to the entry) or dismiss it.
 
 The pipeline is triggered by a **Reframe** button — available in the journal editor and on any saved entry's detail screen.
 
@@ -18,7 +18,7 @@ All inference is local by default. The orchestrator routes requests through a st
 
 ```text
 Gemini Nano (AICore, API 35+)
-  → Gemma 3 1B via MediaPipe Tasks GenAI (all API levels)
+  → Gemma 3 1B via LiteRT-LM (all API levels)
     → Cloud API (disabled by default, requires explicit opt-in)
 ```
 
@@ -36,7 +36,7 @@ PII masking is enforced at every boundary:
 ```text
 app/                    Compose UI, ViewModel, DI wiring (LatticeApplication)
 core-logic/             Business logic — no Android framework dependencies
-  EmbeddingProvider     Snowflake Arctic Embed XS (384-dim, ONNX)
+  EmbeddingProvider     Snowflake Arctic Embed XS (384-dim, LiteRT TFLite)
   JournalRepository     PII masking, embedding generation, vibe score updates
   LlmOrchestrator       Provider routing + sovereignty gate
   ReframingLoop         3-stage CBT inference pipeline
@@ -62,7 +62,7 @@ core-data/              Room entities, DAOs, database + migrations
 
 ## Reframing pipeline
 
-Triggered by `!reframe` in the editor. Runs entirely on-device via `LocalFallbackProvider`.
+Triggered by the **Reframe** button in the journal editor or entry detail screen. Runs entirely on-device via `LocalFallbackProvider`.
 
 **Stage 1 — Affective Mapping**
 Prompts the model for `v=<n> a=<n>` coordinates. Maps to a `MoodLabel` via the Russell circumplex model. Updates the mood grid in the editor.
@@ -105,7 +105,7 @@ Three model variants are available. `LocalFallbackProvider` selects at runtime v
 | Ultra | `gemma3-1b-it-ultra.litertlm` | SM8650 S24 Ultra | ~15 s reframe |
 | Universal | `gemma3-1b-it-int4.litertlm` | Any ARM64 | fallback |
 
-The selected file is staged to `context.filesDir` on first run (MediaPipe requires a
+The selected file is read from `context.filesDir` on init (LiteRT-LM requires a
 filesystem path). Context window is 1,280 tokens (`ekv1280`).
 
 > **Model files are not committed to this repository.** Run `./gradlew downloadModels` before building.

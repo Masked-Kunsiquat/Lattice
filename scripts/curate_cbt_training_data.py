@@ -72,7 +72,7 @@ OUTPUT_DIR = pathlib.Path("/content/output") if _in_notebook else pathlib.Path(_
 
 # ── Models ────────────────────────────────────────────────────────────────────
 CLASSIFY_MODEL = "gemini-2.5-flash-lite"   # synthetic entry generation
-REFRAME_MODEL  = "gemini-2.5-flash-lite"   # no thinking overhead; right for short constrained generation
+REFRAME_MODEL  = "gemini-2.0-flash"        # faster; right for short constrained reframe generation
 
 # ── Strategy routing — mirrors ReframingLoop.selectStrategy() ─────────────────
 AFFIRMATION_THRESHOLD = 0.4  # matches ReframingLoop.AFFIRMATION_THRESHOLD
@@ -341,7 +341,7 @@ _SYNTHETIC_VA = {
 _TYPICAL_DISTORTIONS = {
     STRATEGY_SOCRATIC:    ["Catastrophizing", "Mind Reading", "Fortune-telling", "Overgeneralization", "All-or-nothing thinking"],
     STRATEGY_BA:          ["Emotional Reasoning", "Labeling", "Should statements", "Mental filter", "All-or-nothing thinking"],
-    STRATEGY_REFLECTION:  [],  # low-distortion zone — often empty
+    STRATEGY_REFLECTION:  ["Disqualifying the positive", "Emotional Reasoning", "Mental filter", "Should statements"],
     STRATEGY_AFFIRMATION: [],
 }
 
@@ -396,8 +396,8 @@ def generate_reframe(
             return text
         if attempt < max_attempts - 1:
             print(f"  [retry] validation failed ({reason}); text={repr(text[:120])}", file=sys.stderr)
-    # Return last result even if it fails soft validation — reviewer can filter
-    return text if text else None
+    # All attempts failed validation — do not return an invalid SFT target.
+    return None
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -408,7 +408,7 @@ def main() -> None:
     parser.add_argument("--flash-reframe", action="store_true", help="Use gemini-2.0-flash for reframes (faster)")
     args, _ = parser.parse_known_args()  # parse_known_args ignores Colab/Jupyter kernel flags
 
-    reframe_model = CLASSIFY_MODEL if args.flash_reframe else REFRAME_MODEL
+    reframe_model = REFRAME_MODEL if args.flash_reframe else CLASSIFY_MODEL
     print(f"Classification model : {CLASSIFY_MODEL}")
     print(f"Reframe model        : {reframe_model}")
 
@@ -480,12 +480,10 @@ def main() -> None:
                         continue
 
                     dists = raw["cognitiveDistortions"]
-                    # Skip REFLECTION_CARD path
+                    # Skip REFLECTION_CARD path — production skips the LLM for
+                    # zero-distortion REFLECTION entries, so don't train on them.
                     if strategy == STRATEGY_REFLECTION and not dists:
-                        # Accept no-distortion REFLECTION for reflection prompt training
-                        # (strategy still generates LLM reframe when distortions present;
-                        # for zero-distortion we still generate a reframe as training signal)
-                        pass
+                        continue
 
                     instruction = build_instruction(raw["content"], strategy, dists)
                     reframe = generate_reframe(client, instruction, reframe_model)
