@@ -252,6 +252,32 @@ def check_deps() -> None:
 # Step 1 — export_hf → .tflite
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _resolve_source(source: str, subfolder: str | None) -> str:
+    """
+    export_hf passes --subfolder to its own CLI but does NOT forward it to
+    from_pretrained(), so HF repos with the model in a subfolder fail.
+    Workaround: download just that subfolder locally and return the local path.
+    """
+    if not subfolder:
+        return source
+    from huggingface_hub import snapshot_download
+    local_cache = pathlib.Path("/tmp/_hf_model_cache")
+    print(f"Downloading subfolder '{subfolder}' from {source} …")
+    snapshot_download(
+        repo_id=source,
+        allow_patterns=[f"{subfolder}/*"],
+        local_dir=str(local_cache),
+    )
+    local_model_dir = local_cache / subfolder
+    if not local_model_dir.exists():
+        sys.exit(
+            f"snapshot_download completed but {local_model_dir} not found.\n"
+            f"Check that the subfolder '{subfolder}' exists in {source}."
+        )
+    print(f"  Resolved to local path: {local_model_dir}")
+    return str(local_model_dir)
+
+
 def run_export_hf(
     source: str,
     tflite_dir: pathlib.Path,
@@ -270,9 +296,12 @@ def run_export_hf(
         --externalize_embedder reduce peak RAM during tracing
         --use_jinja_template   required for Gemma 3 chat template
     """
+    # Resolve HF subfolder → local path so export_hf can find the safetensors.
+    resolved_source = _resolve_source(source, subfolder)
+
     cmd = [
         sys.executable, "-m", "litert_torch.generative.export_hf",
-        source,
+        resolved_source,
         str(tflite_dir),
         "-p", str(prefill),
         "--cache_length", str(context),
@@ -280,8 +309,7 @@ def run_export_hf(
         "--externalize_embedder",
         "--use_jinja_template",
     ]
-    if subfolder:
-        cmd += ["--subfolder", subfolder]
+    # subfolder is already baked into resolved_source — don't pass it again.
 
     # Write a launcher that injects torchao stubs before running export_hf,
     # so the subprocess gets the same fix as the parent process.
@@ -380,12 +408,18 @@ def run_build_litertlm(
     """
     from litert_torch.generative.utilities.litertlm_builder import build_litertlm
 
-    tokenizer_path = tflite_dir / "tokenizer.model"
-    if not tokenizer_path.exists():
-        tokenizer_path = model_dir / "tokenizer.model"
-    if not tokenizer_path.exists():
+    # export_hf copies tokenizer.model next to the .tflite; also check the
+    # local HF cache in case the download put it there.
+    _local_hf_cache = pathlib.Path("/tmp/_hf_model_cache")
+    tokenizer_search = [
+        tflite_dir / "tokenizer.model",
+        model_dir / "tokenizer.model",
+        _local_hf_cache / "tokenizer.model",
+    ]
+    tokenizer_path = next((p for p in tokenizer_search if p.exists()), None)
+    if tokenizer_path is None:
         sys.exit(
-            f"tokenizer.model not found in {tflite_dir} or {model_dir}.\n"
+            f"tokenizer.model not found in any of: {[str(p) for p in tokenizer_search]}\n"
             "export_hf should copy it alongside the .tflite — check step 1 output."
         )
 
