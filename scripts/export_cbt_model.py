@@ -166,6 +166,7 @@ def _inject_torchao_stubs() -> None:
                 return type(name, (), {
                     "__class_getitem__": classmethod(lambda c, *a, **kw: c),
                     "with_args":         classmethod(lambda c, *a, **kw: c),
+                    "__init__":          lambda self, *a, **kw: None,
                     "__call__":          lambda self, *a, **kw: None,
                 })
             def _getattr(name):
@@ -282,6 +283,7 @@ def run_export_hf(
         "    def _mk(n): return type(n,(),({\n"
         "        '__class_getitem__':classmethod(lambda c,*a,**k:c),\n"
         "        'with_args':classmethod(lambda c,*a,**k:c),\n"
+        "        '__init__':lambda self,*a,**k:None,\n"
         "        '__call__':lambda self,*a,**k:None}))\n"
         "    class _S(importlib.abc.MetaPathFinder, importlib.abc.Loader):\n"
         "        _P = 'torchao.quantization.pt2e'\n"
@@ -299,8 +301,8 @@ def run_export_hf(
         "    import importlib as _il\n"
         "    _il.import_module('torchao.quantization.pt2e.graph_utils').find_sequential_partitions=lambda*a,**k:None\n"
         "    _qt=_il.import_module('torchao.quantization.pt2e.quantizer')\n"
-        "    _qt.QuantizationAnnotation=type('QuantizationAnnotation',(),{'__class_getitem__':classmethod(lambda c,*a,**k:c)})\n"
-        "    _qt.QuantizationSpec=type('QuantizationSpec',(),{'__class_getitem__':classmethod(lambda c,*a,**k:c),'with_args':classmethod(lambda c,*a,**k:c)})\n"
+        "    _qt.QuantizationAnnotation=type('QuantizationAnnotation',(),{'__class_getitem__':classmethod(lambda c,*a,**k:c),'__init__':lambda self,*a,**k:None})\n"
+        "    _qt.QuantizationSpec=type('QuantizationSpec',(),{'__class_getitem__':classmethod(lambda c,*a,**k:c),'with_args':classmethod(lambda c,*a,**k:c),'__init__':lambda self,*a,**k:None})\n"
         "    if not getattr(typing.get_type_hints,'_lp',False):\n"
         "        _og=typing.get_type_hints\n"
         "        def _sg(o,*a,**k):\n"

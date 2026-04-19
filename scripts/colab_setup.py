@@ -116,6 +116,7 @@ if _torchao_broken:
                 return type(name, (), {
                     "__class_getitem__": classmethod(lambda c, *a, **kw: c),
                     "with_args":         classmethod(lambda c, *a, **kw: c),
+                    "__init__":          lambda self, *a, **kw: None,
                     "__call__":          lambda self, *a, **kw: None,
                 })
 
@@ -139,10 +140,12 @@ if _torchao_broken:
     _graph_utils.find_sequential_partitions = _fn
     _quantizer.QuantizationAnnotation = type("QuantizationAnnotation", (), {
         "__class_getitem__": classmethod(lambda c, *a, **kw: c),
+        "__init__":          lambda self, *a, **kw: None,
     })
     _quantizer.QuantizationSpec = type("QuantizationSpec", (), {
         "__class_getitem__": classmethod(lambda c, *a, **kw: c),
         "with_args":         classmethod(lambda c, *a, **kw: c),
+        "__init__":          lambda self, *a, **kw: None,
     })
 
     # Safety net: if typing.get_type_hints() still trips on a stub type,
