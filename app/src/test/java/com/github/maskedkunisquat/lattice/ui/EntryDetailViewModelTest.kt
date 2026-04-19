@@ -4,13 +4,17 @@ import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.dao.JournalDao
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
+import com.github.maskedkunisquat.lattice.core.data.dao.PhoneNumberDao
 import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
+import com.github.maskedkunisquat.lattice.core.data.dao.TagDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
 import com.github.maskedkunisquat.lattice.core.data.model.Mention
 import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.PhoneNumber
 import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.Tag
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.EmbeddingProvider
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
@@ -18,8 +22,11 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmOrchestrator
 import com.github.maskedkunisquat.lattice.core.logic.LlmProvider
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
+import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
+import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import com.github.maskedkunisquat.lattice.core.logic.SearchRepository
+import com.github.maskedkunisquat.lattice.core.logic.TagRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -53,6 +60,7 @@ class EntryDetailViewModelTest {
         override suspend fun incrementVibeScore(personId: UUID, delta: Float) = Unit
         override suspend fun deletePersonById(id: UUID) = Unit
         override fun searchByName(query: String): Flow<List<Person>> = flowOf(emptyList())
+        override suspend fun getPersonsByIds(ids: List<UUID>): List<Person> = emptyList()
     }
 
     private class FakePlaceDao : PlaceDao {
@@ -62,6 +70,7 @@ class EntryDetailViewModelTest {
         override fun searchByName(query: String): Flow<List<Place>> = flowOf(emptyList())
         override suspend fun getById(id: UUID): Place? = null
         override suspend fun getByName(name: String): Place? = null
+        override suspend fun getPlacesByIds(ids: List<UUID>): List<Place> = emptyList()
     }
 
     private class FakeMentionDao : MentionDao {
@@ -78,6 +87,25 @@ class EntryDetailViewModelTest {
         override suspend fun getAllEvents(): List<TransitEvent> = emptyList()
         override fun getEventsFlow(): Flow<List<TransitEvent>> = flowOf(emptyList())
         override suspend fun deleteEventsForEntry(entryId: String) = Unit
+    }
+
+    private class FakePhoneNumberDao : PhoneNumberDao {
+        override suspend fun insertPhoneNumber(phoneNumber: PhoneNumber) = Unit
+        override suspend fun insertPhoneNumbers(phoneNumbers: List<PhoneNumber>) = Unit
+        override suspend fun updatePhoneNumber(phoneNumber: PhoneNumber) = Unit
+        override suspend fun deletePhoneNumber(phoneNumber: PhoneNumber) = Unit
+        override fun getPhoneNumbersForPerson(personId: UUID): Flow<List<PhoneNumber>> = flowOf(emptyList())
+        override fun getAllPhoneNumbers(): Flow<List<PhoneNumber>> = flowOf(emptyList())
+        override suspend fun deleteByPersonId(personId: UUID) = Unit
+    }
+
+    private class FakeTagDao : TagDao {
+        override suspend fun insertTag(tag: Tag) = Unit
+        override suspend fun deleteById(id: UUID) = Unit
+        override fun getAll(): Flow<List<Tag>> = flowOf(emptyList())
+        override fun searchByName(query: String): Flow<List<Tag>> = flowOf(emptyList())
+        override suspend fun getById(id: UUID): Tag? = null
+        override suspend fun getByName(name: String): Tag? = null
     }
 
     private class FakeActivityHierarchyDao : ActivityHierarchyDao {
@@ -158,6 +186,7 @@ class EntryDetailViewModelTest {
         val searchRepo = SearchRepository(
             journalDao = dao,
             personDao = FakePersonDao(),
+            placeDao = FakePlaceDao(),
             embeddingProvider = object : EmbeddingProvider() {
                 override suspend fun generateEmbedding(text: String) = FloatArray(384)
             },
@@ -173,6 +202,14 @@ class EntryDetailViewModelTest {
             transitEventDao = FakeTransitEventDao(),
             modelLoadState = MutableStateFlow(ModelLoadState.READY),
             entryId = entryId,
+            mentionDao = FakeMentionDao(),
+            peopleRepository = PeopleRepository(
+                personDao = FakePersonDao(),
+                phoneNumberDao = FakePhoneNumberDao(),
+                transact = { it() },
+            ),
+            placeRepository = PlaceRepository(FakePlaceDao()),
+            tagDao = FakeTagDao(),
         )
     }
 

@@ -10,6 +10,9 @@ class PlaceRepository(private val placeDao: PlaceDao) {
     suspend fun getAllPlaces(): List<Place> =
         placeDao.getAll().first()
 
+    suspend fun getByIds(ids: Set<java.util.UUID>): List<Place> =
+        if (ids.isEmpty()) emptyList() else placeDao.getPlacesByIds(ids.toList())
+
     suspend fun searchPlaces(query: String): List<Place> =
         placeDao.searchByName(query).first()
 

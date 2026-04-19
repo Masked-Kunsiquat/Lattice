@@ -53,6 +53,7 @@ class JournalRepositoryDeleteEntryTest {
         override fun getPersonById(id: UUID): Flow<com.github.maskedkunisquat.lattice.core.data.model.Person?> = flowOf(null)
         override suspend fun deletePersonById(id: UUID) = Unit
         override fun searchByName(query: String): Flow<List<com.github.maskedkunisquat.lattice.core.data.model.Person>> = flowOf(emptyList())
+        override suspend fun getPersonsByIds(ids: List<UUID>): List<com.github.maskedkunisquat.lattice.core.data.model.Person> = emptyList()
     }
 
     private class FakePlaceDao : PlaceDao {
@@ -62,6 +63,7 @@ class JournalRepositoryDeleteEntryTest {
         override fun searchByName(query: String): Flow<List<Place>> = flowOf(emptyList())
         override suspend fun getById(id: UUID): Place? = null
         override suspend fun getByName(name: String): Place? = null
+        override suspend fun getPlacesByIds(ids: List<UUID>): List<Place> = emptyList()
     }
 
     private class FakeMentionDao(private val mentions: List<Mention>) : MentionDao {

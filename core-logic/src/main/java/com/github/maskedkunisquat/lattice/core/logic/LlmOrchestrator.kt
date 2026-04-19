@@ -99,6 +99,19 @@ class LlmOrchestrator(
         emitAll(provider.process(prompt, systemInstruction))
     }
 
+    /**
+     * Returns true when the next [process] call would route to [cloudProvider].
+     * Used by [ReframingLoop] to decide whether to substitute masked text for display text
+     * before building Stage 3 prompts — pseudonymous `@name`/`!place` tokens must not leave
+     * the device via the cloud path.
+     */
+    internal suspend fun isCloudBound(): Boolean {
+        if (cloudProvider == null) return false
+        if (nanoProvider.isAvailable()) return false
+        if (localFallbackProvider.isAvailable()) return false
+        return cloudEnabled()
+    }
+
     private suspend fun selectProvider(): LlmProvider {
         if (nanoProvider.isAvailable()) return nanoProvider
         if (localFallbackProvider.isAvailable()) return localFallbackProvider

@@ -444,10 +444,16 @@ class JournalEditorViewModel(
                     .runStage2DiagnosisOfThought(maskedText)
                     .getOrThrow()
 
-                // Build UUID → entity maps for Stage 3 display-name substitution.
-                // These are fetched once per reframe; they are not passed to stages 1 or 2.
-                val personById = peopleRepository.getAllPersons().associateBy { it.id }
-                val placeById  = placeRepository.getAllPlaces().associateBy { it.id }
+                // Build UUID → entity maps for Stage 3 display-name substitution, scoped to
+                // only the UUIDs present in maskedText so we never fetch the full table.
+                val personUuids = PERSON_UUID_REGEX.findAll(maskedText)
+                    .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
+                    .toSet()
+                val placeUuids = PLACE_UUID_REGEX.findAll(maskedText)
+                    .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
+                    .toSet()
+                val personById = peopleRepository.getByIds(personUuids).associateBy { it.id }
+                val placeById  = placeRepository.getByIds(placeUuids).associateBy { it.id }
 
                 // Stage 3 — Stream tokens into Streaming state, seal to Done on Complete
                 val (_, tokenFlow) = reframingLoop
@@ -510,6 +516,10 @@ class JournalEditorViewModel(
         private val PLACE_REGEX    = Regex("!((?:$W+ )*$W+|$W*)$")
         /** Matches all resolved #tag tokens in saved text for tagId collection. */
         private val TAG_WORD_REGEX = Regex("#($W+)")
+        /** Matches [PERSON_UUID] placeholders in masked text for scoped entity fetching. */
+        private val PERSON_UUID_REGEX = Regex("""\[PERSON_([a-fA-F0-9\-]{36})\]""")
+        /** Matches [PLACE_UUID] placeholders in masked text for scoped entity fetching. */
+        private val PLACE_UUID_REGEX  = Regex("""\[PLACE_([a-fA-F0-9\-]{36})\]""")
         /** Matches all resolved !place tokens in saved text for placeId collection. */
         private val PLACE_WORD_REGEX = Regex("!((?:$W+ )*$W+)")
         /**

@@ -33,6 +33,9 @@ interface PersonDao {
     @Query("DELETE FROM people WHERE id = :id")
     suspend fun deletePersonById(id: UUID)
 
+    @Query("SELECT * FROM people WHERE id IN (:ids)")
+    suspend fun getPersonsByIds(ids: List<UUID>): List<Person>
+
     @Query("""
         SELECT * FROM people
         WHERE firstName LIKE '%' || :query || '%'

@@ -556,7 +556,7 @@ class ReframingLoopTest {
     @Test
     fun `buildInterventionPrompt - Q2 prompt contains Socratic techniques`() {
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "I know [PERSON_abc] is angry at me.",
+            displayText = "I know [PERSON_abc] is angry at me.",
             strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
             distortions = listOf(CognitiveDistortion.MIND_READING),
         )
@@ -570,7 +570,7 @@ class ReframingLoopTest {
     @Test
     fun `buildInterventionPrompt - Q3 prompt contains Behavioral Activation techniques`() {
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "Nothing ever works out for me.",
+            displayText = "Nothing ever works out for me.",
             strategy = ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
             distortions = listOf(CognitiveDistortion.OVERGENERALIZATION),
         )
@@ -582,7 +582,7 @@ class ReframingLoopTest {
     @Test
     fun `buildInterventionPrompt - reflection prompt asks what entry reveals about what matters`() {
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "meeting up with [PERSON_abc] later. might go to the park.",
+            displayText = "meeting up with [PERSON_abc] later. might go to the park.",
             strategy = ReframingLoop.ReframeStrategy.REFLECTION,
             distortions = emptyList(),
         )
@@ -596,12 +596,25 @@ class ReframingLoopTest {
     @Test
     fun `buildInterventionPrompt - empty distortions produces no-distortion context`() {
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "test",
+            displayText = "test",
             strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
             distortions = emptyList(),
         )
         // When distortions is empty, no distortion line is injected into the prompt.
         assertFalse(prompt.contains("Distortions present:"))
+    }
+
+    @Test
+    fun `buildReflectionCard - captures multi-word place names and strips trailing punctuation`() {
+        val card = loop.buildReflectionCard(
+            displayText = "Saw @Alice, went to !Central Park.",
+            evidenceEntries = emptyList(),
+            personById = emptyMap(),
+            placeById = emptyMap(),
+        )
+        // Both @Alice (stripped of comma) and !Central Park (multi-word) must appear in entityList.
+        assertTrue("@Alice must be captured without trailing comma", card.contains("@Alice"))
+        assertTrue("!Central Park must be captured as multi-word entity", card.contains("!Central Park"))
     }
 
     // ── buildReflectionCard ──────────────────────────────────────────────────
@@ -859,7 +872,7 @@ class ReframingLoopTest {
             valueCategory = "health"
         )
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "I feel exhausted and hopeless.",
+            displayText = "I feel exhausted and hopeless.",
             strategy = ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
             distortions = emptyList(),
             baActivity = activity,
@@ -882,7 +895,7 @@ class ReframingLoopTest {
             embedding = FloatArray(384),
         )
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "I feel [PERSON_abc] is angry at me.",
+            displayText = "I feel [PERSON_abc] is angry at me.",
             strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
             distortions = emptyList(),
             evidenceEntries = listOf(evidence),
@@ -895,5 +908,80 @@ class ReframingLoopTest {
             "Evidence entry content must be present in prompt",
             prompt.contains("[PERSON_abc] was kind and supportive yesterday.")
         )
+    }
+
+    // ── Distortion gate: end-to-end ───────────────────────────────────────────
+
+    /**
+     * A provider that records whether it was ever called and throws if it is,
+     * so we can assert the LLM was NOT invoked in the distortion-gate path.
+     */
+    private class ErrorOnCallProvider(override val id: String) : LlmProvider {
+        override suspend fun isAvailable() = true
+        override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> =
+            kotlinx.coroutines.flow.flow {
+                throw AssertionError("LLM provider must not be called for REFLECTION_CARD path")
+            }
+    }
+
+    private fun loopWithErrorProvider(): ReframingLoop {
+        val provider = ErrorOnCallProvider("error_local")
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = provider,
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = { false },
+        )
+        return ReframingLoop(orchestrator)
+    }
+
+    @Test
+    fun `runStage3Intervention - REFLECTION with empty distortions returns REFLECTION_CARD without invoking LLM`() = runTest {
+        val reframingLoop = loopWithErrorProvider()
+        // Low-positive valence → REFLECTION strategy; empty distortions → distortion gate fires.
+        val affectiveMap = ReframingLoop.AffectiveMapResult(0.1f, 0.0f, MoodLabel.ALIVE)
+        val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "")
+
+        val result = reframingLoop.runStage3Intervention("Spent time at the park.", affectiveMap, diagnosis)
+
+        assertTrue("Result must be success", result.isSuccess)
+        assertEquals(
+            "Strategy must be REFLECTION_CARD for undistorted REFLECTION entry",
+            ReframingLoop.ReframeStrategy.REFLECTION_CARD,
+            result.getOrThrow().strategy,
+        )
+    }
+
+    @Test
+    fun `streamStage3Intervention - REFLECTION with empty distortions emits REFLECTION_CARD tokens without invoking LLM`() = runTest {
+        val reframingLoop = loopWithErrorProvider()
+        val affectiveMap = ReframingLoop.AffectiveMapResult(0.1f, 0.0f, MoodLabel.ALIVE)
+        val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "")
+
+        val result = reframingLoop.streamStage3Intervention("Spent time at the park.", affectiveMap, diagnosis)
+
+        assertTrue("Result must be success", result.isSuccess)
+        val (strategy, flow) = result.getOrThrow()
+        assertEquals(
+            "Strategy must be REFLECTION_CARD",
+            ReframingLoop.ReframeStrategy.REFLECTION_CARD,
+            strategy,
+        )
+
+        val tokens = mutableListOf<String>()
+        var completed = false
+        flow.collect { llmResult ->
+            when (llmResult) {
+                is LlmResult.Token    -> tokens.add(llmResult.text)
+                is LlmResult.Complete -> completed = true
+                is LlmResult.Error    -> throw llmResult.cause
+            }
+        }
+        assertTrue("Flow must emit at least one token containing the card text", tokens.isNotEmpty())
+        assertTrue("Flow must complete", completed)
     }
 }

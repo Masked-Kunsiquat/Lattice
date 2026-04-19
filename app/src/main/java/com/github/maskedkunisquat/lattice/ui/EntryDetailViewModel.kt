@@ -6,8 +6,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
-import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
-import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TagDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
@@ -18,6 +16,8 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
+import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
+import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -54,8 +53,8 @@ class EntryDetailViewModel(
     val modelLoadState: StateFlow<ModelLoadState>,
     private val entryId: UUID,
     private val mentionDao: MentionDao,
-    private val personDao: PersonDao,
-    private val placeDao: PlaceDao,
+    private val peopleRepository: PeopleRepository,
+    private val placeRepository: PlaceRepository,
     private val tagDao: TagDao,
 ) : ViewModel() {
 
@@ -82,9 +81,9 @@ class EntryDetailViewModel(
                 val entry = (state as? EntryDetailState.Found)?.entry ?: return@collect
                 withContext(Dispatchers.IO) {
                     val mentions = mentionDao.getMentionsByEntry(entry.id)
-                    val people = mentions
-                        .mapNotNull { mention -> personDao.getPersonById(mention.personId).first() }
-                    val places = entry.placeIds.mapNotNull { placeDao.getById(it) }
+                    val personIds = mentions.map { it.personId }.toSet()
+                    val people = peopleRepository.getByIds(personIds)
+                    val places = placeRepository.getByIds(entry.placeIds.toSet())
                     val tags = entry.tagIds.mapNotNull { tagDao.getById(it) }
                     _tagsData.value = EntryTagsData(people, places, tags)
                 }
@@ -109,9 +108,16 @@ class EntryDetailViewModel(
                 val affectiveMap = reframingLoop.runStage1AffectiveMap(maskedText).getOrThrow()
                 val diagnosis    = reframingLoop.runStage2DiagnosisOfThought(maskedText).getOrThrow()
 
-                // Build UUID → entity maps for Stage 3 display-name substitution.
-                val personById = personDao.getPersons().first().associateBy { it.id }
-                val placeById  = placeDao.getAll().first().associateBy { it.id }
+                // Build UUID → entity maps for Stage 3 display-name substitution, scoped to
+                // only the UUIDs present in maskedText so we never fetch the full table.
+                val personUuids = PERSON_UUID_REGEX.findAll(maskedText)
+                    .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
+                    .toSet()
+                val placeUuids = PLACE_UUID_REGEX.findAll(maskedText)
+                    .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
+                    .toSet()
+                val personById = peopleRepository.getByIds(personUuids).associateBy { it.id }
+                val placeById  = placeRepository.getByIds(placeUuids).associateBy { it.id }
 
                 val (_, tokenFlow) = reframingLoop
                     .streamStage3Intervention(maskedText, affectiveMap, diagnosis, personById, placeById)
@@ -220,6 +226,11 @@ class EntryDetailViewModel(
     companion object {
         private const val TAG = "EntryDetailViewModel"
 
+        /** Matches [PERSON_UUID] placeholders in masked text for scoped entity fetching. */
+        private val PERSON_UUID_REGEX = Regex("""\[PERSON_([a-fA-F0-9\-]{36})\]""")
+        /** Matches [PLACE_UUID] placeholders in masked text for scoped entity fetching. */
+        private val PLACE_UUID_REGEX  = Regex("""\[PLACE_([a-fA-F0-9\-]{36})\]""")
+
         fun factory(app: LatticeApplication, entryId: UUID) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -231,8 +242,8 @@ class EntryDetailViewModel(
                         modelLoadState    = app.localFallbackProvider.modelLoadState,
                         entryId           = entryId,
                         mentionDao        = app.database.mentionDao(),
-                        personDao         = app.database.personDao(),
-                        placeDao          = app.database.placeDao(),
+                        peopleRepository  = app.peopleRepository,
+                        placeRepository   = app.placeRepository,
                         tagDao            = app.database.tagDao(),
                     ) as T
             }

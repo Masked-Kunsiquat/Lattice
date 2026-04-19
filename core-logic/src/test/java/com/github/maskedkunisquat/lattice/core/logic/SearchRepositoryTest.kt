@@ -26,6 +26,7 @@ class SearchRepositoryTest {
         override suspend fun incrementVibeScore(personId: UUID, delta: Float) = Unit
         override suspend fun deletePersonById(id: UUID) = Unit
         override fun searchByName(query: String): Flow<List<Person>> = flowOf(emptyList())
+        override suspend fun getPersonsByIds(ids: List<UUID>): List<Person> = emptyList()
     }
 
     private class FakePlaceDao : PlaceDao {
@@ -35,15 +36,17 @@ class SearchRepositoryTest {
         override fun searchByName(query: String): Flow<List<com.github.maskedkunisquat.lattice.core.data.model.Place>> = flowOf(emptyList())
         override suspend fun getById(id: UUID): com.github.maskedkunisquat.lattice.core.data.model.Place? = null
         override suspend fun getByName(name: String): com.github.maskedkunisquat.lattice.core.data.model.Place? = null
+        override suspend fun getPlacesByIds(ids: List<UUID>): List<com.github.maskedkunisquat.lattice.core.data.model.Place> = emptyList()
     }
 
     private fun entry(
         valence: Float,
         content: String,
+        timestamp: Long,
         hasEmbedding: Boolean = true,
     ) = JournalEntry(
         id = UUID.randomUUID(),
-        timestamp = System.currentTimeMillis(),
+        timestamp = timestamp,
         content = content,
         valence = valence,
         arousal = 0f,
@@ -85,9 +88,9 @@ class SearchRepositoryTest {
         val personId = UUID.randomUUID()
         val placeholder = "[PERSON_$personId]"
 
-        val aboveThreshold = entry(valence = 0.8f, content = "Had a great day with $placeholder.")
-        val belowThreshold = entry(valence = 0.3f, content = "Was okay with $placeholder.")
-        val atThreshold    = entry(valence = 0.5f, content = "Exactly at threshold with $placeholder.")
+        val aboveThreshold = entry(valence = 0.8f, content = "Had a great day with $placeholder.", timestamp = 1000L)
+        val belowThreshold = entry(valence = 0.3f, content = "Was okay with $placeholder.", timestamp = 2000L)
+        val atThreshold    = entry(valence = 0.5f, content = "Exactly at threshold with $placeholder.", timestamp = 3000L)
 
         val repo = makeRepo(listOf(aboveThreshold, belowThreshold, atThreshold))
         val results = repo.findEvidenceEntries(
@@ -104,8 +107,8 @@ class SearchRepositoryTest {
         val personId = UUID.randomUUID()
         val placeholder = "[PERSON_$personId]"
 
-        val withEmbedding    = entry(valence = 0.9f, content = "Great day with $placeholder.", hasEmbedding = true)
-        val withoutEmbedding = entry(valence = 0.9f, content = "Also good with $placeholder.", hasEmbedding = false)
+        val withEmbedding    = entry(valence = 0.9f, content = "Great day with $placeholder.", timestamp = 1000L, hasEmbedding = true)
+        val withoutEmbedding = entry(valence = 0.9f, content = "Also good with $placeholder.", timestamp = 2000L, hasEmbedding = false)
 
         val repo = makeRepo(listOf(withEmbedding, withoutEmbedding))
         val results = repo.findEvidenceEntries(
@@ -123,9 +126,9 @@ class SearchRepositoryTest {
 
         // Three entries all above the valence threshold and containing the placeholder.
         // makeRepo sorts by valence DESC, so the order is deterministic.
-        val highest = entry(valence = 0.95f, content = "Amazing day with $placeholder.")
-        val middle  = entry(valence = 0.85f, content = "Good day with $placeholder.")
-        val lowest  = entry(valence = 0.75f, content = "Nice day with $placeholder.")
+        val highest = entry(valence = 0.95f, content = "Amazing day with $placeholder.", timestamp = 1000L)
+        val middle  = entry(valence = 0.85f, content = "Good day with $placeholder.", timestamp = 2000L)
+        val lowest  = entry(valence = 0.75f, content = "Nice day with $placeholder.", timestamp = 3000L)
 
         val repo = makeRepo(listOf(highest, middle, lowest))
         val results = repo.findEvidenceEntries(
@@ -143,9 +146,9 @@ class SearchRepositoryTest {
         val personId = UUID.randomUUID()
         val placeholder = "[PERSON_$personId]"
 
-        val withPlaceholder    = entry(valence = 0.9f, content = "Great day with $placeholder.")
-        val withoutPlaceholder = entry(valence = 0.8f, content = "Great solo hike today.")
-        val belowThreshold     = entry(valence = 0.3f, content = "Rough day alone.")
+        val withPlaceholder    = entry(valence = 0.9f, content = "Great day with $placeholder.", timestamp = 1000L)
+        val withoutPlaceholder = entry(valence = 0.8f, content = "Great solo hike today.", timestamp = 2000L)
+        val belowThreshold     = entry(valence = 0.3f, content = "Rough day alone.", timestamp = 3000L)
 
         val repo = makeRepo(listOf(withPlaceholder, withoutPlaceholder, belowThreshold))
         val results = repo.findEvidenceEntries(
@@ -162,9 +165,9 @@ class SearchRepositoryTest {
         val placeholderA = "[PERSON_$personA]"
         val placeholderB = "[PERSON_$personB]"
 
-        val matchingEntry    = entry(valence = 0.9f, content = "Loved spending time with $placeholderA.")
-        val noPlaceholder    = entry(valence = 0.9f, content = "Had a great solo hike.")
-        val wrongPerson      = entry(valence = 0.9f, content = "Worked well with $placeholderB.")
+        val matchingEntry    = entry(valence = 0.9f, content = "Loved spending time with $placeholderA.", timestamp = 1000L)
+        val noPlaceholder    = entry(valence = 0.9f, content = "Had a great solo hike.", timestamp = 2000L)
+        val wrongPerson      = entry(valence = 0.9f, content = "Worked well with $placeholderB.", timestamp = 3000L)
 
         val repo = makeRepo(listOf(matchingEntry, noPlaceholder, wrongPerson))
         val results = repo.findEvidenceEntries(
@@ -180,9 +183,9 @@ class SearchRepositoryTest {
         val personId = UUID.randomUUID()
         val placeholder = "[PERSON_$personId]"
 
-        val positive = entry(valence = 0.8f, content = "Good time with $placeholder.")
-        val neutral  = entry(valence = 0.1f, content = "Just hung out with $placeholder.")
-        val negative = entry(valence = -0.5f, content = "Tough chat with $placeholder.")
+        val positive = entry(valence = 0.8f, content = "Good time with $placeholder.", timestamp = 1000L)
+        val neutral  = entry(valence = 0.1f, content = "Just hung out with $placeholder.", timestamp = 2000L)
+        val negative = entry(valence = -0.5f, content = "Tough chat with $placeholder.", timestamp = 3000L)
 
         val repo = makeRepo(listOf(positive, neutral, negative))
         val results = repo.findRecentEntriesForEntities(setOf(placeholder))
@@ -193,7 +196,7 @@ class SearchRepositoryTest {
     fun `findRecentEntriesForEntities - empty placeholders returns no entries`() = runTest {
         val personId = UUID.randomUUID()
         val placeholder = "[PERSON_$personId]"
-        val repo = makeRepo(listOf(entry(valence = 0.8f, content = "Good time with $placeholder.")))
+        val repo = makeRepo(listOf(entry(valence = 0.8f, content = "Good time with $placeholder.", timestamp = 1000L)))
         val results = repo.findRecentEntriesForEntities(emptySet())
         assertEquals(0, results.size)
     }
@@ -202,9 +205,30 @@ class SearchRepositoryTest {
     fun `findRecentEntriesForEntities - limit caps results`() = runTest {
         val personId = UUID.randomUUID()
         val placeholder = "[PERSON_$personId]"
-        val entries = (1..5).map { entry(valence = 0.5f, content = "Entry $it with $placeholder.") }
+        val entries = (1..5).mapIndexed { i, _ ->
+            entry(valence = 0.5f, content = "Entry ${i + 1} with $placeholder.", timestamp = 1000L * (i + 1))
+        }
         val repo = makeRepo(entries)
         val results = repo.findRecentEntriesForEntities(setOf(placeholder), limit = 2)
         assertEquals(2, results.size)
+    }
+
+    @Test
+    fun `findRecentEntriesForEntities - returns entries in newest-first order`() = runTest {
+        val personId = UUID.randomUUID()
+        val placeholder = "[PERSON_$personId]"
+        val base = 1_000L
+        // Create three entries with ascending timestamps so the expected order is newest → oldest.
+        val oldest  = entry(valence = 0.5f, content = "Oldest entry with $placeholder.",  timestamp = base)
+        val middle  = entry(valence = 0.5f, content = "Middle entry with $placeholder.",  timestamp = base + 1)
+        val newest  = entry(valence = 0.5f, content = "Newest entry with $placeholder.",  timestamp = base + 2)
+
+        val repo = makeRepo(listOf(oldest, middle, newest))
+        val results = repo.findRecentEntriesForEntities(setOf(placeholder))
+
+        assertEquals("Should return all three entries", 3, results.size)
+        assertEquals("First result must be newest", newest.id, results[0].id)
+        assertEquals("Second result must be middle", middle.id, results[1].id)
+        assertEquals("Third result must be oldest", oldest.id, results[2].id)
     }
 }

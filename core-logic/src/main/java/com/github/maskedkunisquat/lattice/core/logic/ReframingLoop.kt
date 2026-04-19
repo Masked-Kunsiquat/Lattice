@@ -194,10 +194,14 @@ class ReframingLoop(
                 fetchEvidenceEntries(maskedText)
             } else emptyList()
 
+            // Cloud gate: pseudonymous @name / !place tokens must not leave the device.
+            // Fall back to masked placeholders when the request would route to cloud.
+            val promptText = if (orchestrator.isCloudBound()) maskedText else displayText
+
             val reframe = collectTokens(
                 orchestrator.process(
                     buildInterventionPrompt(
-                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                        promptText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -255,8 +259,16 @@ class ReframingLoop(
         "FINAL_DISTORTIONS:"
 
 
+    /**
+     * Builds the Stage 3 LLM prompt.
+     *
+     * @param displayText Journal text with Stage 3 un-masking already applied —
+     *   `[PERSON_uuid]` / `[PLACE_uuid]` tokens have been replaced with pseudonymous
+     *   `@name` / `!place` display names. Callers that route to cloud must pass masked
+     *   text instead (see [runStage3Intervention]).
+     */
     internal fun buildInterventionPrompt(
-        maskedText: String,
+        displayText: String,
         strategy: ReframeStrategy,
         distortions: List<CognitiveDistortion>,
         baActivity: ActivityHierarchy? = null,
@@ -297,7 +309,7 @@ class ReframingLoop(
                 throw IllegalArgumentException("buildInterventionPrompt must not be called for REFLECTION_CARD — use buildReflectionCard instead.")
         }
 
-        return "Journal entry: \"$maskedText\"\n\n" +
+        return "Journal entry: \"$displayText\"\n\n" +
             distortionLine +
             evidenceBlock +
             "$techniqueBlock\n\n" +
@@ -347,8 +359,8 @@ class ReframingLoop(
         personById: Map<java.util.UUID, Person>,
         placeById: Map<java.util.UUID, Place>,
     ): String {
-        val atNames  = Regex("""@(\S+)""").findAll(displayText).map { "@${it.groupValues[1]}" }.toList()
-        val bangNames = Regex("""!(\S+)""").findAll(displayText).map { "!${it.groupValues[1]}" }.toList()
+        val atNames   = Regex("""@(\w+(?:\s+\w+)*)""").findAll(displayText).map { "@${it.groupValues[1]}" }.toList()
+        val bangNames = Regex("""!(\w+(?:\s+\w+)*)""").findAll(displayText).map { "!${it.groupValues[1]}" }.toList()
         val entities  = (atNames + bangNames).distinct()
         val entityList = when {
             entities.isEmpty() -> "these connections"
@@ -478,9 +490,11 @@ class ReframingLoop(
                 val evidenceEntries = if (affectiveMap.valence < 0f) {
                     fetchEvidenceEntries(maskedText)
                 } else emptyList()
+                // Cloud gate: pseudonymous @name / !place tokens must not leave the device.
+                val promptText = if (orchestrator.isCloudBound()) maskedText else displayText
                 val flow = orchestrator.process(
                     buildInterventionPrompt(
-                        displayText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                        promptText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
