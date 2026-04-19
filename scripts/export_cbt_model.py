@@ -4,22 +4,8 @@ export_cbt_model.py
 Converts a merged Gemma 3 1B HuggingFace model → LiteRT INT4 .litertlm
 for use with LiteRT-LM / LocalFallbackProvider in Lattice.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IMPORTANT — run setup FIRST, in its own cell, before anything else:
-
-    # ── Cell 1: setup (run once, do NOT restart after) ──────────────────────
-    import subprocess, sys
-    # Remove Colab's pre-installed TF so litert-torch can own it
-    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y",
-                    "tensorflow", "tensorflow-cpu", "tensorflow-gpu",
-                    "tf-keras", "keras"], capture_output=True)
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-                    "litert-torch>=0.8.0", "huggingface_hub"], check=True)
-    print("Setup done — paste Cell 2 and run (no restart needed)")
-
-    # ── Cell 2: paste this entire file and run ───────────────────────────────
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Run colab_setup.py as Cell 1 first (fresh runtime, before any imports).
+Then paste or exec() this file as Cell 2.
 
 Pipeline:
     merged HF safetensors (bf16)
