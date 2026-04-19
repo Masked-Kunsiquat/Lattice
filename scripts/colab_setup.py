@@ -186,14 +186,8 @@ try:
             _model_type_cls = _cls_name
             break
 
-    import inspect
     print(f"\n[OK] litert-torch {litert_torch.__version__} — generative submodule present")
-    print(f"     build_litertlm signature: {inspect.signature(build_litertlm)}")
-    # Inspect the protobuf model-type module
-    _pb2 = getattr(_builder_mod, "llm_model_type_pb2", None)
-    if _pb2 is not None:
-        print(f"     llm_model_type_pb2 exports: {[n for n in dir(_pb2) if not n.startswith('_')]}")
-    print("\nRun Cell 2 (export_cbt_model.py) now.")
+    print("Run Cell 2 (export_cbt_model.py) now.")
 except Exception as e:
     print(f"\n[FAIL] {type(e).__name__}: {e}")
     print("Check output above for the specific import that failed.")

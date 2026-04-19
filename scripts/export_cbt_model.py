@@ -221,7 +221,7 @@ def check_deps() -> None:
         missing.append(f"litert-torch>=0.8.0 (import failed: {e})")
     try:
         from litert_torch.generative.utilities.litertlm_builder import (  # noqa: F401
-            build_litertlm, LlmModelType,
+            build_litertlm,
         )
     except Exception as e:
         missing.append(f"litert_torch.generative (import failed: {e})")
@@ -351,14 +351,18 @@ def run_build_litertlm(
     model_dir: pathlib.Path,
     tflite_dir: pathlib.Path,
     out_path: pathlib.Path,
+    context: int,
 ) -> None:
     """
     Bundles .tflite + tokenizer into a .litertlm archive.
     Searches for tokenizer.model in tflite_dir first, then model_dir.
+
+    litert-torch 0.8.0 API (different from earlier versions):
+        - llm_model_type is now a string ('gemma3'), not an enum
+        - workdir (temp dir for intermediate files) is required
+        - context_length (KV cache size) is required
     """
-    from litert_torch.generative.utilities.litertlm_builder import (
-        build_litertlm, LlmModelType,
-    )
+    from litert_torch.generative.utilities.litertlm_builder import build_litertlm
 
     tokenizer_path = tflite_dir / "tokenizer.model"
     if not tokenizer_path.exists():
@@ -369,12 +373,17 @@ def run_build_litertlm(
             "export_hf should copy it alongside the .tflite — check step 1 output."
         )
 
-    print(f"Building .litertlm …")
+    workdir = tflite_dir / "_litertlm_work"
+    workdir.mkdir(exist_ok=True)
+
+    print("Building .litertlm …")
     build_litertlm(
         tflite_model_path=str(tflite_path),
-        tokenizer_model_path=str(tokenizer_path),
+        workdir=str(workdir),
         output_path=str(out_path),
-        llm_model_type=LlmModelType.GEMMA,
+        context_length=context,
+        tokenizer_model_path=str(tokenizer_path),
+        llm_model_type="gemma3",
     )
 
 
@@ -467,6 +476,7 @@ def main() -> None:
         model_dir=model_dir,
         tflite_dir=tflite_dir,
         out_path=out_path,
+        context=args.context,
     )
 
     elapsed = time.time() - t0
