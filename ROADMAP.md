@@ -160,12 +160,19 @@ The deeper problem: for positive/neutral entries with no cognitive distortions, 
 
 ### Model-level fix (long-term)
 
-- [ ] **CBT LoRA fine-tune** — fine-tune a LoRA adapter on top of Gemma 3 1B specifically for CBT reframing. LoRA weights are ~10–50 MB and load on top of existing Gemma weights; LiteRT-LM supports adapter loading. This is the structural fix that eliminates prompt-engineering fragility entirely. Requires:
-  - Training data curation: generate `(entry, strategy, distortions) → reframe` pairs using Claude as the labeler with the exact CBT guidelines as the system prompt (appropriate use of a frontier model to label data for a smaller model's fine-tune)
-  - Offline fine-tuning script (Python, LoRA via HuggingFace PEFT)
-  - Adapter packaging and upload to HuggingFace (`masked-kunsiquat/` repo)
-  - `LocalFallbackProvider` adapter-loading support
-  - `ModelDownloadWorker` extended to optionally fetch and validate the adapter file alongside the base model
+- [ ] **CBT LoRA fine-tune** — fine-tune a LoRA adapter on top of Gemma 3 1B specifically for CBT reframing, then merge weights into a new standalone model file. This is the structural fix that eliminates prompt-engineering fragility entirely.
+
+  > **Architecture note:** LiteRT-LM 0.10.x has no adapter/LoRA loading API — `EngineConfig` accepts a single model path only. The practical path is: train LoRA offline → `peft.merge_and_unload()` → export merged model to LiteRT INT4 → distribute as `gemma3-1b-it-cbt-int4.litertlm`. No Android-side adapter hook is needed; the CBT model is a drop-in replacement for the base model file.
+
+  **Python pipeline** (`scripts/`):
+  - [ ] `curate_cbt_training_data.py` — calls Claude API to generate `(masked_entry, strategy, distortions) → reframe` pairs; uses `ReframingLoop.INTERVENTION_SYSTEM` verbatim as the labeler system prompt; outputs `cbt_training_data.jsonl`
+  - [ ] `finetune_cbt_lora.py` — HuggingFace PEFT LoRA on `google/gemma-3-1b-it`; trains on curated pairs in instruction-tuning format; checkpoints to `checkpoints/cbt_lora/`
+  - [ ] `export_cbt_model.py` — merges LoRA weights via `peft.merge_and_unload()`, quantizes to INT4, converts to LiteRT format, smoke-tests with a sample prompt; outputs `gemma3-1b-it-cbt-int4.litertlm`
+
+  **Android integration**:
+  - [ ] `ModelDownloadWorker` — add `CBT_MODEL_ASSET` / `CBT_URL` constants; new `enqueueCbtDownload()` entry point mirroring the existing base-model flow
+  - [ ] `LocalFallbackProvider` — prefer `gemma3-1b-it-cbt-int4.litertlm` from `filesDir` when present; fall back to base tier selection if absent
+  - [ ] Upload merged model to HuggingFace (`masked-kunsiquat/gemma-3-1b-it-litert`) and wire URL into `ModelDownloadWorker`
 
 ---
 
