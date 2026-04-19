@@ -86,13 +86,23 @@ def parse_args() -> argparse.Namespace:
 def hf_login() -> None:
     token = os.environ.get("HF_TOKEN")
     if not token and _in_notebook:
+        # Colab
         try:
             from google.colab import userdata
             token = userdata.get("HF_TOKEN")
         except Exception:
             pass
+    if not token and _in_notebook:
+        # Kaggle
+        try:
+            from kaggle_secrets import UserSecretsClient
+            token = UserSecretsClient().get_secret("HF_TOKEN")
+        except Exception:
+            pass
     if not token:
-        print("[warn] No HF_TOKEN — gated model download and upload will fail.")
+        print("[warn] No HF_TOKEN found — gated model download and upload will fail.")
+        print("  Colab: add HF_TOKEN to Colab Secrets (key icon in sidebar)")
+        print("  Kaggle: Notebook settings → Secrets → Add HF_TOKEN → Attach to notebook")
         return
     from huggingface_hub import login
     login(token=token, add_to_git_credential=False)

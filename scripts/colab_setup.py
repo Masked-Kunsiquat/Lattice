@@ -1,15 +1,16 @@
 """
 colab_setup.py
 ==============
-Run this as Cell 1 in a FRESH Colab notebook before anything else.
-Do NOT restart after — tensorflow was never imported, so no restart needed.
+Run this as Cell 1 in a FRESH Colab or Kaggle notebook before anything else.
+Do NOT restart after — TF was never imported, so no restart needed.
 
-    # Cell 1
-    exec(open("colab_setup.py").read())   # if mounted from Drive
-    # — or paste this file directly —
+    # Cell 1 — paste and run this file
+    # Cell 2 — paste and run export_cbt_model.py
 
-    # Cell 2
-    exec(open("export_cbt_model.py").read())
+Kaggle setup before running:
+    1. Notebook settings → Internet → On
+    2. Add Secrets → Name: HF_TOKEN, Value: your HuggingFace token → Attach to notebook
+    3. Accelerator → None  (CPU, 30 GB RAM — enough for 1B model export)
 """
 
 import subprocess
