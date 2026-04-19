@@ -175,12 +175,26 @@ print("Verifying litert_torch.generative …")
 print(f"{'─'*60}")
 try:
     import litert_torch
-    from litert_torch.generative.utilities.litertlm_builder import (
-        build_litertlm,
-        LlmModelType,
-    )
+    import litert_torch.generative.utilities.litertlm_builder as _builder_mod
+    from litert_torch.generative.utilities.litertlm_builder import build_litertlm
+
+    # The model-type enum has been renamed across versions. Find whatever is
+    # available so export_cbt_model.py knows what name to use.
+    _model_type_cls = None
+    for _cls_name in ("LlmModelType", "GemmaModelType", "ModelType", "LlmType"):
+        if hasattr(_builder_mod, _cls_name):
+            _model_type_cls = _cls_name
+            break
+
     print(f"\n[OK] litert-torch {litert_torch.__version__} — generative submodule present")
-    print("Run Cell 2 (export_cbt_model.py) now.")
+    if _model_type_cls:
+        print(f"     model-type enum : {_model_type_cls}")
+        _cls = getattr(_builder_mod, _model_type_cls)
+        print(f"     available values: {[m for m in dir(_cls) if not m.startswith('_')]}")
+    else:
+        # Print all public names so we can identify the right one
+        print(f"     builder exports : {[n for n in dir(_builder_mod) if not n.startswith('_')]}")
+    print("\nRun Cell 2 (export_cbt_model.py) now.")
 except Exception as e:
     print(f"\n[FAIL] {type(e).__name__}: {e}")
     print("Check output above for the specific import that failed.")
