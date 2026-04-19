@@ -98,6 +98,16 @@ class LocalFallbackProvider(
     }
 
     /**
+     * Triggers the [ModelDownloadWorker] to fetch the CBT fine-tuned model file.
+     * Once downloaded, [initialize] will automatically prefer it over the base tier file.
+     * Routes through [ModelDownloadWorker.UNIQUE_WORK_NAME_CBT] so it runs independently
+     * of any in-progress base model download.
+     */
+    fun downloadCbtModel() {
+        modelDownloader.enqueue(MODEL_FILE_CBT, "$HF_BASE_URL/$MODEL_FILE_CBT", MODEL_SHA256[MODEL_FILE_CBT])
+    }
+
+    /**
      * Creates the [Engine] and marks the provider ready.
      * Safe to call multiple times — no-op once engine is loaded.
      * Automatically resets after a failure so callers can retry (e.g. after
@@ -242,6 +252,16 @@ class LocalFallbackProvider(
      * not a catchable exception — so we must guard the NPU path before attempting init.
      */
     private fun selectModelAndBackends(): Pair<String, List<Backend>> {
+        // Prefer the CBT fine-tuned model when it has been downloaded.
+        // It is a standard INT4 model so GPU→CPU backends apply on all devices.
+        val cbtFile = File(context.filesDir, MODEL_FILE_CBT)
+        if (cbtFile.exists() && cbtFile.length() > 100_000_000L) {
+            val backends = if (!openClFailed) listOf(Backend.GPU(), Backend.CPU())
+                           else listOf(Backend.CPU())
+            Log.i(TAG, "CBT model present — using $MODEL_FILE_CBT")
+            return MODEL_FILE_CBT to backends
+        }
+
         val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val dispatchLibAvailable = java.io.File(nativeLibDir, "libpenguin.so").exists()
@@ -290,6 +310,11 @@ class LocalFallbackProvider(
         // For all other devices. ~584 MB.
         const val MODEL_FILE_INT4  = "gemma3-1b-it-int4.litertlm"
 
+        // CBT fine-tuned model — merged LoRA weights, same INT4 quantisation as MODEL_FILE_INT4.
+        // Preferred over the base tier files when present in filesDir.
+        // Download via downloadCbtModel(); upload to HF repo after offline training completes.
+        const val MODEL_FILE_CBT   = "gemma3-1b-it-cbt-int4.litertlm"
+
         // Convenience alias — the file this device will download/use.
         // (Used by external callers that don't have a Context to call selectModelAndBackends.)
         const val MODEL_FILE = MODEL_FILE_INT4
@@ -303,6 +328,7 @@ class LocalFallbackProvider(
             MODEL_FILE_ELITE to null,
             MODEL_FILE_ULTRA to null,
             MODEL_FILE_INT4  to null,
+            MODEL_FILE_CBT   to null,
         )
     }
 }
