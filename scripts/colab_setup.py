@@ -48,6 +48,25 @@ _run(
     "Installing litert-torch + huggingface_hub",
 )
 
+# ── 2b. Restore torch / torchvision after litert-torch install ────────────────
+# litert-torch 0.8.0 pins torch==2.9.x and can downgrade it from the system
+# version (Kaggle ships 2.10.0). torchvision 0.25.0 is compiled against
+# 2.10.0 and breaks when torch is downgraded, which cascades into
+# transformers failing to import → AttentionInterface not found →
+# export_hf subprocess crashes.
+# Reinstalling matching versions after litert-torch restores the environment.
+_run(
+    [sys.executable, "-m", "pip", "install", "-q",
+     "torch==2.10.0", "torchvision==0.25.0"],
+    "Restoring torch 2.10.0 + torchvision (litert-torch may have downgraded them)",
+)
+# transformers.AttentionInterface was added in 4.51.0; older system images
+# on Kaggle/Colab may not have it.
+_run(
+    [sys.executable, "-m", "pip", "install", "-q", "transformers>=4.51.0"],
+    "Ensuring transformers>=4.51.0 (AttentionInterface required by export_hf)",
+)
+
 # ── 3. Stub broken torchao imports before litert_torch loads ─────────────────
 # litert_torch imports torchao.quantization.pt2e which was removed in torchao
 # ~0.5+. We never call the PT2E quantizer — it just gets imported and crashes.
