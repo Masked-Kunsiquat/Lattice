@@ -4,6 +4,9 @@ import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
+import com.github.maskedkunisquat.lattice.core.data.model.RelationshipType
 import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -509,14 +512,34 @@ class ReframingLoopTest {
     }
 
     @Test
-    fun `selectStrategy - strengths affirmation for positive valence`() {
+    fun `selectStrategy - reflection for low-positive valence below threshold`() {
+        assertEquals(
+            ReframingLoop.ReframeStrategy.REFLECTION,
+            ReframingLoop.selectStrategy(0.0f, 0.7f)   // zero valence
+        )
+        assertEquals(
+            ReframingLoop.ReframeStrategy.REFLECTION,
+            ReframingLoop.selectStrategy(0.3f, 0.7f)   // below threshold
+        )
+        assertEquals(
+            ReframingLoop.ReframeStrategy.REFLECTION,
+            ReframingLoop.selectStrategy(0.39f, -0.5f) // just below threshold, Q4 arousal
+        )
+    }
+
+    @Test
+    fun `selectStrategy - strengths affirmation for high-positive valence at or above threshold`() {
         assertEquals(
             ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
-            ReframingLoop.selectStrategy(0.3f, 0.7f)  // Q1
+            ReframingLoop.selectStrategy(0.4f, 0.7f)   // exactly at threshold
         )
         assertEquals(
             ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
-            ReframingLoop.selectStrategy(0.6f, -0.4f)  // Q4
+            ReframingLoop.selectStrategy(0.6f, -0.4f)  // well above threshold, Q4
+        )
+        assertEquals(
+            ReframingLoop.ReframeStrategy.STRENGTHS_AFFIRMATION,
+            ReframingLoop.selectStrategy(1.0f, 1.0f)   // max positive
         )
     }
 
@@ -533,7 +556,7 @@ class ReframingLoopTest {
     @Test
     fun `buildInterventionPrompt - Q2 prompt contains Socratic techniques`() {
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "I know [PERSON_abc] is angry at me.",
+            displayText = "I know [PERSON_abc] is angry at me.",
             strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
             distortions = listOf(CognitiveDistortion.MIND_READING),
         )
@@ -547,24 +570,169 @@ class ReframingLoopTest {
     @Test
     fun `buildInterventionPrompt - Q3 prompt contains Behavioral Activation techniques`() {
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "Nothing ever works out for me.",
+            displayText = "Nothing ever works out for me.",
             strategy = ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
             distortions = listOf(CognitiveDistortion.OVERGENERALIZATION),
         )
         assertTrue(prompt.contains("Overgeneralization"))
         assertTrue(prompt.contains("avoidance", ignoreCase = true))
-        assertTrue(prompt.contains("temporary state", ignoreCase = true))
+        assertTrue(prompt.contains("temporary", ignoreCase = true))
+    }
+
+    @Test
+    fun `buildInterventionPrompt - reflection prompt asks what entry reveals about what matters`() {
+        val prompt = loop.buildInterventionPrompt(
+            displayText = "meeting up with [PERSON_abc] later. might go to the park.",
+            strategy = ReframingLoop.ReframeStrategy.REFLECTION,
+            distortions = emptyList(),
+        )
+        assertTrue(prompt.contains("reveals", ignoreCase = true))
+        assertTrue(prompt.contains("matters", ignoreCase = true))
+        // Should not contain strengths-affirmation or BA-specific language
+        assertFalse(prompt.contains("strength", ignoreCase = true))
+        assertFalse(prompt.contains("avoidance", ignoreCase = true))
     }
 
     @Test
     fun `buildInterventionPrompt - empty distortions produces no-distortion context`() {
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "test",
+            displayText = "test",
             strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
             distortions = emptyList(),
         )
         // When distortions is empty, no distortion line is injected into the prompt.
         assertFalse(prompt.contains("Distortions present:"))
+    }
+
+    @Test
+    fun `buildReflectionCard - captures multi-word place names and strips trailing punctuation`() {
+        val card = loop.buildReflectionCard(
+            displayText = "Saw @Alice, went to !Central Park.",
+            evidenceEntries = emptyList(),
+            personById = emptyMap(),
+            placeById = emptyMap(),
+        )
+        // Both @Alice (stripped of comma) and !Central Park (multi-word) must appear in entityList.
+        assertTrue("@Alice must be captured without trailing comma", card.contains("@Alice"))
+        assertTrue("!Central Park must be captured as multi-word entity", card.contains("!Central Park"))
+    }
+
+    // ── buildReflectionCard ──────────────────────────────────────────────────
+
+    @Test
+    fun `buildReflectionCard - uses evidence snippets when available`() {
+        val personId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+        val person = Person(id = personId, firstName = "Alice", lastName = null, nickname = null,
+            relationshipType = RelationshipType.FRIEND, vibeScore = 0f, isFavorite = false)
+        val evidence = JournalEntry(
+            id = UUID.randomUUID(), timestamp = 0L,
+            content = "Had a great lunch with [PERSON_00000000-0000-0000-0000-000000000001].",
+            valence = 0.8f, arousal = 0.2f, moodLabel = "SERENE", embedding = FloatArray(384),
+        )
+        val card = loop.buildReflectionCard(
+            displayText = "Hanging out with @Alice later.",
+            evidenceEntries = listOf(evidence),
+            personById = mapOf(personId to person),
+            placeById = emptyMap(),
+        )
+        assertTrue(card.contains("@Alice"))
+        assertTrue(card.contains("Had a great lunch with @Alice"))
+    }
+
+    @Test
+    fun `buildReflectionCard - falls back to template when no evidence`() {
+        val card = loop.buildReflectionCard(
+            displayText = "Hanging out with @Alice later.",
+            evidenceEntries = emptyList(),
+            personById = emptyMap(),
+            placeById = emptyMap(),
+        )
+        assertTrue(card.contains("@Alice"))
+        assertTrue(card.contains("matters", ignoreCase = true))
+    }
+
+    @Test
+    fun `buildReflectionCard - generic fallback when no entities in entry`() {
+        val card = loop.buildReflectionCard(
+            displayText = "Had a quiet evening.",
+            evidenceEntries = emptyList(),
+            personById = emptyMap(),
+            placeById = emptyMap(),
+        )
+        assertTrue(card.contains("these connections", ignoreCase = true))
+    }
+
+    // ── buildDisplayText ─────────────────────────────────────────────────────
+
+    @Test
+    fun `buildDisplayText - replaces PERSON token with at-nickname when nickname present`() {
+        val personId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+        val person = Person(
+            id = personId,
+            firstName = "John",
+            lastName = "Smith",
+            nickname = "JJ",
+            relationshipType = RelationshipType.FRIEND,
+            vibeScore = 0f,
+            isFavorite = false,
+        )
+        val result = loop.buildDisplayText(
+            maskedText = "Hanging out with [PERSON_00000000-0000-0000-0000-000000000001] today.",
+            personById = mapOf(personId to person),
+            placeById  = emptyMap(),
+        )
+        assertEquals("Hanging out with @JJ today.", result)
+    }
+
+    @Test
+    fun `buildDisplayText - falls back to firstName when nickname is null`() {
+        val personId = UUID.fromString("00000000-0000-0000-0000-000000000002")
+        val person = Person(
+            id = personId,
+            firstName = "Alice",
+            lastName = null,
+            nickname = null,
+            relationshipType = RelationshipType.FRIEND,
+            vibeScore = 0f,
+            isFavorite = false,
+        )
+        val result = loop.buildDisplayText(
+            maskedText = "Saw [PERSON_00000000-0000-0000-0000-000000000002] at the event.",
+            personById = mapOf(personId to person),
+            placeById  = emptyMap(),
+        )
+        assertEquals("Saw @Alice at the event.", result)
+    }
+
+    @Test
+    fun `buildDisplayText - replaces PLACE token with bang-placeName`() {
+        val placeId = UUID.fromString("00000000-0000-0000-0000-000000000010")
+        val place = Place(
+            id = placeId,
+            name = "Central Park",
+        )
+        val result = loop.buildDisplayText(
+            maskedText = "Went to [PLACE_00000000-0000-0000-0000-000000000010] yesterday.",
+            personById = emptyMap(),
+            placeById  = mapOf(placeId to place),
+        )
+        assertEquals("Went to !Central Park yesterday.", result)
+    }
+
+    @Test
+    fun `buildDisplayText - unknown UUID tokens are left unchanged`() {
+        val result = loop.buildDisplayText(
+            maskedText = "Met [PERSON_00000000-0000-0000-0000-000000000099] at [PLACE_00000000-0000-0000-0000-000000000099].",
+            personById = emptyMap(),
+            placeById  = emptyMap(),
+        )
+        assertEquals("Met [PERSON_00000000-0000-0000-0000-000000000099] at [PLACE_00000000-0000-0000-0000-000000000099].", result)
+    }
+
+    @Test
+    fun `buildDisplayText - returns maskedText unchanged when both maps are empty`() {
+        val input = "Some text with [PERSON_00000000-0000-0000-0000-000000000001] inside."
+        assertEquals(input, loop.buildDisplayText(input, emptyMap(), emptyMap()))
     }
 
     // ── Stage 3: end-to-end flow ──────────────────────────────────────────────
@@ -704,7 +872,7 @@ class ReframingLoopTest {
             valueCategory = "health"
         )
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "I feel exhausted and hopeless.",
+            displayText = "I feel exhausted and hopeless.",
             strategy = ReframingLoop.ReframeStrategy.BEHAVIORAL_ACTIVATION,
             distortions = emptyList(),
             baActivity = activity,
@@ -727,7 +895,7 @@ class ReframingLoopTest {
             embedding = FloatArray(384),
         )
         val prompt = loop.buildInterventionPrompt(
-            maskedText = "I feel [PERSON_abc] is angry at me.",
+            displayText = "I feel [PERSON_abc] is angry at me.",
             strategy = ReframingLoop.ReframeStrategy.SOCRATIC_REALITY_TESTING,
             distortions = emptyList(),
             evidenceEntries = listOf(evidence),
@@ -740,5 +908,80 @@ class ReframingLoopTest {
             "Evidence entry content must be present in prompt",
             prompt.contains("[PERSON_abc] was kind and supportive yesterday.")
         )
+    }
+
+    // ── Distortion gate: end-to-end ───────────────────────────────────────────
+
+    /**
+     * A provider that records whether it was ever called and throws if it is,
+     * so we can assert the LLM was NOT invoked in the distortion-gate path.
+     */
+    private class ErrorOnCallProvider(override val id: String) : LlmProvider {
+        override suspend fun isAvailable() = true
+        override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> =
+            kotlinx.coroutines.flow.flow {
+                throw AssertionError("LLM provider must not be called for REFLECTION_CARD path")
+            }
+    }
+
+    private fun loopWithErrorProvider(): ReframingLoop {
+        val provider = ErrorOnCallProvider("error_local")
+        val orchestrator = LlmOrchestrator(
+            nanoProvider = object : LlmProvider {
+                override val id = "nano"
+                override suspend fun isAvailable() = false
+                override fun process(prompt: String, systemInstruction: String?): Flow<LlmResult> = flowOf()
+            },
+            localFallbackProvider = provider,
+            transitEventDao = FakeTransitEventDao(),
+            cloudEnabled = { false },
+        )
+        return ReframingLoop(orchestrator)
+    }
+
+    @Test
+    fun `runStage3Intervention - REFLECTION with empty distortions returns REFLECTION_CARD without invoking LLM`() = runTest {
+        val reframingLoop = loopWithErrorProvider()
+        // Low-positive valence → REFLECTION strategy; empty distortions → distortion gate fires.
+        val affectiveMap = ReframingLoop.AffectiveMapResult(0.1f, 0.0f, MoodLabel.ALIVE)
+        val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "")
+
+        val result = reframingLoop.runStage3Intervention("Spent time at the park.", affectiveMap, diagnosis)
+
+        assertTrue("Result must be success", result.isSuccess)
+        assertEquals(
+            "Strategy must be REFLECTION_CARD for undistorted REFLECTION entry",
+            ReframingLoop.ReframeStrategy.REFLECTION_CARD,
+            result.getOrThrow().strategy,
+        )
+    }
+
+    @Test
+    fun `streamStage3Intervention - REFLECTION with empty distortions emits REFLECTION_CARD tokens without invoking LLM`() = runTest {
+        val reframingLoop = loopWithErrorProvider()
+        val affectiveMap = ReframingLoop.AffectiveMapResult(0.1f, 0.0f, MoodLabel.ALIVE)
+        val diagnosis = ReframingLoop.DiagnosisResult(emptyList(), "")
+
+        val result = reframingLoop.streamStage3Intervention("Spent time at the park.", affectiveMap, diagnosis)
+
+        assertTrue("Result must be success", result.isSuccess)
+        val (strategy, flow) = result.getOrThrow()
+        assertEquals(
+            "Strategy must be REFLECTION_CARD",
+            ReframingLoop.ReframeStrategy.REFLECTION_CARD,
+            strategy,
+        )
+
+        val tokens = mutableListOf<String>()
+        var completed = false
+        flow.collect { llmResult ->
+            when (llmResult) {
+                is LlmResult.Token    -> tokens.add(llmResult.text)
+                is LlmResult.Complete -> completed = true
+                is LlmResult.Error    -> throw llmResult.cause
+            }
+        }
+        assertTrue("Flow must emit at least one token containing the card text", tokens.isNotEmpty())
+        assertTrue("Flow must complete", completed)
     }
 }

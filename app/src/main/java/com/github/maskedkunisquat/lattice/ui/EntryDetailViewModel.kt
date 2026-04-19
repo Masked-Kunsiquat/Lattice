@@ -6,8 +6,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.lattice.LatticeApplication
 import com.github.maskedkunisquat.lattice.core.data.dao.MentionDao
-import com.github.maskedkunisquat.lattice.core.data.dao.PersonDao
-import com.github.maskedkunisquat.lattice.core.data.dao.PlaceDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TagDao
 import com.github.maskedkunisquat.lattice.core.data.dao.TransitEventDao
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
@@ -18,6 +16,8 @@ import com.github.maskedkunisquat.lattice.core.data.model.TransitEvent
 import com.github.maskedkunisquat.lattice.core.logic.JournalRepository
 import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
+import com.github.maskedkunisquat.lattice.core.logic.PeopleRepository
+import com.github.maskedkunisquat.lattice.core.logic.PlaceRepository
 import com.github.maskedkunisquat.lattice.core.logic.ReframingLoop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -54,8 +53,8 @@ class EntryDetailViewModel(
     val modelLoadState: StateFlow<ModelLoadState>,
     private val entryId: UUID,
     private val mentionDao: MentionDao,
-    private val personDao: PersonDao,
-    private val placeDao: PlaceDao,
+    private val peopleRepository: PeopleRepository,
+    private val placeRepository: PlaceRepository,
     private val tagDao: TagDao,
 ) : ViewModel() {
 
@@ -82,11 +81,14 @@ class EntryDetailViewModel(
                 val entry = (state as? EntryDetailState.Found)?.entry ?: return@collect
                 withContext(Dispatchers.IO) {
                     val mentions = mentionDao.getMentionsByEntry(entry.id)
-                    val people = mentions
-                        .mapNotNull { mention -> personDao.getPersonById(mention.personId).first() }
-                    val places = entry.placeIds.mapNotNull { placeDao.getById(it) }
+                    val personIdList = mentions.map { it.personId }.distinct()
+                    val placeIdList = entry.placeIds.distinct()
+                    val peopleById = peopleRepository.getByIds(personIdList.toSet()).associateBy { it.id }
+                    val placesById = placeRepository.getByIds(placeIdList.toSet()).associateBy { it.id }
+                    val peopleOrdered = personIdList.mapNotNull { peopleById[it] }
+                    val placesOrdered = placeIdList.mapNotNull { placesById[it] }
                     val tags = entry.tagIds.mapNotNull { tagDao.getById(it) }
-                    _tagsData.value = EntryTagsData(people, places, tags)
+                    _tagsData.value = EntryTagsData(peopleOrdered, placesOrdered, tags)
                 }
             }
         }
@@ -108,6 +110,10 @@ class EntryDetailViewModel(
 
                 val affectiveMap = reframingLoop.runStage1AffectiveMap(maskedText).getOrThrow()
                 val diagnosis    = reframingLoop.runStage2DiagnosisOfThought(maskedText).getOrThrow()
+
+                // Pass empty entity maps — real names must not enter Stage 3 prompts.
+                // [PERSON_uuid] / [PLACE_uuid] tokens remain in the prompt text; the LLM
+                // output is unmasked via PiiShield.unmask() at the UI display layer only.
                 val (_, tokenFlow) = reframingLoop
                     .streamStage3Intervention(maskedText, affectiveMap, diagnosis)
                     .getOrThrow()
@@ -226,8 +232,8 @@ class EntryDetailViewModel(
                         modelLoadState    = app.localFallbackProvider.modelLoadState,
                         entryId           = entryId,
                         mentionDao        = app.database.mentionDao(),
-                        personDao         = app.database.personDao(),
-                        placeDao          = app.database.placeDao(),
+                        peopleRepository  = app.peopleRepository,
+                        placeRepository   = app.placeRepository,
                         tagDao            = app.database.tagDao(),
                     ) as T
             }

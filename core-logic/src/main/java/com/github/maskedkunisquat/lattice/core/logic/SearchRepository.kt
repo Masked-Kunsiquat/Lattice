@@ -88,6 +88,32 @@ class SearchRepository(
     }
 
     /**
+     * Finds the most recent journal entries that reference at least one placeholder from
+     * [placeholders], with no valence filter. Used for the REFLECTION retrieval card path
+     * where we want to surface what the writer has said about these people/places before,
+     * regardless of emotional tone.
+     *
+     * Returns an empty list when [placeholders] is empty — a card without entity anchoring
+     * would be meaningless.
+     *
+     * @param placeholders Set of `[PERSON_UUID]` or `[PLACE_UUID]` tokens.
+     * @param limit Maximum number of entries to return. Defaults to 3.
+     */
+    suspend fun findRecentEntriesForEntities(
+        placeholders: Set<String>,
+        limit: Int = 3,
+    ): List<JournalEntry> = withContext(Dispatchers.Default) {
+        if (placeholders.isEmpty()) return@withContext emptyList()
+        journalDao.getAllEntries()
+            .filter { entry ->
+                val c = entry.content
+                c != null && entry.embedding.any { it != 0f } && placeholders.any { it in c }
+            }
+            .sortedByDescending { it.timestamp }
+            .take(limit)
+    }
+
+    /**
      * Computes the cosine similarity between two 384-dimensional float vectors.
      * Returns 0f when either vector is the zero-vector (no valid direction).
      */

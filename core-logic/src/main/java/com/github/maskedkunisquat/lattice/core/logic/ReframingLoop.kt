@@ -3,6 +3,8 @@ package com.github.maskedkunisquat.lattice.core.logic
 import com.github.maskedkunisquat.lattice.core.data.dao.ActivityHierarchyDao
 import com.github.maskedkunisquat.lattice.core.data.model.ActivityHierarchy
 import com.github.maskedkunisquat.lattice.core.data.model.JournalEntry
+import com.github.maskedkunisquat.lattice.core.data.model.Person
+import com.github.maskedkunisquat.lattice.core.data.model.Place
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -165,9 +167,20 @@ class ReframingLoop(
         maskedText: String,
         affectiveMap: AffectiveMapResult,
         diagnosis: DiagnosisResult,
+        personById: Map<java.util.UUID, Person> = emptyMap(),
+        placeById: Map<java.util.UUID, Place> = emptyMap(),
     ): Result<ReframeResult> = withContext(dispatcher) {
         runCatching {
             val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
+            val displayText = buildDisplayText(maskedText, personById, placeById)
+
+            // Distortion gate: REFLECTION entries with no detected distortions have nothing to
+            // reframe. Skip the LLM entirely and return a retrieval card instead.
+            if (strategy == ReframeStrategy.REFLECTION && diagnosis.distortions.isEmpty()) {
+                val evidence = fetchReflectionEvidence(maskedText)
+                val card = buildReflectionCard(displayText, evidence, personById, placeById)
+                return@runCatching ReframeResult(strategy = ReframeStrategy.REFLECTION_CARD, reframe = card)
+            }
 
             // For Quadrant III (Behavioral Activation), look up the most accessible activity
             // whose valueCategory aligns with the entry context.
@@ -181,10 +194,14 @@ class ReframingLoop(
                 fetchEvidenceEntries(maskedText)
             } else emptyList()
 
+            // Cloud gate: pseudonymous @name / !place tokens must not leave the device.
+            // Fall back to masked placeholders when the request would route to cloud.
+            val promptText = if (orchestrator.isCloudBound()) maskedText else displayText
+
             val reframe = collectTokens(
                 orchestrator.process(
                     buildInterventionPrompt(
-                        maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                        promptText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -242,8 +259,16 @@ class ReframingLoop(
         "FINAL_DISTORTIONS:"
 
 
+    /**
+     * Builds the Stage 3 LLM prompt.
+     *
+     * @param displayText Journal text with Stage 3 un-masking already applied —
+     *   `[PERSON_uuid]` / `[PLACE_uuid]` tokens have been replaced with pseudonymous
+     *   `@name` / `!place` display names. Callers that route to cloud must pass masked
+     *   text instead (see [runStage3Intervention]).
+     */
     internal fun buildInterventionPrompt(
-        maskedText: String,
+        displayText: String,
         strategy: ReframeStrategy,
         distortions: List<CognitiveDistortion>,
         baActivity: ActivityHierarchy? = null,
@@ -264,39 +289,111 @@ class ReframingLoop(
 
         val techniqueBlock = when (strategy) {
             ReframeStrategy.SOCRATIC_REALITY_TESTING ->
-                "Write exactly 2-3 sentences in first person that:\n" +
-                "1. Question whether the fear or assumption is definitely true.\n" +
-                "2. Offer a more balanced, realistic interpretation.\n" +
-                "3. Land on what you actually know."
+                "Question whether the fear or assumption is definitely true, then land on a more balanced reading."
 
             ReframeStrategy.BEHAVIORAL_ACTIVATION -> {
-                val evidenceStep = if (evidenceEntries.isNotEmpty())
-                    "2. Challenge the avoidance using one of the past moments listed above."
-                else
-                    "2. Reframe the gap between intention and action as inertia, not a character flaw."
                 val actionStep = if (baActivity != null)
-                    "3. End with this one concrete next step: \"${baActivity.taskName}\"."
+                    " End with this one concrete next step: \"${baActivity.taskName}\"."
                 else
-                    "3. End with one specific, minimal action that addresses what the entry actually describes — not a generic outdoor or mindfulness suggestion."
-                "Write exactly 2-3 sentences in first person.\n" +
-                "No motivational phrases. No invented details.\n" +
-                "1. Name the pattern (avoidance, low energy) as a temporary state, not a fixed trait.\n" +
-                "$evidenceStep\n" +
-                actionStep
+                    " End with one specific, minimal action that addresses what the entry actually describes."
+                "Name the low-energy or avoidance pattern as temporary, not a fixed trait.$actionStep"
             }
 
+            ReframeStrategy.REFLECTION ->
+                "Notice what this entry reveals about what matters to you — name the value or relationship it points to."
+
             ReframeStrategy.STRENGTHS_AFFIRMATION ->
-                "Write exactly 2-3 sentences in first person that:\n" +
-                "1. Name the strength or effort this entry shows.\n" +
-                "2. Connect it to a value or pattern that matters to you.\n" +
-                "3. Anchor what made this moment meaningful."
+                "Name the strength or effort this entry shows and connect it to what matters to you."
+
+            ReframeStrategy.REFLECTION_CARD ->
+                throw IllegalArgumentException("buildInterventionPrompt must not be called for REFLECTION_CARD — use buildReflectionCard instead.")
         }
 
-        return "Journal entry: \"$maskedText\"\n\n" +
+        return "Journal entry: \"$displayText\"\n\n" +
             distortionLine +
             evidenceBlock +
             "$techniqueBlock\n\n" +
-            "Output only the reframe. No markdown, no asterisks, no ellipses."
+            "Output only the reframe."
+    }
+
+    /**
+     * Replaces UUID placeholders in [maskedText] with pseudonymous display names for use
+     * in Stage 3 prompts only. `[PERSON_uuid]` → `@{nickname ?: firstName}`,
+     * `[PLACE_uuid]` → `!{placeName}`. Tokens whose UUID is absent from the lookup maps
+     * are left unchanged so the model still sees a coherent (if opaque) token.
+     *
+     * This function must never be called for Stage 1/2 inputs, evidence retrieval, or storage.
+     */
+    internal fun buildDisplayText(
+        maskedText: String,
+        personById: Map<java.util.UUID, Person>,
+        placeById: Map<java.util.UUID, Place>,
+    ): String {
+        if (personById.isEmpty() && placeById.isEmpty()) return maskedText
+        var result = PLACEHOLDER_REGEX.replace(maskedText) { match ->
+            val uuidStr = match.value.removePrefix("[PERSON_").removeSuffix("]")
+            val uuid = runCatching { java.util.UUID.fromString(uuidStr) }.getOrNull()
+            val person = uuid?.let { personById[it] }
+            if (person != null) "@${person.nickname ?: person.firstName}" else match.value
+        }
+        result = PLACE_PLACEHOLDER_REGEX.replace(result) { match ->
+            val uuidStr = match.value.removePrefix("[PLACE_").removeSuffix("]")
+            val uuid = runCatching { java.util.UUID.fromString(uuidStr) }.getOrNull()
+            val place = uuid?.let { placeById[it] }
+            if (place != null) "!${place.name}" else match.value
+        }
+        return result
+    }
+
+    /**
+     * Builds a retrieval card for undistorted REFLECTION entries — no LLM generation.
+     *
+     * Extracts `@name` and `!place` tokens from [displayText] (already substituted by
+     * [buildDisplayText]), then assembles a card from [evidenceEntries] (at most 2 snippets,
+     * each unmasked via [buildDisplayText]). Falls back to a single templated line when no
+     * evidence is available.
+     */
+    internal fun buildReflectionCard(
+        displayText: String,
+        evidenceEntries: List<JournalEntry>,
+        personById: Map<java.util.UUID, Person>,
+        placeById: Map<java.util.UUID, Place>,
+    ): String {
+        val atNames   = Regex("""@(\w+(?:\s+\w+)*)""").findAll(displayText).map { "@${it.groupValues[1]}" }.toList()
+        val bangNames = Regex("""!(\w+(?:\s+\w+)*)""").findAll(displayText).map { "!${it.groupValues[1]}" }.toList()
+        val entities  = (atNames + bangNames).distinct()
+        val entityList = when {
+            entities.isEmpty() -> "these connections"
+            entities.size == 1 -> entities[0]
+            else               -> entities.dropLast(1).joinToString(", ") + " and " + entities.last()
+        }
+
+        val snippets = evidenceEntries.take(2).mapNotNull { entry ->
+            val content = entry.content?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val display = buildDisplayText(content, personById, placeById)
+            val trimmed = if (display.length > 120) display.take(120) + "…" else display
+            "\"$trimmed\""
+        }
+
+        return if (snippets.isNotEmpty()) {
+            "You've written about $entityList before:\n${snippets.joinToString("\n")}\n" +
+            "Connection to $entityList keeps showing up in what you write."
+        } else {
+            "Spending time with $entityList is something that matters to you."
+        }
+    }
+
+    /**
+     * Fetches recent journal entries referencing the same entity placeholders as the current
+     * entry, with no valence filter. Used for the [ReframeStrategy.REFLECTION_CARD] path.
+     */
+    private suspend fun fetchReflectionEvidence(maskedText: String): List<JournalEntry> {
+        val repo = searchRepository ?: return emptyList()
+        val placeholders = (
+            PLACEHOLDER_REGEX.findAll(maskedText) +
+            PLACE_PLACEHOLDER_REGEX.findAll(maskedText)
+        ).map { it.value }.toSet()
+        return repo.findRecentEntriesForEntities(placeholders)
     }
 
     // ── Parsers ──────────────────────────────────────────────────────────────
@@ -368,19 +465,36 @@ class ReframingLoop(
         maskedText: String,
         affectiveMap: AffectiveMapResult,
         diagnosis: DiagnosisResult,
+        personById: Map<java.util.UUID, Person> = emptyMap(),
+        placeById: Map<java.util.UUID, Place> = emptyMap(),
     ): Result<Pair<ReframeStrategy, kotlinx.coroutines.flow.Flow<LlmResult>>> =
         withContext(dispatcher) {
             runCatching {
                 val strategy = selectStrategy(affectiveMap.valence, affectiveMap.arousal)
+                val displayText = buildDisplayText(maskedText, personById, placeById)
+
+                // Distortion gate: REFLECTION + no distortions → retrieval card, no LLM call.
+                if (strategy == ReframeStrategy.REFLECTION && diagnosis.distortions.isEmpty()) {
+                    val evidence = fetchReflectionEvidence(maskedText)
+                    val card = buildReflectionCard(displayText, evidence, personById, placeById)
+                    val cardFlow = kotlinx.coroutines.flow.flow<LlmResult> {
+                        emit(LlmResult.Token(card))
+                        emit(LlmResult.Complete)
+                    }
+                    return@runCatching Pair(ReframeStrategy.REFLECTION_CARD, cardFlow)
+                }
+
                 val baActivity = if (strategy == ReframeStrategy.BEHAVIORAL_ACTIVATION) {
                     pickBaActivity(maskedText)
                 } else null
                 val evidenceEntries = if (affectiveMap.valence < 0f) {
                     fetchEvidenceEntries(maskedText)
                 } else emptyList()
+                // Cloud gate: pseudonymous @name / !place tokens must not leave the device.
+                val promptText = if (orchestrator.isCloudBound()) maskedText else displayText
                 val flow = orchestrator.process(
                     buildInterventionPrompt(
-                        maskedText, strategy, diagnosis.distortions, baActivity, evidenceEntries
+                        promptText, strategy, diagnosis.distortions, baActivity, evidenceEntries
                     ),
                     "intervention",
                     INTERVENTION_SYSTEM,
@@ -455,8 +569,16 @@ class ReframingLoop(
         SOCRATIC_REALITY_TESTING,
         /** Quadrant III (v<0, a<0): Behavioral Activation + Evidence for the Contrary. */
         BEHAVIORAL_ACTIVATION,
-        /** Quadrant I/IV (v≥0): Positive-valence strengths affirmation. */
+        /** Low-positive band (0 ≤ v < AFFIRMATION_THRESHOLD): Reflective awareness of what matters. */
+        REFLECTION,
+        /** High-positive band (v ≥ AFFIRMATION_THRESHOLD): Strengths affirmation for clearly positive entries. */
         STRENGTHS_AFFIRMATION,
+        /**
+         * Undistorted REFLECTION entry — assembled from entity-anchored retrieval, no LLM generation.
+         * Returned when [strategy] == [REFLECTION] and distortions are empty; the [ReframeResult.reframe]
+         * string contains a retrieval card rather than generated text.
+         */
+        REFLECTION_CARD,
     }
 
     /**
@@ -474,6 +596,13 @@ class ReframingLoop(
         private const val TAG = "ReframingLoop"
         /** Maximum activity difficulty included in the BA suggestion lookup (0–10 scale). */
         internal const val BA_MAX_DIFFICULTY = 5
+        /**
+         * Minimum valence for [ReframeStrategy.STRENGTHS_AFFIRMATION]. Entries with valence in
+         * [0, AFFIRMATION_THRESHOLD) are routed to [ReframeStrategy.REFLECTION] instead.
+         * Tune this value to adjust how much of the positive-valence band gets reflective vs.
+         * strengths-focused framing.
+         */
+        internal const val AFFIRMATION_THRESHOLD = 0.4f
 
         internal const val AFFECTIVE_SYSTEM =
             "You are an affective computing assistant. " +
@@ -485,29 +614,33 @@ class ReframingLoop(
             "Output only the DISTORTIONS line. No explanation, no markdown."
 
         internal const val INTERVENTION_SYSTEM =
-            "You are a CBT journaling assistant. Write a brief, grounded first-person reframe. " +
+            "You are a CBT journaling assistant. " +
+            "Write exactly 2-3 sentences as a brief, grounded, first-person reframe. " +
             "Interpret the entry literally — do not contradict what it says or invent details not in the text. " +
-            "Do NOT repeat or amplify the negative thought — reframe it. " +
-            "No motivational cheerleading (no 'I can do this', 'I've got this', 'I believe in myself'). " +
+            "Never repeat or amplify the negative thought. " +
+            "No motivational cheerleading. " +
             "Write in first person singular only (I, me, my). Never use 'we', 'let's', or 'you'. " +
-            "No mindfulness or outdoor activity suggestions unless the entry itself mentions them. " +
             "No markdown, no asterisks, no ellipses, no therapist language."
 
         /**
-         * Selects the intervention strategy based on circumplex quadrant.
-         * v<0 and a≥0 → Quadrant II → [ReframeStrategy.SOCRATIC_REALITY_TESTING]
-         * v<0 and a<0  → Quadrant III → [ReframeStrategy.BEHAVIORAL_ACTIVATION]
-         * v≥0 (any a)  → Positive valence → [ReframeStrategy.STRENGTHS_AFFIRMATION]
+         * Selects the intervention strategy based on circumplex quadrant and valence band.
+         * v<0 and a≥0              → Quadrant II   → [ReframeStrategy.SOCRATIC_REALITY_TESTING]
+         * v<0 and a<0              → Quadrant III  → [ReframeStrategy.BEHAVIORAL_ACTIVATION]
+         * 0 ≤ v < AFFIRMATION_THRESHOLD (any a) → [ReframeStrategy.REFLECTION]
+         * v ≥ AFFIRMATION_THRESHOLD (any a)     → [ReframeStrategy.STRENGTHS_AFFIRMATION]
          */
         fun selectStrategy(valence: Float, arousal: Float): ReframeStrategy = when {
-            valence < 0f && arousal >= 0f -> ReframeStrategy.SOCRATIC_REALITY_TESTING
-            valence < 0f && arousal < 0f  -> ReframeStrategy.BEHAVIORAL_ACTIVATION
-            else                          -> ReframeStrategy.STRENGTHS_AFFIRMATION
+            valence < 0f && arousal >= 0f        -> ReframeStrategy.SOCRATIC_REALITY_TESTING
+            valence < 0f && arousal < 0f         -> ReframeStrategy.BEHAVIORAL_ACTIVATION
+            valence < AFFIRMATION_THRESHOLD      -> ReframeStrategy.REFLECTION
+            else                                 -> ReframeStrategy.STRENGTHS_AFFIRMATION
         }
         // Both regexes tolerate optional spaces around `=` and an optional leading `-`.
         private val V_REGEX = Regex("""v\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
         private val A_REGEX = Regex("""a\s*=\s*(-?\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
         /** Matches [PERSON_UUID] placeholders produced by PiiShield. */
         private val PLACEHOLDER_REGEX = Regex("""\[PERSON_[a-fA-F0-9\-]{36}\]""")
+        /** Matches [PLACE_UUID] placeholders produced by PiiShield. */
+        private val PLACE_PLACEHOLDER_REGEX = Regex("""\[PLACE_[a-fA-F0-9\-]{36}\]""")
     }
 }

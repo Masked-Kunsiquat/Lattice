@@ -27,4 +27,7 @@ interface PlaceDao {
 
     @Query("SELECT * FROM places WHERE name = :name LIMIT 1")
     suspend fun getByName(name: String): Place?
+
+    @Query("SELECT * FROM places WHERE id IN (:ids)")
+    suspend fun getPlacesByIds(ids: List<UUID>): List<Place>
 }

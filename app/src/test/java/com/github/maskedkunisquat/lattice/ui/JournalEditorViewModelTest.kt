@@ -59,6 +59,7 @@ class JournalEditorViewModelTest {
         override suspend fun incrementVibeScore(personId: UUID, delta: Float) = Unit
         override suspend fun deletePersonById(id: UUID) = Unit
         override fun searchByName(query: String): Flow<List<Person>> = flowOf(emptyList())
+        override suspend fun getPersonsByIds(ids: List<UUID>): List<Person> = emptyList()
     }
 
     private class FakePlaceDao : PlaceDao {
@@ -68,6 +69,7 @@ class JournalEditorViewModelTest {
         override fun searchByName(query: String): Flow<List<Place>> = flowOf(emptyList())
         override suspend fun getById(id: UUID): Place? = null
         override suspend fun getByName(name: String): Place? = null
+        override suspend fun getPlacesByIds(ids: List<UUID>): List<Place> = emptyList()
     }
 
     private class FakeJournalDao : JournalDao {
