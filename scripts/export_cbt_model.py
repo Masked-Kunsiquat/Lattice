@@ -42,13 +42,26 @@ import zipfile
 _in_notebook = "__file__" not in dir()
 _SCRIPT_DIR  = pathlib.Path.cwd() if _in_notebook else pathlib.Path(__file__).parent
 
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  NOTEBOOK CONFIGURATION — edit these when running as a Kaggle/Colab cell   ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+# HuggingFace repo ID where the merged CBT model was uploaded (required).
+NOTEBOOK_HF_SOURCE  = "masked-kunsiquat/gemma-3-1b-it-litert"
+# Subfolder within that repo (set to None if weights are at the root).
+NOTEBOOK_SUBFOLDER  = "cbt-merged-bf16"
+# Output dir on the notebook filesystem.
+NOTEBOOK_OUTPUT_DIR = "/kaggle/working/export-output"
+# Set True to auto-upload the finished .litertlm back to HuggingFace.
+NOTEBOOK_UPLOAD     = True
+# ══════════════════════════════════════════════════════════════════════════════
+
 DEFAULT_MERGED  = (
     pathlib.Path("/content/finetune-output/merged")
     if _in_notebook else
     _SCRIPT_DIR / "finetune_cbt_lora-output" / "merged"
 )
 DEFAULT_OUTPUT  = (
-    pathlib.Path("/content/export-output")
+    pathlib.Path(NOTEBOOK_OUTPUT_DIR)
     if _in_notebook else
     _SCRIPT_DIR / "export_cbt_model-output"
 )
@@ -65,15 +78,18 @@ DEFAULT_CONTEXT  = 1280
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--merged",    default=None)
-    p.add_argument("--hf-source", default=None,
+    p.add_argument("--hf-source",
+                   default=NOTEBOOK_HF_SOURCE if _in_notebook else None,
                    help="HF model ID or local path for export_hf (defaults to --merged)")
-    p.add_argument("--subfolder", default=None,
+    p.add_argument("--subfolder",
+                   default=NOTEBOOK_SUBFOLDER if _in_notebook else None,
                    help="Subfolder within HF repo (e.g. cbt-merged-bf16)")
     p.add_argument("--output",    default=str(DEFAULT_OUTPUT))
     p.add_argument("--filename",  default=DEFAULT_FILENAME)
     p.add_argument("--prefill",   type=int, default=DEFAULT_PREFILL)
     p.add_argument("--context",   type=int, default=DEFAULT_CONTEXT)
-    p.add_argument("--upload",    action="store_true")
+    p.add_argument("--upload",    action="store_true",
+                   default=NOTEBOOK_UPLOAD if _in_notebook else False)
     p.add_argument("--hf-repo",   default=DEFAULT_HF_REPO)
     args, _ = p.parse_known_args()
     return args
