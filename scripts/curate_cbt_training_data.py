@@ -21,8 +21,8 @@ Sources:
   1. Seed personas (holmes / watson / werther) — real masked entries, already labelled
   2. Gemini-generated synthetic entries — fills coverage gaps per strategy
 
-Classification model : gemini-2.0-flash   (fast, cheap; JSON structured output)
-Reframe model        : gemini-2.5-pro     (quality matters — this is the training signal)
+Classification model : gemini-2.5-flash-lite   (synthetic entry generation)
+Reframe model        : gemini-2.5-flash-lite   (no thinking overhead; ~$0.05 for 550 examples)
 
 Usage (from Lattice project root):
     pip install google-genai tqdm
@@ -64,13 +64,15 @@ except ImportError:
         return it
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-PROJECT_ROOT = pathlib.Path(__file__).parent.parent
-SEEDS_DIR    = PROJECT_ROOT / "core-data/src/main/assets/seeds"
-OUTPUT_DIR   = PROJECT_ROOT / "scripts/output"
+# When running as a script from the repo root, paths resolve automatically.
+# When copy-pasting into Colab, set these two variables to match your environment.
+_in_notebook = "__file__" not in dir()
+SEEDS_DIR  = pathlib.Path("/content/seeds") if _in_notebook else pathlib.Path(__file__).parent.parent / "core-data/src/main/assets/seeds"
+OUTPUT_DIR = pathlib.Path("/content/output") if _in_notebook else pathlib.Path(__file__).parent.parent / "scripts/output"
 
 # ── Models ────────────────────────────────────────────────────────────────────
-CLASSIFY_MODEL = "gemini-2.0-flash"
-REFRAME_MODEL  = "gemini-2.5-pro"
+CLASSIFY_MODEL = "gemini-2.5-flash-lite"   # synthetic entry generation
+REFRAME_MODEL  = "gemini-2.5-flash-lite"   # no thinking overhead; right for short constrained generation
 
 # ── Strategy routing — mirrors ReframingLoop.selectStrategy() ─────────────────
 AFFIRMATION_THRESHOLD = 0.4  # matches ReframingLoop.AFFIRMATION_THRESHOLD
@@ -194,7 +196,13 @@ def load_seed_entries() -> list[dict]:
 def make_client() -> genai.Client:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        sys.exit("Set GEMINI_API_KEY before running.")
+        try:
+            from google.colab import userdata
+            api_key = userdata.get("GEMINI_API_KEY")
+        except Exception:
+            pass
+    if not api_key:
+        sys.exit("Set GEMINI_API_KEY in Colab secrets or as an environment variable.")
     return genai.Client(api_key=api_key)
 
 
@@ -245,17 +253,25 @@ def gemini_text(
                     max_output_tokens=256,
                 ),
             )
-            return response.text.strip()
+            # Check finish reason — SAFETY stops generation mid-sentence; skip rather than retry.
+            candidate = response.candidates[0] if response.candidates else None
+            if candidate and str(candidate.finish_reason) not in ("FinishReason.STOP", "STOP", "1"):
+                print(f"[warn] generation stopped early: finish_reason={candidate.finish_reason}", file=sys.stderr)
+                return None
+            text = response.text.strip() if response.text else None
+            if text:
+                return text.replace("…", "...")
         except Exception as exc:  # noqa: BLE001
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
             else:
                 print(f"[warn] gemini_text failed after {retries} attempts: {exc}", file=sys.stderr)
                 return None
+    return None
 
 
 # ── Validation ────────────────────────────────────────────────────────────────
-_SENTENCE_END = re.compile(r"[.!?]")
+_SENTENCE_END = re.compile(r"[.!?]+")
 _FORBIDDEN    = re.compile(r"\b(we|let's|you\b|your\b)", re.IGNORECASE)
 _FIRST_PERSON = re.compile(r"\b(I|me|my|mine|myself)\b")
 
@@ -263,19 +279,20 @@ _FIRST_PERSON = re.compile(r"\b(I|me|my|mine|myself)\b")
 def validate_reframe(text: str) -> tuple[bool, str]:
     """
     Returns (ok, reason). Checks:
-    - 2–3 sentences
+    - Minimum length (safety-cut responses are very short)
     - First-person singular present
     - No forbidden pronouns
     - No markdown artefacts
+    Note: sentence count not checked — safety filtering can cut responses mid-sentence,
+    and retrying the same content won't help.
     """
-    sentences = [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
-    if not (2 <= len(sentences) <= 4):  # allow 4 to handle trailing punctuation splits
-        return False, f"sentence count {len(sentences)} not in [2,3]"
+    if len(text) < 40:
+        return False, f"response too short ({len(text)} chars) — likely safety-cut"
     if not _FIRST_PERSON.search(text):
         return False, "no first-person singular pronoun"
     if _FORBIDDEN.search(text):
         return False, "contains forbidden pronoun (we/let's/you)"
-    if any(c in text for c in ("*", "_", "#", "…")):
+    if any(c in text for c in ("*", "#")):
         return False, "markdown artefact detected"
     return True, ""
 
@@ -378,7 +395,7 @@ def generate_reframe(
         if ok:
             return text
         if attempt < max_attempts - 1:
-            print(f"  [retry] validation failed ({reason}); retrying…", file=sys.stderr)
+            print(f"  [retry] validation failed ({reason}); text={repr(text[:120])}", file=sys.stderr)
     # Return last result even if it fails soft validation — reviewer can filter
     return text if text else None
 
@@ -389,7 +406,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Seed entries only; skip synthetic generation")
     parser.add_argument("--target", type=int, default=550, help="Total examples target (default 550)")
     parser.add_argument("--flash-reframe", action="store_true", help="Use gemini-2.0-flash for reframes (faster)")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()  # parse_known_args ignores Colab/Jupyter kernel flags
 
     reframe_model = CLASSIFY_MODEL if args.flash_reframe else REFRAME_MODEL
     print(f"Classification model : {CLASSIFY_MODEL}")
