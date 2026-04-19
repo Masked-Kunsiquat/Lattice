@@ -105,12 +105,7 @@ class LlmOrchestrator(
      * before building Stage 3 prompts — pseudonymous `@name`/`!place` tokens must not leave
      * the device via the cloud path.
      */
-    internal suspend fun isCloudBound(): Boolean {
-        if (cloudProvider == null) return false
-        if (nanoProvider.isAvailable()) return false
-        if (localFallbackProvider.isAvailable()) return false
-        return cloudEnabled()
-    }
+    internal suspend fun isCloudBound(): Boolean = selectProvider() === cloudProvider
 
     private suspend fun selectProvider(): LlmProvider {
         if (nanoProvider.isAvailable()) return nanoProvider

@@ -81,11 +81,14 @@ class EntryDetailViewModel(
                 val entry = (state as? EntryDetailState.Found)?.entry ?: return@collect
                 withContext(Dispatchers.IO) {
                     val mentions = mentionDao.getMentionsByEntry(entry.id)
-                    val personIds = mentions.map { it.personId }.toSet()
-                    val people = peopleRepository.getByIds(personIds)
-                    val places = placeRepository.getByIds(entry.placeIds.toSet())
+                    val personIdList = mentions.map { it.personId }.distinct()
+                    val placeIdList = entry.placeIds.distinct()
+                    val peopleById = peopleRepository.getByIds(personIdList.toSet()).associateBy { it.id }
+                    val placesById = placeRepository.getByIds(placeIdList.toSet()).associateBy { it.id }
+                    val peopleOrdered = personIdList.mapNotNull { peopleById[it] }
+                    val placesOrdered = placeIdList.mapNotNull { placesById[it] }
                     val tags = entry.tagIds.mapNotNull { tagDao.getById(it) }
-                    _tagsData.value = EntryTagsData(people, places, tags)
+                    _tagsData.value = EntryTagsData(peopleOrdered, placesOrdered, tags)
                 }
             }
         }
@@ -108,19 +111,11 @@ class EntryDetailViewModel(
                 val affectiveMap = reframingLoop.runStage1AffectiveMap(maskedText).getOrThrow()
                 val diagnosis    = reframingLoop.runStage2DiagnosisOfThought(maskedText).getOrThrow()
 
-                // Build UUID → entity maps for Stage 3 display-name substitution, scoped to
-                // only the UUIDs present in maskedText so we never fetch the full table.
-                val personUuids = PERSON_UUID_REGEX.findAll(maskedText)
-                    .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
-                    .toSet()
-                val placeUuids = PLACE_UUID_REGEX.findAll(maskedText)
-                    .mapNotNull { runCatching { UUID.fromString(it.groupValues[1]) }.getOrNull() }
-                    .toSet()
-                val personById = peopleRepository.getByIds(personUuids).associateBy { it.id }
-                val placeById  = placeRepository.getByIds(placeUuids).associateBy { it.id }
-
+                // Pass empty entity maps — real names must not enter Stage 3 prompts.
+                // [PERSON_uuid] / [PLACE_uuid] tokens remain in the prompt text; the LLM
+                // output is unmasked via PiiShield.unmask() at the UI display layer only.
                 val (_, tokenFlow) = reframingLoop
-                    .streamStage3Intervention(maskedText, affectiveMap, diagnosis, personById, placeById)
+                    .streamStage3Intervention(maskedText, affectiveMap, diagnosis)
                     .getOrThrow()
 
                 var partial = ""
@@ -225,11 +220,6 @@ class EntryDetailViewModel(
 
     companion object {
         private const val TAG = "EntryDetailViewModel"
-
-        /** Matches [PERSON_UUID] placeholders in masked text for scoped entity fetching. */
-        private val PERSON_UUID_REGEX = Regex("""\[PERSON_([a-fA-F0-9\-]{36})\]""")
-        /** Matches [PLACE_UUID] placeholders in masked text for scoped entity fetching. */
-        private val PLACE_UUID_REGEX  = Regex("""\[PLACE_([a-fA-F0-9\-]{36})\]""")
 
         fun factory(app: LatticeApplication, entryId: UUID) =
             object : ViewModelProvider.Factory {
