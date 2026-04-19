@@ -34,6 +34,7 @@ After export, update LocalFallbackProvider to prefer the CBT model file.
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import sys
 import time
@@ -95,7 +96,25 @@ def resolve_source(args: argparse.Namespace) -> pathlib.Path:
     return merged_path
 
 
+def _hf_login() -> None:
+    token = os.environ.get("HF_TOKEN")
+    if not token and _in_notebook:
+        try:
+            from google.colab import userdata
+            token = userdata.get("HF_TOKEN")
+        except Exception:
+            pass
+    if token:
+        try:
+            from huggingface_hub import login
+            login(token=token, add_to_git_credential=False)
+            print("HuggingFace: authenticated via HF_TOKEN")
+        except Exception as e:
+            print(f"[warn] HuggingFace login failed: {e}")
+
+
 def _merge_adapter(base_model_id: str, adapter_dir: pathlib.Path, out_dir: pathlib.Path) -> None:
+    _hf_login()
     try:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer

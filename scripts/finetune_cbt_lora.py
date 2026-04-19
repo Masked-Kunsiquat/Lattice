@@ -254,8 +254,37 @@ class RunStats:
     output_dir: str
 
 
+def _hf_login() -> None:
+    """
+    Authenticate with HuggingFace.
+    Priority:
+      1. HF_TOKEN env var (set externally or via `huggingface-cli login`)
+      2. Colab user secrets (key: HF_TOKEN)
+    Silently skips if already logged in or no token is available.
+    """
+    token = os.environ.get("HF_TOKEN")
+    if not token and _in_notebook:
+        try:
+            from google.colab import userdata
+            token = userdata.get("HF_TOKEN")
+        except Exception:
+            pass
+    if token:
+        try:
+            from huggingface_hub import login
+            login(token=token, add_to_git_credential=False)
+            print("HuggingFace: authenticated via HF_TOKEN")
+        except Exception as e:
+            print(f"[warn] HuggingFace login failed: {e}")
+    else:
+        print("[warn] No HF_TOKEN found — download will fail for gated models.")
+        print("       Set HF_TOKEN env var or add it as a Colab secret.")
+
+
 def train(args: argparse.Namespace) -> None:
     import torch
+
+    _hf_login()
 
     # ── Lazy imports (keeps startup fast for --dry-run) ──────────────────────
     try:
