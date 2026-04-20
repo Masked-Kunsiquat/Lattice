@@ -13,6 +13,8 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelDownloader
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import java.io.File
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.withLock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +90,7 @@ class LocalFallbackProvider(
     // Subsequent initialize() calls will skip GPU entirely.
     @Volatile private var openClFailed = false
     private val initLock = Any()
+    private val engineLock = ReentrantReadWriteLock()
 
     private val _modelLoadState = MutableStateFlow(ModelLoadState.IDLE)
     override val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
@@ -166,13 +169,15 @@ class LocalFallbackProvider(
             // Close existing engine if switching models
             if (engine != null) {
                 Log.i(TAG, "Closing existing engine to switch model: ${_loadedModelName.value} -> $targetFile")
-                try {
-                    (engine as? AutoCloseable)?.close()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error closing engine", e)
+                engineLock.writeLock().withLock {
+                    try {
+                        (engine as? AutoCloseable)?.close()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error closing engine", e)
+                    }
+                    engine = null
+                    _loadedModelName.value = null
                 }
-                engine = null
-                _loadedModelName.value = null
             }
 
             initAttempted = true
@@ -254,20 +259,30 @@ class LocalFallbackProvider(
         systemInstruction: String?,
         allowOpenClRetry: Boolean,
     ): Flow<LlmResult> = flow {
-        val eng = engine ?: throw IllegalStateException(
-            "Model not loaded. ${initFailureReason ?: "Call initialize() first."}"
-        )
-        val config = if (systemInstruction != null) {
-            ConversationConfig(systemInstruction = Contents.of(systemInstruction))
-        } else {
-            ConversationConfig()
+        val eng = engineLock.readLock().withLock {
+            engine ?: throw IllegalStateException(
+                "Model not loaded. ${initFailureReason ?: "Call initialize() first."}"
+            )
         }
-        eng.createConversation(config).use { conversation ->
-            conversation.sendMessageAsync(prompt).collect { message ->
-                val text = message.toString()
-                if (text.isNotEmpty()) emit(LlmResult.Token(text))
+
+        // We MUST hold the read lock while the engine is in use (during inference)
+        // to prevent initialize() or switchToCpu() from closing it underneath us.
+        engineLock.readLock().lock()
+        try {
+            val config = if (systemInstruction != null) {
+                ConversationConfig(systemInstruction = Contents.of(systemInstruction))
+            } else {
+                ConversationConfig()
             }
-            emit(LlmResult.Complete)
+            eng.createConversation(config).use { conversation ->
+                conversation.sendMessageAsync(prompt).collect { message ->
+                    val text = message.toString()
+                    if (text.isNotEmpty()) emit(LlmResult.Token(text))
+                }
+                emit(LlmResult.Complete)
+            }
+        } finally {
+            engineLock.readLock().unlock()
         }
     }.catch { e ->
         if (allowOpenClRetry && !openClFailed &&
@@ -287,12 +302,14 @@ class LocalFallbackProvider(
      */
     private fun switchToCpu() {
         synchronized(initLock) {
-            (engine as? AutoCloseable)?.runCatching { close() }
-            engine = null
-            _loadedModelName.value = null
-            initAttempted = false
-            initFailureReason = null
-            _modelLoadState.value = ModelLoadState.IDLE
+            engineLock.writeLock().withLock {
+                (engine as? AutoCloseable)?.runCatching { close() }
+                engine = null
+                _loadedModelName.value = null
+                initAttempted = false
+                initFailureReason = null
+                _modelLoadState.value = ModelLoadState.IDLE
+            }
         }
         initialize() // openClFailed = true, so backends = [CPU]
     }

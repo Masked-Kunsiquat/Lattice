@@ -839,7 +839,7 @@ private fun PersonalizationSection(
 }
 
 private fun isCbtDownloaded(context: android.content.Context): Boolean {
-    val file = java.io.File(context.filesDir, "gemma3-1b-it-cbt-int8.litertlm")
+    val file = java.io.File(context.filesDir, com.github.maskedkunisquat.lattice.LocalFallbackProvider.MODEL_FILE_CBT)
     return file.exists() && file.length() > 100_000_000L
 }
 

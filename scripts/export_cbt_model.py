@@ -26,11 +26,34 @@ def cleanup_environment(output_dir, cache_dir):
         pathlib.Path("/tmp/_litertlm_work")
     ]
 
+    safe_bases = [pathlib.Path("/tmp"), pathlib.Path("/kaggle/working")]
+
     for path in to_wipe:
-        if path.exists():
-            print(f"  Removing: {path}")
-            shutil.rmtree(path)
-        path.mkdir(parents=True, exist_ok=True)
+        p = pathlib.Path(path).absolute()
+
+        # Validation
+        if p == pathlib.Path("/"):
+            print(f"  ⚠️ Skipping root directory: {p}")
+            continue
+        if p == pathlib.Path.home():
+            print(f"  ⚠️ Skipping home directory: {p}")
+            continue
+        if p.is_symlink():
+            print(f"  ⚠️ Skipping symlink: {p}")
+            continue
+
+        is_under_safe_base = any(p == base or base in p.parents for base in safe_bases)
+        if not is_under_safe_base:
+            print(f"  ⚠️ Skipping path outside safe bases (/tmp, /kaggle/working): {p}")
+            continue
+
+        if p.exists():
+            if not p.is_dir():
+                print(f"  ⚠️ Skipping non-directory: {p}")
+                continue
+            print(f"  Removing: {p}")
+            shutil.rmtree(p)
+        p.mkdir(parents=True, exist_ok=True)
 
     # Trigger garbage collection
     gc.collect()
@@ -39,16 +62,20 @@ def cleanup_environment(output_dir, cache_dir):
 
 def patch_config(model_dir):
     cfg_p = pathlib.Path(model_dir) / "config.json"
-    if not cfg_p.exists(): return
-    with open(cfg_p, "r") as f: cfg = json.load(f)
+    if not cfg_p.exists():
+        return
+    with open(cfg_p, "r") as f:
+        cfg = json.load(f)
     if "rope_scaling" in cfg:
         print("🛠️ Patching config: Removing rope_scaling...")
         del cfg["rope_scaling"]
-        with open(cfg_p, "w") as f: json.dump(cfg, f, indent=2)
+        with open(cfg_p, "w") as f:
+            json.dump(cfg, f, indent=2)
 
 def recover_tokenizer(model_dir):
     target = pathlib.Path(model_dir) / "tokenizer.model"
-    if target.exists(): return target
+    if target.exists():
+        return target
     print("🔍 tokenizer.model missing! Fetching compatible version from Google...")
     try:
         path = hf_hub_download(repo_id="google/gemma-3-1b-it", filename="tokenizer.model", local_dir=model_dir)
@@ -121,6 +148,12 @@ def run_pipeline(args):
     if generated_file.exists() and generated_file != final_file:
         generated_file.rename(final_file)
 
+    if not final_file.exists():
+        raise RuntimeError(
+            f"❌ LiteRT-LM bundle failed to materialize at {final_file}. "
+            "Check build_litertlm() logs for errors."
+        )
+
     return final_file
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -142,7 +175,7 @@ if __name__ == "__main__":
         print(f"✨ SUCCESS! Created: {result_path}")
         if args.upload:
             api = HfApi()
-            print(f"📤 Uploading to HF...")
+            print("📤 Uploading to HF...")
             api.upload_file(path_or_fileobj=str(result_path), path_in_repo=result_path.name, repo_id=args.hf_source)
         else:
             print("ℹ️ Upload skipped (use --upload to publish)")
