@@ -415,13 +415,17 @@ private fun SectionHeader(title: String) {
 
 @Composable
 private fun AboutRow(label: String, value: String) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(vertical = 6.dp),
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium
+        )
         Text(
             value,
             style = MaterialTheme.typography.bodyMedium,
@@ -476,7 +480,7 @@ private fun LocalModelSection(
                 )
                 Column(modifier = Modifier.padding(start = 8.dp)) {
                     Text("CBT Fine-tuned", style = MaterialTheme.typography.bodyLarge)
-                    Text("Optimized for cognitive reframing (~530 MB)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Optimized for cognitive reframing (~1.03 GB)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 

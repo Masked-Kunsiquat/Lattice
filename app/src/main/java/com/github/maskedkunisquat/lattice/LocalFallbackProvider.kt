@@ -340,10 +340,10 @@ class LocalFallbackProvider(
         // For all other devices. ~584 MB.
         const val MODEL_FILE_INT4  = "gemma3-1b-it-int4.litertlm"
 
-        // CBT fine-tuned model — merged LoRA weights, same INT4 quantisation as MODEL_FILE_INT4.
+        // CBT fine-tuned model — merged LoRA weights, INT8 quantisation.
         // Preferred over the base tier files when present in filesDir.
         // Download via downloadCbtModel(); upload to HF repo after offline training completes.
-        const val MODEL_FILE_CBT   = "gemma3-1b-it-cbt-int4.litertlm"
+        const val MODEL_FILE_CBT   = "gemma3-1b-it-cbt-int8.litertlm"
 
         // Convenience alias — the file this device will download/use.
         // (Used by external callers that don't have a Context to call selectModelAndBackends.)
@@ -358,7 +358,7 @@ class LocalFallbackProvider(
             MODEL_FILE_ELITE to "1904ceff9591e7a140df3a672c800e8e7bee8337526484b00f69ccef4fa2d60a",
             MODEL_FILE_ULTRA to "85d2ea5199802f913818d53897b3a304bcf983abb993393e6b1749fbdb005552",
             MODEL_FILE_INT4  to "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",
-            MODEL_FILE_CBT   to "8a43b82bb59521987428e2b7d906d8f517c4b9d913716a916f0ba355919756d2",
+            MODEL_FILE_CBT   to "e8f6c82183c70a4fcdc5a2512c182ff14ac77e7a302f78eab87d40e0189fe758",
         )
     }
 }
