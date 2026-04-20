@@ -46,6 +46,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -132,10 +133,12 @@ fun SettingsScreen(
 
             item { SectionHeader("About") }
             item {
+                val loadedModel by viewModel.loadedModelName.collectAsStateWithLifecycle()
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     AboutRow("App version", "1.0")
                     AboutRow("Schema version", ExportManager.SCHEMA_VERSION)
                     AboutRow("Embedding model", "snowflake-arctic-embed-xs")
+                    AboutRow("Loaded model", loadedModel ?: "None")
                 }
             }
 
@@ -168,8 +171,12 @@ fun InferenceSettingsScreen(
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val downloadWorkInfo by viewModel.downloadWorkInfo.collectAsStateWithLifecycle(null)
+    val cbtDownloadProgress by viewModel.cbtDownloadProgress.collectAsStateWithLifecycle()
+    val cbtDownloadWorkInfo by viewModel.cbtDownloadWorkInfo.collectAsStateWithLifecycle(null)
 
     val context = LocalContext.current
+
+    var pendingDownloadAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     // Request POST_NOTIFICATIONS before enqueueing the download worker so the
     // foreground service progress notification is permitted. Download proceeds
@@ -177,18 +184,35 @@ fun InferenceSettingsScreen(
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
-        viewModel.downloadModel()
+        pendingDownloadAction?.invoke()
+        pendingDownloadAction = null
     }
 
     val onDownload: () -> Unit = {
+        val action = { viewModel.downloadModel() }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            pendingDownloadAction = action
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            viewModel.downloadModel()
+            action()
+        }
+    }
+
+    val onCbtDownload: () -> Unit = {
+        val action = { viewModel.downloadCbtModel() }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingDownloadAction = action
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            action()
         }
     }
 
@@ -218,10 +242,15 @@ fun InferenceSettingsScreen(
             item { SectionHeader("Local Model") }
             item {
                 LocalModelSection(
+                    useCbtModel = settings.useCbtModel,
+                    onUseCbtModelChange = viewModel::setUseCbtModel,
                     modelLoadState = modelLoadState,
                     downloadProgress = downloadProgress,
                     downloadWorkInfo = downloadWorkInfo,
                     onDownload = onDownload,
+                    cbtDownloadProgress = cbtDownloadProgress,
+                    cbtDownloadWorkInfo = cbtDownloadWorkInfo,
+                    onCbtDownload = onCbtDownload,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -378,227 +407,7 @@ fun PrivacyDataSettingsScreen(
     }
 }
 
-// ── Local Model section ───────────────────────────────────────────────────────
-
-@Composable
-private fun LocalModelSection(
-    modelLoadState: ModelLoadState,
-    downloadProgress: Float,
-    downloadWorkInfo: WorkInfo?,
-    onDownload: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val isDownloading = downloadWorkInfo?.state == WorkInfo.State.RUNNING ||
-            downloadWorkInfo?.state == WorkInfo.State.ENQUEUED
-
-    val context = LocalContext.current
-    val notificationsBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        ContextCompat.checkSelfPermission(
-            context, Manifest.permission.POST_NOTIFICATIONS
-        ) != PackageManager.PERMISSION_GRANTED
-    } else false
-
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        val statusText = when {
-            isDownloading -> "Downloading… ${(downloadProgress * 100).toInt()}%"
-            modelLoadState == ModelLoadState.IDLE -> "Not downloaded"
-            modelLoadState == ModelLoadState.COPYING_MODEL -> "Copying model…"
-            modelLoadState == ModelLoadState.LOADING_SESSION -> "Loading session…"
-            modelLoadState == ModelLoadState.READY -> "Ready"
-            modelLoadState == ModelLoadState.ERROR -> "Load failed"
-            else -> "Not downloaded"
-        }
-        // Only READY gets a distinct color; all other states use the neutral variant.
-        val statusColor = if (modelLoadState == ModelLoadState.READY)
-            StatusGreen
-        else
-            MaterialTheme.colorScheme.onSurfaceVariant
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Gemma 3 1B (local fallback)", style = MaterialTheme.typography.bodyLarge)
-                Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
-            }
-            if ((modelLoadState == ModelLoadState.ERROR || modelLoadState == ModelLoadState.IDLE) && !isDownloading) {
-                Button(
-                    onClick = onDownload,
-                    modifier = Modifier.padding(start = 8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                ) {
-                    Text("Download", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
-        when {
-            isDownloading -> {
-                LinearProgressIndicator(
-                    progress = { downloadProgress },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    "Downloading ~700 MB to device storage. You can close the app.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (notificationsBlocked) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Text(
-                            "Notifications are off — no status bar progress.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(
-                            onClick = {
-                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = Uri.fromParts("package", context.packageName, null)
-                                }
-                                context.startActivity(intent)
-                            },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        ) {
-                            Text("Enable", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-            }
-            modelLoadState == ModelLoadState.COPYING_MODEL -> {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text(
-                    "Preparing model files. Please wait.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            modelLoadState == ModelLoadState.LOADING_SESSION -> {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text(
-                    "Optimizing model for your hardware. This may take a minute.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            modelLoadState == ModelLoadState.ERROR -> {
-                Text(
-                    "The model file failed to load. Download to try again (~700 MB).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            modelLoadState == ModelLoadState.IDLE -> {
-                Text(
-                    "Download to enable local inference (~700 MB). Runs entirely on-device.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            else -> Unit
-        }
-    }
-}
-
-// ── Personalization section ───────────────────────────────────────────────────
-
-@Composable
-private fun PersonalizationSection(
-    personalizationEnabled: Boolean,
-    manifest: AffectiveManifest?,
-    isResetting: Boolean,
-    onToggle: (Boolean) -> Unit,
-    onReset: () -> Unit,
-) {
-    var showResetDialog by remember { mutableStateOf(false) }
-
-    if (showResetDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text("Reset personalization?") },
-            text = {
-                Text(
-                    "All learned preferences will be deleted and the model will restart " +
-                    "from its default state on next launch. This cannot be undone."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { onReset(); showResetDialog = false },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) { Text("Reset") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) { Text("Cancel") }
-            },
-        )
-    }
-
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Personalization", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Improves mood detection over time using your corrections. " +
-                    "All learning happens on this device.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = personalizationEnabled, onCheckedChange = onToggle)
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        val trainedCount = manifest?.trainedOnCount ?: 0
-        val lastTimestamp = manifest?.lastTrainingTimestamp ?: 0L
-        AboutRow("Trained on", "$trainedCount corrections")
-        AboutRow("Last updated", formatRelativeTimestamp(lastTimestamp))
-
-        if (trainedCount > 0 || isResetting) {
-            Spacer(Modifier.height(8.dp))
-            TextButton(
-                onClick = { showResetDialog = true },
-                enabled = !isResetting,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error,
-                ),
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text(if (isResetting) "Resetting…" else "Reset personalization")
-            }
-        }
-    }
-}
-
-private fun formatRelativeTimestamp(timestamp: Long): String {
-    if (timestamp == 0L) return "Never"
-    val diff = System.currentTimeMillis() - timestamp
-    return when {
-        diff < 60_000L         -> "Just now"
-        diff < 3_600_000L      -> "${diff / 60_000} min ago"
-        diff < 86_400_000L     -> "${diff / 3_600_000} hr ago"
-        diff < 2 * 86_400_000L -> "Yesterday"
-        else                   -> (diff / 86_400_000).let { d -> if (d == 1L) "1 day ago" else "$d days ago" }
-    }
-}
+// ── UI Components ────────────────────────────────────────────────────────────
 
 @Composable
 private fun SectionHeader(title: String) {
@@ -613,18 +422,190 @@ private fun SectionHeader(title: String) {
 
 @Composable
 private fun AboutRow(label: String, value: String) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(vertical = 6.dp),
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium
+        )
         Text(
             value,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+// ── Local Model section ───────────────────────────────────────────────────────
+
+@Composable
+private fun LocalModelSection(
+    useCbtModel: Boolean,
+    onUseCbtModelChange: (Boolean) -> Unit,
+    modelLoadState: ModelLoadState,
+    downloadProgress: Float,
+    downloadWorkInfo: WorkInfo?,
+    onDownload: () -> Unit,
+    cbtDownloadProgress: Float,
+    cbtDownloadWorkInfo: WorkInfo?,
+    onCbtDownload: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isDownloading = downloadWorkInfo?.state == WorkInfo.State.RUNNING ||
+            downloadWorkInfo?.state == WorkInfo.State.ENQUEUED
+    val isCbtDownloading = cbtDownloadWorkInfo?.state == WorkInfo.State.RUNNING ||
+            cbtDownloadWorkInfo?.state == WorkInfo.State.ENQUEUED
+
+    val context = LocalContext.current
+    val notificationsBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS
+        ) != PackageManager.PERMISSION_GRANTED
+    } else false
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // --- Selection ---
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Preferred Model", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+
+            // CBT Radio
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !isCbtDownloading && !isDownloading) { onUseCbtModelChange(true) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = useCbtModel,
+                    onClick = { onUseCbtModelChange(true) },
+                    enabled = !isCbtDownloading && !isDownloading
+                )
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("CBT Fine-tuned", style = MaterialTheme.typography.bodyLarge)
+                    Text("Optimized for cognitive reframing (~1.03 GB)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // Base Radio
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !isCbtDownloading && !isDownloading) { onUseCbtModelChange(false) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = !useCbtModel,
+                    onClick = { onUseCbtModelChange(false) },
+                    enabled = !isCbtDownloading && !isDownloading
+                )
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Base Model", style = MaterialTheme.typography.bodyLarge)
+                    Text("General purpose Gemma 3 1B (~580 MB)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        // --- Action Area (Download/Progress) ---
+        val activeDownload = if (useCbtModel) isCbtDownloading else isDownloading
+        val activeProgress = if (useCbtModel) cbtDownloadProgress else downloadProgress
+
+        // We show the download button if the engine is IDLE or ERROR.
+        val showDownloadButton = if (useCbtModel) {
+            // For CBT, we show the download button if it's not downloaded (IDLE) or load failed
+            // because the CBT file might be missing even if the base engine is READY.
+            modelLoadState == ModelLoadState.IDLE || modelLoadState == ModelLoadState.ERROR ||
+                    (modelLoadState == ModelLoadState.READY && !isCbtDownloaded(context))
+        } else {
+            modelLoadState == ModelLoadState.IDLE || modelLoadState == ModelLoadState.ERROR
+        }
+
+        if (activeDownload) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LinearProgressIndicator(
+                    progress = { activeProgress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Downloading… ${(activeProgress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else if (showDownloadButton) {
+            Button(
+                onClick = if (useCbtModel) onCbtDownload else onDownload,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Download ${if (useCbtModel) "CBT" else "Base"} Model")
+            }
+        }
+
+        // --- Engine Status ---
+        val statusText = when {
+            activeDownload -> "Downloading…"
+            modelLoadState == ModelLoadState.IDLE -> "Not downloaded"
+            modelLoadState == ModelLoadState.COPYING_MODEL -> "Copying…"
+            modelLoadState == ModelLoadState.LOADING_SESSION -> "Optimizing…"
+            modelLoadState == ModelLoadState.READY -> {
+                if (useCbtModel && !isCbtDownloaded(context)) "Not downloaded" else "Ready"
+            }
+            modelLoadState == ModelLoadState.ERROR -> "Load failed"
+            else -> "Offline"
+        }
+        val statusColor = if (statusText == "Ready")
+            StatusGreen
+        else if (modelLoadState == ModelLoadState.ERROR)
+            MaterialTheme.colorScheme.error
+        else
+            MaterialTheme.colorScheme.onSurfaceVariant
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Engine Status", style = MaterialTheme.typography.bodyMedium)
+            Text(statusText, style = MaterialTheme.typography.bodyMedium, color = statusColor, fontWeight = FontWeight.Bold)
+        }
+
+        if (notificationsBlocked && (isDownloading || isCbtDownloading)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    "Notifications are off — no status bar progress.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                        }
+                        context.startActivity(intent)
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                ) {
+                    Text("Enable", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
     }
 }
 
@@ -771,6 +752,105 @@ private fun ApiKeySection(
             enabled = keyInput.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Save key") }
+    }
+}
+
+// ── Personalization section ───────────────────────────────────────────────────
+
+@Composable
+private fun PersonalizationSection(
+    personalizationEnabled: Boolean,
+    manifest: AffectiveManifest?,
+    isResetting: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onReset: () -> Unit,
+) {
+    var showResetDialog by remember { mutableStateOf(false) }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Reset personalization?") },
+            text = {
+                Text(
+                    "All learned preferences will be deleted and the model will restart " +
+                    "from its default state on next launch. This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { onReset(); showResetDialog = false },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Enable personalization", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    if (personalizationEnabled) "Learning your mood patterns"
+                    else "Using default general model",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = personalizationEnabled, onCheckedChange = onToggle)
+        }
+
+        if (personalizationEnabled && manifest != null) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text("Model state", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Last trained ${formatTimestamp(manifest.lastTrainingTimestamp)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = { showResetDialog = true },
+                    enabled = !isResetting,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    if (isResetting) Text("Resetting…") else Text("Reset")
+                }
+            }
+        }
+    }
+}
+
+private fun isCbtDownloaded(context: android.content.Context): Boolean {
+    val file = java.io.File(context.filesDir, com.github.maskedkunisquat.lattice.LocalFallbackProvider.MODEL_FILE_CBT)
+    return file.exists() && file.length() > 100_000_000L
+}
+
+private fun formatTimestamp(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    return when {
+        diff < 60_000      -> "Just now"
+        diff < 3_600_000   -> "${diff / 60_000}m ago"
+        diff < 86_400_000  -> "${diff / 3_600_000}h ago"
+        else                   -> (diff / 86_400_000).let { d -> if (d == 1L) "1 day ago" else "$d days ago" }
     }
 }
 

@@ -243,6 +243,7 @@ class ModelDownloadWorker(
         const val KEY_SHA256 = "sha256"
         const val KEY_PROGRESS = "progress"
         const val UNIQUE_WORK_NAME = "model_download"
+        const val UNIQUE_WORK_NAME_CBT = "model_download_cbt"
     }
 }
 

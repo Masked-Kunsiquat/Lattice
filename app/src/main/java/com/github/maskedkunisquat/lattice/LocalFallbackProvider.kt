@@ -13,17 +13,25 @@ import com.github.maskedkunisquat.lattice.core.logic.LlmResult
 import com.github.maskedkunisquat.lattice.core.logic.ModelDownloader
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import java.io.File
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.withLock
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
+import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 
 /**
  * LLM provider backed by a locally-stored Gemma 3 1B Instruct LiteRT-LM model.
@@ -67,6 +75,8 @@ import kotlinx.coroutines.withContext
 class LocalFallbackProvider(
     private val context: Context,
     private val modelDownloader: ModelDownloader,
+    private val settingsRepository: SettingsRepository,
+    private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : LocalModelProvider {
 
@@ -80,9 +90,36 @@ class LocalFallbackProvider(
     // Subsequent initialize() calls will skip GPU entirely.
     @Volatile private var openClFailed = false
     private val initLock = Any()
+    private val engineLock = ReentrantReadWriteLock()
 
     private val _modelLoadState = MutableStateFlow(ModelLoadState.IDLE)
     override val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
+
+    private val _loadedModelName = MutableStateFlow<String?>(null)
+    override val loadedModelName: StateFlow<String?> = _loadedModelName.asStateFlow()
+
+    /**
+     * Whether the provider should prefer the CBT fine-tuned model.
+     * If true, [initialize] picks [MODEL_FILE_CBT] if it exists.
+     * If false, it always falls back to the appropriate base tier (elite/ultra/int4).
+     */
+    @Volatile
+    var useCbtModel: Boolean = true
+
+    init {
+        settingsRepository.settings
+            .map { it.useCbtModel }
+            .distinctUntilChanged()
+            .onEach { enabled ->
+                val old = useCbtModel
+                useCbtModel = enabled
+                // If we've already initialized, we need to re-initialize to switch models.
+                if (old != enabled && initAttempted) {
+                    withContext(dispatcher) { initialize() }
+                }
+            }
+            .launchIn(scope)
+    }
 
     /**
      * Triggers the [ModelDownloadWorker] to fetch the appropriate model file for this device.
@@ -98,6 +135,20 @@ class LocalFallbackProvider(
     }
 
     /**
+     * Triggers the [ModelDownloadWorker] to fetch the CBT fine-tuned model file.
+     * Once downloaded, [initialize] will automatically prefer it over the base tier file.
+     * Routes through [ModelDownloadWorker.UNIQUE_WORK_NAME_CBT] so it runs independently
+     * of any in-progress base model download.
+     */
+    fun downloadCbtModel() {
+        val sha256 = MODEL_SHA256[MODEL_FILE_CBT]
+        check(sha256 != null || BuildConfig.DEBUG) {
+            "SHA-256 digest for $MODEL_FILE_CBT is not set. Populate MODEL_SHA256 before shipping a release build."
+        }
+        modelDownloader.enqueue(MODEL_FILE_CBT, "$HF_BASE_URL/$MODEL_FILE_CBT", sha256)
+    }
+
+    /**
      * Creates the [Engine] and marks the provider ready.
      * Safe to call multiple times — no-op once engine is loaded.
      * Automatically resets after a failure so callers can retry (e.g. after
@@ -108,11 +159,28 @@ class LocalFallbackProvider(
      * - GPU (OpenCL JIT) then CPU for all-device int4 model
      */
     override fun initialize() {
-        if (engine != null) return
-        synchronized(initLock) {
-            if (engine != null) return
-            initAttempted = true
+        // Force a re-init if the engine is already loaded but with the wrong model file.
+        val (targetFile, _) = selectModelAndBackends()
+        if (engine != null && _loadedModelName.value == targetFile) return
 
+        synchronized(initLock) {
+            if (engine != null && _loadedModelName.value == targetFile) return
+            
+            // Close existing engine if switching models
+            if (engine != null) {
+                Log.i(TAG, "Closing existing engine to switch model: ${_loadedModelName.value} -> $targetFile")
+                engineLock.writeLock().withLock {
+                    try {
+                        (engine as? AutoCloseable)?.close()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error closing engine", e)
+                    }
+                    engine = null
+                    _loadedModelName.value = null
+                }
+            }
+
+            initAttempted = true
             val (modelFileName, backendsToTry) = selectModelAndBackends()
             val modelFile = File(context.filesDir, modelFileName)
             Log.i(TAG, "Initialising engine — file=$modelFileName board=${Build.BOARD} hardware=${Build.HARDWARE}")
@@ -127,20 +195,25 @@ class LocalFallbackProvider(
 
             var lastException: Exception? = null
             for (backend in backendsToTry) {
+                var eng: Engine? = null
                 try {
-                    val eng = Engine(EngineConfig(
+                    eng = Engine(EngineConfig(
                         modelPath = modelFile.absolutePath,
                         backend = backend,
                         cacheDir = context.cacheDir.path,
                     ))
                     eng.initialize()
                     engine = eng
+                    _loadedModelName.value = modelFileName
                     _modelLoadState.value = ModelLoadState.READY
                     Log.i(TAG, "LiteRT-LM engine ready — backend=${backend::class.simpleName} file=$modelFileName")
                     return
                 } catch (e: Exception) {
                     lastException = e
                     Log.w(TAG, "Engine init failed with backend ${backend::class.simpleName} — ${e.message}")
+                    try {
+                        (eng as? AutoCloseable)?.close()
+                    } catch (_: Exception) { }
                 }
             }
 
@@ -186,20 +259,30 @@ class LocalFallbackProvider(
         systemInstruction: String?,
         allowOpenClRetry: Boolean,
     ): Flow<LlmResult> = flow {
-        val eng = engine ?: throw IllegalStateException(
-            "Model not loaded. ${initFailureReason ?: "Call initialize() first."}"
-        )
-        val config = if (systemInstruction != null) {
-            ConversationConfig(systemInstruction = Contents.of(systemInstruction))
-        } else {
-            ConversationConfig()
+        val eng = engineLock.readLock().withLock {
+            engine ?: throw IllegalStateException(
+                "Model not loaded. ${initFailureReason ?: "Call initialize() first."}"
+            )
         }
-        eng.createConversation(config).use { conversation ->
-            conversation.sendMessageAsync(prompt).collect { message ->
-                val text = message.toString()
-                if (text.isNotEmpty()) emit(LlmResult.Token(text))
+
+        // We MUST hold the read lock while the engine is in use (during inference)
+        // to prevent initialize() or switchToCpu() from closing it underneath us.
+        engineLock.readLock().lock()
+        try {
+            val config = if (systemInstruction != null) {
+                ConversationConfig(systemInstruction = Contents.of(systemInstruction))
+            } else {
+                ConversationConfig()
             }
-            emit(LlmResult.Complete)
+            eng.createConversation(config).use { conversation ->
+                conversation.sendMessageAsync(prompt).collect { message ->
+                    val text = message.toString()
+                    if (text.isNotEmpty()) emit(LlmResult.Token(text))
+                }
+                emit(LlmResult.Complete)
+            }
+        } finally {
+            engineLock.readLock().unlock()
         }
     }.catch { e ->
         if (allowOpenClRetry && !openClFailed &&
@@ -219,11 +302,14 @@ class LocalFallbackProvider(
      */
     private fun switchToCpu() {
         synchronized(initLock) {
-            (engine as? AutoCloseable)?.runCatching { close() }
-            engine = null
-            initAttempted = false
-            initFailureReason = null
-            _modelLoadState.value = ModelLoadState.IDLE
+            engineLock.writeLock().withLock {
+                (engine as? AutoCloseable)?.runCatching { close() }
+                engine = null
+                _loadedModelName.value = null
+                initAttempted = false
+                initFailureReason = null
+                _modelLoadState.value = ModelLoadState.IDLE
+            }
         }
         initialize() // openClFailed = true, so backends = [CPU]
     }
@@ -242,6 +328,15 @@ class LocalFallbackProvider(
      * not a catchable exception — so we must guard the NPU path before attempting init.
      */
     private fun selectModelAndBackends(): Pair<String, List<Backend>> {
+        // Prefer the CBT fine-tuned model when it has been downloaded AND enabled in settings.
+        val cbtFile = File(context.filesDir, MODEL_FILE_CBT)
+        if (useCbtModel && cbtFile.exists() && cbtFile.length() > 100_000_000L) {
+            val backends = if (!openClFailed) listOf(Backend.GPU(), Backend.CPU())
+                           else listOf(Backend.CPU())
+            Log.i(TAG, "CBT model selected — using $MODEL_FILE_CBT")
+            return MODEL_FILE_CBT to backends
+        }
+
         val board = Build.BOARD.lowercase(java.util.Locale.ROOT)
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val dispatchLibAvailable = java.io.File(nativeLibDir, "libpenguin.so").exists()
@@ -290,6 +385,11 @@ class LocalFallbackProvider(
         // For all other devices. ~584 MB.
         const val MODEL_FILE_INT4  = "gemma3-1b-it-int4.litertlm"
 
+        // CBT fine-tuned model — merged LoRA weights, INT8 quantisation.
+        // Preferred over the base tier files when present in filesDir.
+        // Download via downloadCbtModel(); upload to HF repo after offline training completes.
+        const val MODEL_FILE_CBT   = "gemma3-1b-it-cbt-int8.litertlm"
+
         // Convenience alias — the file this device will download/use.
         // (Used by external callers that don't have a Context to call selectModelAndBackends.)
         const val MODEL_FILE = MODEL_FILE_INT4
@@ -300,9 +400,10 @@ class LocalFallbackProvider(
          * TODO: populate from HuggingFace model card checksums before shipping.
          */
         internal val MODEL_SHA256: Map<String, String?> = mapOf(
-            MODEL_FILE_ELITE to null,
-            MODEL_FILE_ULTRA to null,
-            MODEL_FILE_INT4  to null,
+            MODEL_FILE_ELITE to "1904ceff9591e7a140df3a672c800e8e7bee8337526484b00f69ccef4fa2d60a",
+            MODEL_FILE_ULTRA to "85d2ea5199802f913818d53897b3a304bcf983abb993393e6b1749fbdb005552",
+            MODEL_FILE_INT4  to "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",
+            MODEL_FILE_CBT   to "e8f6c82183c70a4fcdc5a2512c182ff14ac77e7a302f78eab87d40e0189fe758",
         )
     }
 }

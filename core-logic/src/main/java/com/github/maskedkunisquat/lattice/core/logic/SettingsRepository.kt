@@ -26,6 +26,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val TRANSIT_RETENTION_DAYS = intPreferencesKey("transit_retention_days")
         val EXPORT_INCLUDE_TRANSIT_LOG = booleanPreferencesKey("export_include_transit_log")
         val PERSONALIZATION_ENABLED = booleanPreferencesKey("personalization_enabled")
+        val USE_CBT_MODEL = booleanPreferencesKey("use_cbt_model")
     }
 
     val settings: Flow<LatticeSettings> = dataStore.data.map { prefs ->
@@ -35,6 +36,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             transitRetentionDays = prefs[Keys.TRANSIT_RETENTION_DAYS] ?: 90,
             exportIncludeTransitLog = prefs[Keys.EXPORT_INCLUDE_TRANSIT_LOG] ?: true,
             personalizationEnabled = prefs[Keys.PERSONALIZATION_ENABLED] ?: true,
+            useCbtModel = prefs[Keys.USE_CBT_MODEL] ?: true,
         )
     }
 
@@ -58,6 +60,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setPersonalizationEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.PERSONALIZATION_ENABLED] = enabled }
     }
+
+    suspend fun setUseCbtModel(enabled: Boolean) {
+        dataStore.edit { it[Keys.USE_CBT_MODEL] = enabled }
+    }
 }
 
 data class LatticeSettings(
@@ -66,4 +72,5 @@ data class LatticeSettings(
     val transitRetentionDays: Int = 90,
     val exportIncludeTransitLog: Boolean = true,
     val personalizationEnabled: Boolean = true,
+    val useCbtModel: Boolean = true,
 )
