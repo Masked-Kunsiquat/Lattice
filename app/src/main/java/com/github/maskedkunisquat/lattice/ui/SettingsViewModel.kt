@@ -46,6 +46,7 @@ class SettingsViewModel(
     private val exportManager: ExportManager,
     private val cloudCredentialStore: CloudCredentialStore,
     val modelLoadState: StateFlow<ModelLoadState>,
+    val loadedModelName: StateFlow<String?>,
     private val localFallbackProvider: LocalFallbackProvider,
     private val manifestDao: TrainingManifestDao,
     // 3.6-f: injected singleton instead of constructing ad-hoc in resetPersonalization
@@ -246,6 +247,7 @@ class SettingsViewModel(
                     exportManager = app.exportManager,
                     cloudCredentialStore = app.cloudCredentialStore,
                     modelLoadState = app.localFallbackProvider.modelLoadState,
+                    loadedModelName = app.localFallbackProvider.loadedModelName,
                     manifestDao = app.database.trainingManifestDao(),
                     trainingCoordinator = app.trainingCoordinator,
                     localFallbackProvider = app.localFallbackProvider,

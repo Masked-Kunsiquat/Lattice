@@ -84,6 +84,16 @@ class LocalFallbackProvider(
     private val _modelLoadState = MutableStateFlow(ModelLoadState.IDLE)
     override val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
 
+    private val _loadedModelName = MutableStateFlow<String?>(null)
+    override val loadedModelName: StateFlow<String?> = _loadedModelName.asStateFlow()
+
+    /**
+     * Whether the provider should prefer the CBT fine-tuned model.
+     * If true, [initialize] picks [MODEL_FILE_CBT] if it exists.
+     * If false, it always falls back to the appropriate base tier (elite/ultra/int4).
+     */
+    var useCbtModel: Boolean = true
+
     /**
      * Triggers the [ModelDownloadWorker] to fetch the appropriate model file for this device.
      * UI should observe [getDownloadWorkInfo] to track progress.
@@ -122,11 +132,26 @@ class LocalFallbackProvider(
      * - GPU (OpenCL JIT) then CPU for all-device int4 model
      */
     override fun initialize() {
-        if (engine != null) return
-        synchronized(initLock) {
-            if (engine != null) return
-            initAttempted = true
+        // Force a re-init if the engine is already loaded but with the wrong model file.
+        val (targetFile, _) = selectModelAndBackends()
+        if (engine != null && _loadedModelName.value == targetFile) return
 
+        synchronized(initLock) {
+            if (engine != null && _loadedModelName.value == targetFile) return
+            
+            // Close existing engine if switching models
+            if (engine != null) {
+                Log.i(TAG, "Closing existing engine to switch model: ${_loadedModelName.value} -> $targetFile")
+                try {
+                    (engine as? AutoCloseable)?.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error closing engine", e)
+                }
+                engine = null
+                _loadedModelName.value = null
+            }
+
+            initAttempted = true
             val (modelFileName, backendsToTry) = selectModelAndBackends()
             val modelFile = File(context.filesDir, modelFileName)
             Log.i(TAG, "Initialising engine — file=$modelFileName board=${Build.BOARD} hardware=${Build.HARDWARE}")
@@ -149,6 +174,7 @@ class LocalFallbackProvider(
                     ))
                     eng.initialize()
                     engine = eng
+                    _loadedModelName.value = modelFileName
                     _modelLoadState.value = ModelLoadState.READY
                     Log.i(TAG, "LiteRT-LM engine ready — backend=${backend::class.simpleName} file=$modelFileName")
                     return
@@ -235,6 +261,7 @@ class LocalFallbackProvider(
         synchronized(initLock) {
             (engine as? AutoCloseable)?.runCatching { close() }
             engine = null
+            _loadedModelName.value = null
             initAttempted = false
             initFailureReason = null
             _modelLoadState.value = ModelLoadState.IDLE
@@ -256,15 +283,12 @@ class LocalFallbackProvider(
      * not a catchable exception — so we must guard the NPU path before attempting init.
      */
     private fun selectModelAndBackends(): Pair<String, List<Backend>> {
-        // Prefer the CBT fine-tuned model when it has been downloaded.
-        // It is a standard INT4 model so GPU→CPU backends apply on all devices,
-        // including SM8750/SM8650 flagships — the NPU-compiled elite/ultra models
-        // are bypassed when CBT is present.
+        // Prefer the CBT fine-tuned model when it has been downloaded AND enabled in settings.
         val cbtFile = File(context.filesDir, MODEL_FILE_CBT)
-        if (cbtFile.exists() && cbtFile.length() > 100_000_000L) {
+        if (useCbtModel && cbtFile.exists() && cbtFile.length() > 100_000_000L) {
             val backends = if (!openClFailed) listOf(Backend.GPU(), Backend.CPU())
                            else listOf(Backend.CPU())
-            Log.i(TAG, "CBT model present — using $MODEL_FILE_CBT")
+            Log.i(TAG, "CBT model selected — using $MODEL_FILE_CBT")
             return MODEL_FILE_CBT to backends
         }
 
