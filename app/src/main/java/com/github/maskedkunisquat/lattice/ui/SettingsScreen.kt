@@ -168,6 +168,8 @@ fun InferenceSettingsScreen(
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val downloadWorkInfo by viewModel.downloadWorkInfo.collectAsStateWithLifecycle(null)
+    val cbtDownloadProgress by viewModel.cbtDownloadProgress.collectAsStateWithLifecycle()
+    val cbtDownloadWorkInfo by viewModel.cbtDownloadWorkInfo.collectAsStateWithLifecycle(null)
 
     val context = LocalContext.current
 
@@ -189,6 +191,20 @@ fun InferenceSettingsScreen(
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             viewModel.downloadModel()
+        }
+    }
+
+    val onCbtDownload: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Re-using the same launcher is fine for now; in a real app we'd
+            // perhaps track which download was requested.
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.downloadCbtModel()
         }
     }
 
@@ -218,10 +234,15 @@ fun InferenceSettingsScreen(
             item { SectionHeader("Local Model") }
             item {
                 LocalModelSection(
+                    useCbtModel = settings.useCbtModel,
+                    onUseCbtModelChange = viewModel::setUseCbtModel,
                     modelLoadState = modelLoadState,
                     downloadProgress = downloadProgress,
                     downloadWorkInfo = downloadWorkInfo,
                     onDownload = onDownload,
+                    cbtDownloadProgress = cbtDownloadProgress,
+                    cbtDownloadWorkInfo = cbtDownloadWorkInfo,
+                    onCbtDownload = onCbtDownload,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -382,14 +403,21 @@ fun PrivacyDataSettingsScreen(
 
 @Composable
 private fun LocalModelSection(
+    useCbtModel: Boolean,
+    onUseCbtModelChange: (Boolean) -> Unit,
     modelLoadState: ModelLoadState,
     downloadProgress: Float,
     downloadWorkInfo: WorkInfo?,
     onDownload: () -> Unit,
+    cbtDownloadProgress: Float,
+    cbtDownloadWorkInfo: WorkInfo?,
+    onCbtDownload: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isDownloading = downloadWorkInfo?.state == WorkInfo.State.RUNNING ||
             downloadWorkInfo?.state == WorkInfo.State.ENQUEUED
+    val isCbtDownloading = cbtDownloadWorkInfo?.state == WorkInfo.State.RUNNING ||
+            cbtDownloadWorkInfo?.state == WorkInfo.State.ENQUEUED
 
     val context = LocalContext.current
     val notificationsBlocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -398,17 +426,63 @@ private fun LocalModelSection(
         ) != PackageManager.PERMISSION_GRANTED
     } else false
 
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // --- CBT Model Selection & Download ---
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("CBT Fine-tuned Model", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Specially trained for cognitive reframing.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = useCbtModel,
+                    onCheckedChange = onUseCbtModelChange,
+                    enabled = !isCbtDownloading
+                )
+            }
+
+            if (isCbtDownloading) {
+                LinearProgressIndicator(
+                    progress = { cbtDownloadProgress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Downloading CBT model… ${(cbtDownloadProgress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (useCbtModel && modelLoadState == ModelLoadState.IDLE) {
+                // This state isn't perfectly accurate since it doesn't distinguish which 
+                // file is missing, but LocalFallbackProvider handles the delete-on-init-fail.
+                Button(
+                    onClick = onCbtDownload,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Download CBT Model (~530 MB)")
+                }
+            }
+        }
+
+        // --- Status Row ---
         val statusText = when {
-            isDownloading -> "Downloading… ${(downloadProgress * 100).toInt()}%"
+            isDownloading || isCbtDownloading -> "Downloading…"
             modelLoadState == ModelLoadState.IDLE -> "Not downloaded"
             modelLoadState == ModelLoadState.COPYING_MODEL -> "Copying model…"
             modelLoadState == ModelLoadState.LOADING_SESSION -> "Loading session…"
-            modelLoadState == ModelLoadState.READY -> "Ready"
+            modelLoadState == ModelLoadState.READY -> "Engine ready"
             modelLoadState == ModelLoadState.ERROR -> "Load failed"
             else -> "Not downloaded"
         }
-        // Only READY gets a distinct color; all other states use the neutral variant.
         val statusColor = if (modelLoadState == ModelLoadState.READY)
             StatusGreen
         else
@@ -419,94 +493,64 @@ private fun LocalModelSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Gemma 3 1B (local fallback)", style = MaterialTheme.typography.bodyLarge)
-                Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
-            }
-            if ((modelLoadState == ModelLoadState.ERROR || modelLoadState == ModelLoadState.IDLE) && !isDownloading) {
-                Button(
-                    onClick = onDownload,
-                    modifier = Modifier.padding(start = 8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                ) {
-                    Text("Download", style = MaterialTheme.typography.labelMedium)
-                }
+            Text("Engine Status", style = MaterialTheme.typography.bodyMedium)
+            Text(statusText, style = MaterialTheme.typography.bodyMedium, color = statusColor)
+        }
+
+        // --- Base Model Download (Fallback) ---
+        if (!useCbtModel && modelLoadState == ModelLoadState.IDLE && !isDownloading) {
+            Button(
+                onClick = onDownload,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Download Base Model (~580 MB)")
             }
         }
-        when {
-            isDownloading -> {
-                LinearProgressIndicator(
-                    progress = { downloadProgress },
-                    modifier = Modifier.fillMaxWidth(),
+
+        if (isDownloading) {
+            LinearProgressIndicator(
+                progress = { downloadProgress },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Downloading base model… ${(downloadProgress * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (notificationsBlocked && (isDownloading || isCbtDownloading)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(14.dp),
                 )
                 Text(
-                    "Downloading ~700 MB to device storage. You can close the app.",
+                    "Notifications are off — no status bar progress.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
                 )
-                if (notificationsBlocked) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Text(
-                            "Notifications are off — no status bar progress.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(
-                            onClick = {
-                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = Uri.fromParts("package", context.packageName, null)
-                                }
-                                context.startActivity(intent)
-                            },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        ) {
-                            Text("Enable", style = MaterialTheme.typography.labelSmall)
+                TextButton(
+                    onClick = {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
                         }
-                    }
+                        context.startActivity(intent)
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                ) {
+                    Text("Enable", style = MaterialTheme.typography.labelSmall)
                 }
             }
-            modelLoadState == ModelLoadState.COPYING_MODEL -> {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text(
-                    "Preparing model files. Please wait.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            modelLoadState == ModelLoadState.LOADING_SESSION -> {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text(
-                    "Optimizing model for your hardware. This may take a minute.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            modelLoadState == ModelLoadState.ERROR -> {
-                Text(
-                    "The model file failed to load. Download to try again (~700 MB).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            modelLoadState == ModelLoadState.IDLE -> {
-                Text(
-                    "Download to enable local inference (~700 MB). Runs entirely on-device.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            else -> Unit
         }
     }
 }

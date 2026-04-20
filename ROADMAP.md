@@ -172,8 +172,8 @@ The deeper problem: for positive/neutral entries with no cognitive distortions, 
   **Android integration**:
   - [x] `ModelDownloadWorker` — `UNIQUE_WORK_NAME_CBT` added; CBT download runs independently of base model download
   - [x] `LocalFallbackProvider` — `MODEL_FILE_CBT` constant + `downloadCbtModel()`; `selectModelAndBackends()` checks `filesDir` for CBT file first, falls back to board-tier selection
-  - [ ] Run training to completion; review loss curve and sample outputs before uploading
-  - [ ] Upload merged model to HuggingFace (`masked-kunsiquat/gemma-3-1b-it-litert`) and populate `MODEL_SHA256[MODEL_FILE_CBT]`
+  - [x] Run training to completion; review loss curve and sample outputs before uploading
+  - [x] Upload merged model to HuggingFace (`masked-kunsiquat/gemma-3-1b-it-litert`) and populate `MODEL_SHA256[MODEL_FILE_CBT]`
 
 ---
 

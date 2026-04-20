@@ -96,8 +96,24 @@ class SettingsViewModel(
         .map { info -> info?.progress?.getFloat(ModelDownloadWorker.KEY_PROGRESS, 0f) ?: 0f }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)
 
+    val cbtDownloadWorkInfo: StateFlow<WorkInfo?> = workManager
+        .getWorkInfosForUniqueWorkFlow(ModelDownloadWorker.UNIQUE_WORK_NAME_CBT)
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val cbtDownloadProgress: StateFlow<Float> = cbtDownloadWorkInfo
+        .map { info -> info?.progress?.getFloat(ModelDownloadWorker.KEY_PROGRESS, 0f) ?: 0f }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)
+
     init {
         downloadWorkInfo
+            .map { it?.state }
+            .distinctUntilChanged()
+            .filter { it == WorkInfo.State.SUCCEEDED }
+            .onEach { viewModelScope.launch(Dispatchers.IO) { localFallbackProvider.initialize() } }
+            .launchIn(viewModelScope)
+
+        cbtDownloadWorkInfo
             .map { it?.state }
             .distinctUntilChanged()
             .filter { it == WorkInfo.State.SUCCEEDED }
@@ -154,6 +170,14 @@ class SettingsViewModel(
         viewModelScope.launch { activityDao.deleteActivity(activity) }
     }
 
+    fun setUseCbtModel(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setUseCbtModel(enabled)
+            // Re-initialize provider to pick up/drop the CBT model file
+            localFallbackProvider.initialize()
+        }
+    }
+
     fun setPersonalizationEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setPersonalizationEnabled(enabled) }
     }
@@ -191,6 +215,11 @@ class SettingsViewModel(
             return
         }
         localFallbackProvider.downloadModel()
+    }
+
+    fun downloadCbtModel() {
+        if (!BuildConfig.BUILD_HAS_NETWORK) return
+        localFallbackProvider.downloadCbtModel()
     }
 
     fun exportJournal() {

@@ -331,10 +331,10 @@ class LocalFallbackProvider(
          * TODO: populate from HuggingFace model card checksums before shipping.
          */
         internal val MODEL_SHA256: Map<String, String?> = mapOf(
-            MODEL_FILE_ELITE to null,
-            MODEL_FILE_ULTRA to null,
-            MODEL_FILE_INT4  to null,
-            MODEL_FILE_CBT   to null,
+            MODEL_FILE_ELITE to "1904ceff9591e7a140df3a672c800e8e7bee8337526484b00f69ccef4fa2d60a",
+            MODEL_FILE_ULTRA to "85d2ea5199802f913818d53897b3a304bcf983abb993393e6b1749fbdb005552",
+            MODEL_FILE_INT4  to "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",
+            MODEL_FILE_CBT   to "8a43b82bb59521987428e2b7d906d8f517c4b9d913716a916f0ba355919756d2",
         )
     }
 }
