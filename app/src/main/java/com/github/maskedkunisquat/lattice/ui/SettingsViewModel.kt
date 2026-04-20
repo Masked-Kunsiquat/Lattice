@@ -174,6 +174,7 @@ class SettingsViewModel(
     fun setUseCbtModel(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setUseCbtModel(enabled)
+            localFallbackProvider.useCbtModel = enabled
             // Re-initialize provider to pick up/drop the CBT model file
             localFallbackProvider.initialize()
         }

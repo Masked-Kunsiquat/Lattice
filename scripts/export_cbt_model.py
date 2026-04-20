@@ -54,8 +54,7 @@ def recover_tokenizer(model_dir):
         path = hf_hub_download(repo_id="google/gemma-3-1b-it", filename="tokenizer.model", local_dir=model_dir)
         return pathlib.Path(path)
     except Exception as e:
-        print(f"❌ Tokenizer recovery failed: {e}")
-        return None
+        raise RuntimeError(f"❌ Tokenizer recovery failed: {e}") from e
 
 # ── Step 2: The Process ──────────────────────────────────────────────────────
 
@@ -103,18 +102,24 @@ def run_pipeline(args):
     main_tflite = max(tflite_files, key=lambda p: p.stat().st_size)
 
     # 5. The Bundle
+    bundle_work = tmp_dir / "bundle_work"
+    bundle_work.mkdir(parents=True, exist_ok=True)
     final_file = out_dir / f"{args.filename}.litertlm"
     print(f"📦 Bundling into: {final_file}")
 
     from litert_torch.generative.utilities.litertlm_builder import build_litertlm
     build_litertlm(
         tflite_model_path=str(main_tflite),
-        workdir=str(tmp_dir / "bundle_work"),
-        output_path=str(final_file),
+        workdir=str(bundle_work),
+        output_path=str(out_dir),
         context_length=args.context,
         tokenizer_model_path=str(tok_path),
         llm_model_type="gemma3"
     )
+
+    generated_file = out_dir / (main_tflite.stem + ".litertlm")
+    if generated_file.exists() and generated_file != final_file:
+        generated_file.rename(final_file)
 
     return final_file
 
@@ -128,12 +133,16 @@ if __name__ == "__main__":
     parser.add_argument("--filename",  default="gemma3-1b-it-cbt-int8")
     parser.add_argument("--prefill",   type=int, default=256)
     parser.add_argument("--context",   type=int, default=1280)
+    parser.add_argument("--upload",    action="store_true", default=False, help="Upload to HF repo if successful")
     args, _ = parser.parse_known_args()
 
     result_path = run_pipeline(args)
 
     if result_path and result_path.exists():
         print(f"✨ SUCCESS! Created: {result_path}")
-        api = HfApi()
-        print(f"📤 Uploading to HF...")
-        api.upload_file(path_or_fileobj=str(result_path), path_in_repo=result_path.name, repo_id=args.hf_source)
+        if args.upload:
+            api = HfApi()
+            print(f"📤 Uploading to HF...")
+            api.upload_file(path_or_fileobj=str(result_path), path_in_repo=result_path.name, repo_id=args.hf_source)
+        else:
+            print("ℹ️ Upload skipped (use --upload to publish)")

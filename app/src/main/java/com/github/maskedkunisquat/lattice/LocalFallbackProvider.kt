@@ -14,16 +14,22 @@ import com.github.maskedkunisquat.lattice.core.logic.ModelDownloader
 import com.github.maskedkunisquat.lattice.core.logic.ModelLoadState
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
+import com.github.maskedkunisquat.lattice.core.logic.SettingsRepository
 
 /**
  * LLM provider backed by a locally-stored Gemma 3 1B Instruct LiteRT-LM model.
@@ -67,6 +73,8 @@ import kotlinx.coroutines.withContext
 class LocalFallbackProvider(
     private val context: Context,
     private val modelDownloader: ModelDownloader,
+    private val settingsRepository: SettingsRepository,
+    private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : LocalModelProvider {
 
@@ -92,7 +100,23 @@ class LocalFallbackProvider(
      * If true, [initialize] picks [MODEL_FILE_CBT] if it exists.
      * If false, it always falls back to the appropriate base tier (elite/ultra/int4).
      */
+    @Volatile
     var useCbtModel: Boolean = true
+
+    init {
+        settingsRepository.settings
+            .map { it.useCbtModel }
+            .distinctUntilChanged()
+            .onEach { enabled ->
+                val old = useCbtModel
+                useCbtModel = enabled
+                // If we've already initialized, we need to re-initialize to switch models.
+                if (old != enabled && initAttempted) {
+                    withContext(dispatcher) { initialize() }
+                }
+            }
+            .launchIn(scope)
+    }
 
     /**
      * Triggers the [ModelDownloadWorker] to fetch the appropriate model file for this device.
@@ -166,8 +190,9 @@ class LocalFallbackProvider(
 
             var lastException: Exception? = null
             for (backend in backendsToTry) {
+                var eng: Engine? = null
                 try {
-                    val eng = Engine(EngineConfig(
+                    eng = Engine(EngineConfig(
                         modelPath = modelFile.absolutePath,
                         backend = backend,
                         cacheDir = context.cacheDir.path,
@@ -181,6 +206,9 @@ class LocalFallbackProvider(
                 } catch (e: Exception) {
                     lastException = e
                     Log.w(TAG, "Engine init failed with backend ${backend::class.simpleName} — ${e.message}")
+                    try {
+                        (eng as? AutoCloseable)?.close()
+                    } catch (_: Exception) { }
                 }
             }
 

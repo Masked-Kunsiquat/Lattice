@@ -176,36 +176,43 @@ fun InferenceSettingsScreen(
 
     val context = LocalContext.current
 
+    var pendingDownloadAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     // Request POST_NOTIFICATIONS before enqueueing the download worker so the
     // foreground service progress notification is permitted. Download proceeds
     // regardless of the outcome — in-app progress is always visible.
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
-        viewModel.downloadModel()
+        pendingDownloadAction?.invoke()
+        pendingDownloadAction = null
     }
 
     val onDownload: () -> Unit = {
+        val action = { viewModel.downloadModel() }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            pendingDownloadAction = action
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            viewModel.downloadModel()
+            action()
         }
     }
 
     val onCbtDownload: () -> Unit = {
+        val action = { viewModel.downloadCbtModel() }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            pendingDownloadAction = action
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            viewModel.downloadCbtModel()
+            action()
         }
     }
 
@@ -508,7 +515,14 @@ private fun LocalModelSection(
         val activeProgress = if (useCbtModel) cbtDownloadProgress else downloadProgress
 
         // We show the download button if the engine is IDLE or ERROR.
-        val showDownloadButton = modelLoadState == ModelLoadState.IDLE || modelLoadState == ModelLoadState.ERROR
+        val showDownloadButton = if (useCbtModel) {
+            // For CBT, we show the download button if it's not downloaded (IDLE) or load failed
+            // because the CBT file might be missing even if the base engine is READY.
+            modelLoadState == ModelLoadState.IDLE || modelLoadState == ModelLoadState.ERROR ||
+                    (modelLoadState == ModelLoadState.READY && !isCbtDownloaded(context))
+        } else {
+            modelLoadState == ModelLoadState.IDLE || modelLoadState == ModelLoadState.ERROR
+        }
 
         if (activeDownload) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -539,11 +553,13 @@ private fun LocalModelSection(
             modelLoadState == ModelLoadState.IDLE -> "Not downloaded"
             modelLoadState == ModelLoadState.COPYING_MODEL -> "Copying…"
             modelLoadState == ModelLoadState.LOADING_SESSION -> "Optimizing…"
-            modelLoadState == ModelLoadState.READY -> "Ready"
+            modelLoadState == ModelLoadState.READY -> {
+                if (useCbtModel && !isCbtDownloaded(context)) "Not downloaded" else "Ready"
+            }
             modelLoadState == ModelLoadState.ERROR -> "Load failed"
             else -> "Offline"
         }
-        val statusColor = if (modelLoadState == ModelLoadState.READY)
+        val statusColor = if (statusText == "Ready")
             StatusGreen
         else if (modelLoadState == ModelLoadState.ERROR)
             MaterialTheme.colorScheme.error
@@ -820,6 +836,11 @@ private fun PersonalizationSection(
             }
         }
     }
+}
+
+private fun isCbtDownloaded(context: android.content.Context): Boolean {
+    val file = java.io.File(context.filesDir, "gemma3-1b-it-cbt-int8.litertlm")
+    return file.exists() && file.length() > 100_000_000L
 }
 
 private fun formatTimestamp(timestamp: Long): String {
