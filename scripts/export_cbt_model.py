@@ -1,214 +1,139 @@
 """
-export_cbt_model.py
-===================
-Fixed for Kaggle: Runs export_hf in-process via runpy to avoid os.fork deadlocks
-while maintaining all stubbing and environment logic.
+export_cbt_model.py — Kaggle "The Beast" Edition
+===============================================
+- Cleans up /tmp and /working directories first
+- Patches Gemma 3 Config (RoPE bypass)
+- Recovers tokenizer.model from Google
+- Quantizes to INT8 (dynamic_wi8)
+- Bundles and Uploads to HF
 """
 
 from __future__ import annotations
+import argparse, os, pathlib, sys, gc, shutil, runpy, json
+from huggingface_hub import hf_hub_download, snapshot_download, HfApi
 
-import argparse
-import os
-import pathlib
-import sys
-import time
-import zipfile
-import gc
-import torch
-import runpy
-import importlib.abc
-import importlib.util
-import types
-import typing
+# ── Step 0: The Janitor (Cleanup) ───────────────────────────────────────────
 
-# ── Environment Setup ─────────────────────────────────────────────────────────
+def cleanup_environment(output_dir, cache_dir):
+    """Wipes stale files to prevent 'Disk Full' or 'File Exists' errors."""
+    print("🧹 Cleaning environment...")
 
-# Force cleanup
-gc.collect()
-if torch.cuda.is_available():
-    torch.cuda.empty_cache()
-
-_in_notebook = "__file__" not in dir()
-
-# ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  NOTEBOOK CONFIGURATION                                                      ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
-NOTEBOOK_HF_SOURCE  = "masked-kunsiquat/gemma-3-1b-it-litert"
-NOTEBOOK_SUBFOLDER  = "cbt-merged-bf16"
-NOTEBOOK_OUTPUT_DIR = "/kaggle/working/export-output"
-NOTEBOOK_UPLOAD      = True
-# ══════════════════════════════════════════════════════════════════════════════
-
-DEFAULT_OUTPUT  = pathlib.Path(NOTEBOOK_OUTPUT_DIR) if _in_notebook else pathlib.Path.cwd() / "export-output"
-DEFAULT_FILENAME = "gemma3-1b-it-cbt-int4"
-
-# ── Torchao Stub Injection (The "Beast" Tamer) ───────────────────────────────
-
-def _inject_torchao_stubs():
-    """
-    Prevents litert-torch from crashing when it looks for torchao.
-    Must be called before importing or running litert modules.
-    """
-    class _Pt2eAutoStub(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-        _PREFIX = "torchao.quantization.pt2e"
-        def find_spec(self, fullname, path, target=None):
-            if fullname == self._PREFIX or fullname.startswith(self._PREFIX + "."):
-                return importlib.util.spec_from_loader(fullname, self, is_package=True)
-            return None
-        def create_module(self, spec):
-            mod = types.ModuleType(spec.name)
-            mod.__path__ = []
-            mod.__package__ = spec.name
-            mod.__spec__ = spec
-            mod.__loader__ = self
-            mod.__file__ = f"/stub/{spec.name.replace('.', '/')}.py"
-            return mod
-        def exec_module(self, module):
-            def _make_cls(name):
-                return type(name, (), {
-                    "__class_getitem__": classmethod(lambda c, *a, **kw: c),
-                    "with_args":         classmethod(lambda c, *a, **kw: c),
-                    "__init__":          lambda self, *a, **kw: None,
-                    "__call__":          lambda self, *a, **kw: None,
-                })
-            module.__getattr__ = lambda name: _make_cls(name)
-
-    if not any(isinstance(f, _Pt2eAutoStub) for f in sys.meta_path):
-        sys.meta_path.insert(0, _Pt2eAutoStub())
-
-    # Patch typing hints for compatibility
-    if not getattr(typing.get_type_hints, "_lattice_patched", False):
-        _orig_gth = typing.get_type_hints
-        def _safe_gth(obj, *a, **kw):
-            try: return _orig_gth(obj, *a, **kw)
-            except: return getattr(obj, "__annotations__", {})
-        _safe_gth._lattice_patched = True
-        typing.get_type_hints = _safe_gth
-
-# ── Logic Blocks ─────────────────────────────────────────────────────────────
-
-def _resolve_source(source: str, subfolder: str | None) -> tuple[str, pathlib.Path | None]:
-    if not subfolder:
-        return source, None
-    from huggingface_hub import snapshot_download
-    # Using /kaggle/working to avoid RAM-disk pressure in /tmp
-    local_cache = pathlib.Path("/kaggle/working/_hf_model_cache")
-    print(f"Resolving HF subfolder: {source}/{subfolder}")
-    snapshot_download(
-        repo_id=source,
-        allow_patterns=[f"{subfolder}/*"],
-        local_dir=str(local_cache),
-    )
-    return str(local_cache / subfolder), (local_cache / subfolder)
-
-def run_export_hf(source, tflite_dir, prefill, context, subfolder):
-    resolved_source, local_model_dir = _resolve_source(source, subfolder)
-
-    # We prepare the sys.argv exactly as the CLI expects
-    orig_argv = sys.argv
-    sys.argv = [
-        "litert_torch.generative.export_hf",
-        resolved_source,
-        str(tflite_dir),
-        "-p", f"[{prefill}]",
-        "--cache_length", str(context),
-        "-q", "dynamic_wi4_afp32",
-        "--externalize_embedder",
-        "--use_jinja_template",
+    # Paths to clear
+    to_wipe = [
+        output_dir,
+        cache_dir,
+        pathlib.Path("/tmp/_tflite_tmp"),
+        pathlib.Path("/tmp/_litertlm_work")
     ]
 
-    print(f"Running export_hf in-process via runpy...")
+    for path in to_wipe:
+        if path.exists():
+            print(f"  Removing: {path}")
+            shutil.rmtree(path)
+        path.mkdir(parents=True, exist_ok=True)
+
+    # Trigger garbage collection
+    gc.collect()
+
+# ── Step 1: Logic Helpers ───────────────────────────────────────────────────
+
+def patch_config(model_dir):
+    cfg_p = pathlib.Path(model_dir) / "config.json"
+    if not cfg_p.exists(): return
+    with open(cfg_p, "r") as f: cfg = json.load(f)
+    if "rope_scaling" in cfg:
+        print("🛠️ Patching config: Removing rope_scaling...")
+        del cfg["rope_scaling"]
+        with open(cfg_p, "w") as f: json.dump(cfg, f, indent=2)
+
+def recover_tokenizer(model_dir):
+    target = pathlib.Path(model_dir) / "tokenizer.model"
+    if target.exists(): return target
+    print("🔍 tokenizer.model missing! Fetching compatible version from Google...")
     try:
-        # runpy.run_module is the key: it avoids fork() but runs the module logic
+        path = hf_hub_download(repo_id="google/gemma-3-1b-it", filename="tokenizer.model", local_dir=model_dir)
+        return pathlib.Path(path)
+    except Exception as e:
+        print(f"❌ Tokenizer recovery failed: {e}")
+        return None
+
+# ── Step 2: The Process ──────────────────────────────────────────────────────
+
+def run_pipeline(args):
+    out_dir = pathlib.Path(args.output)
+    tmp_dir = out_dir / "_tflite_tmp"
+    cache_dir = pathlib.Path("/kaggle/working/_hf_cache")
+
+    # 0. Clean start
+    cleanup_environment(out_dir, cache_dir)
+    # Re-create tmp_dir because cleanup wiped the whole out_dir
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Download Model
+    print(f"📥 Resolving source: {args.hf_source}")
+    snapshot_download(
+        repo_id=args.hf_source,
+        allow_patterns=[f"{args.subfolder}/*"] if args.subfolder else None,
+        local_dir=str(cache_dir)
+    )
+    model_path = cache_dir / args.subfolder if args.subfolder else cache_dir
+
+    # 2. Patch & Tokenizer
+    patch_config(model_path)
+    tok_path = recover_tokenizer(model_path)
+
+    # 3. Export HF to TFLite
+    orig_argv = sys.argv
+    sys.argv = [
+        "litert_torch.generative.export_hf", str(model_path), str(tmp_dir),
+        "-p", f"[{args.prefill}]", "--cache_length", str(args.context),
+        "-q", "dynamic_wi8_afp32", "--externalize_embedder", "--use_jinja_template"
+    ]
+
+    print("🚀 Starting Export (In-Process)...")
+    try:
         runpy.run_module("litert_torch.generative.export_hf", run_name="__main__")
-    except SystemExit as e:
-        if e.code != 0:
-            raise RuntimeError(f"export_hf failed with exit code {e.code}")
     finally:
         sys.argv = orig_argv
 
-    candidates = list(tflite_dir.glob("*.tflite"))
-    if not candidates:
-        raise FileNotFoundError(f"No .tflite produced in {tflite_dir}")
-    return candidates[0], local_model_dir
+    # 4. Find the main model file
+    tflite_files = list(tmp_dir.glob("*.tflite"))
+    if not tflite_files:
+        raise RuntimeError(f"Export finished but NO .tflite files found in {tmp_dir}")
+    main_tflite = max(tflite_files, key=lambda p: p.stat().st_size)
 
-def run_build_litertlm(tflite_path, tflite_dir, out_path, context, local_model_dir):
+    # 5. The Bundle
+    final_file = out_dir / f"{args.filename}.litertlm"
+    print(f"📦 Bundling into: {final_file}")
+
     from litert_torch.generative.utilities.litertlm_builder import build_litertlm
-
-    search_paths = [
-        tflite_dir / "tokenizer.model",
-        local_model_dir / "tokenizer.model" if local_model_dir else None
-    ]
-    tokenizer_path = next((p for p in search_paths if p and p.exists()), None)
-
-    if not tokenizer_path:
-        raise FileNotFoundError(f"Could not find tokenizer.model in {search_paths}")
-
-    workdir = tflite_dir / "_litertlm_work"
-    workdir.mkdir(exist_ok=True)
-
-    print(f"Building .litertlm: {out_path.name}")
     build_litertlm(
-        tflite_model_path=str(tflite_path),
-        workdir=str(workdir),
-        output_path=str(out_path),
-        context_length=context,
-        tokenizer_model_path=str(tokenizer_path),
-        llm_model_type="gemma3",
+        tflite_model_path=str(main_tflite),
+        workdir=str(tmp_dir / "bundle_work"),
+        output_path=str(final_file),
+        context_length=args.context,
+        tokenizer_model_path=str(tok_path),
+        llm_model_type="gemma3"
     )
 
-# ── Main Execution ────────────────────────────────────────────────────────────
+    return final_file
 
-def main():
-    _inject_torchao_stubs()
-
-    # Auth
-    from huggingface_hub import login
-    token = os.environ.get("HF_TOKEN")
-    if not token and _in_notebook:
-        try:
-            from kaggle_secrets import UserSecretsClient
-            token = UserSecretsClient().get_secret("HF_TOKEN")
-        except: pass
-    if token:
-        login(token=token)
-
-    # Args
-    p = argparse.ArgumentParser()
-    p.add_argument("--hf-source", default=NOTEBOOK_HF_SOURCE)
-    p.add_argument("--subfolder", default=NOTEBOOK_SUBFOLDER)
-    p.add_argument("--output",    default=str(DEFAULT_OUTPUT))
-    p.add_argument("--filename",  default=DEFAULT_FILENAME)
-    p.add_argument("--prefill",   type=int, default=256)
-    p.add_argument("--context",   type=int, default=1280)
-    p.add_argument("--upload",    action="store_true", default=NOTEBOOK_UPLOAD)
-    args, _ = p.parse_known_args()
-
-    out_dir = pathlib.Path(args.output)
-    tmp_dir = out_dir / "_tflite_tmp"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-
-    final_bundle_path = out_dir / f"{args.filename}.litertlm"
-
-    # Step 1: Export
-    tflite_path, local_dir = run_export_hf(
-        args.hf_source, tmp_dir, args.prefill, args.context, args.subfolder
-    )
-
-    # Step 2: Bundle
-    run_build_litertlm(tflite_path, tmp_dir, final_bundle_path, args.context, local_dir)
-
-    print(f"\n✅ Export Complete: {final_bundle_path}")
-
-    if args.upload:
-        from huggingface_hub import HfApi
-        print(f"Uploading to HF: {args.hf_source}")
-        HfApi().upload_file(
-            path_or_fileobj=str(final_bundle_path),
-            path_in_repo=final_bundle_path.name,
-            repo_id=args.hf_source
-        )
+# ── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--hf-source", default="masked-kunsiquat/gemma-3-1b-it-litert")
+    parser.add_argument("--subfolder", default="cbt-merged-bf16")
+    parser.add_argument("--output",    default="/kaggle/working/export-output")
+    parser.add_argument("--filename",  default="gemma3-1b-it-cbt-int8")
+    parser.add_argument("--prefill",   type=int, default=256)
+    parser.add_argument("--context",   type=int, default=1280)
+    args, _ = parser.parse_known_args()
+
+    result_path = run_pipeline(args)
+
+    if result_path and result_path.exists():
+        print(f"✨ SUCCESS! Created: {result_path}")
+        api = HfApi()
+        print(f"📤 Uploading to HF...")
+        api.upload_file(path_or_fileobj=str(result_path), path_in_repo=result_path.name, repo_id=args.hf_source)
