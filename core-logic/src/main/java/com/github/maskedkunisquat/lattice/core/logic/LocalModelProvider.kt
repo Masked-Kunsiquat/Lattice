@@ -14,6 +14,9 @@ interface LocalModelProvider : LlmProvider {
     /** Current load state of the underlying model engine. */
     val modelLoadState: StateFlow<ModelLoadState>
 
+    /** The filename of the model currently loaded in the engine, or null if idle. */
+    val loadedModelName: StateFlow<String?>
+
     /**
      * Creates the model engine and marks the provider ready. Safe to call multiple
      * times — no-op once the engine is loaded. Automatically resets after a failure

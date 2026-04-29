@@ -12,6 +12,12 @@ class WorkManagerModelDownloader(context: Context) : ModelDownloader {
     private val context = context.applicationContext
 
     override fun enqueue(modelFile: String, url: String, sha256: String?) {
+        val uniqueName = if (modelFile == LocalFallbackProvider.MODEL_FILE_CBT) {
+            ModelDownloadWorker.UNIQUE_WORK_NAME_CBT
+        } else {
+            ModelDownloadWorker.UNIQUE_WORK_NAME
+        }
+
         val inputData = Data.Builder()
             .putString(ModelDownloadWorker.KEY_MODEL_ASSET, modelFile)
             .putString(ModelDownloadWorker.KEY_URL, url)
@@ -20,11 +26,11 @@ class WorkManagerModelDownloader(context: Context) : ModelDownloader {
 
         val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
             .setInputData(inputData)
-            .addTag(ModelDownloadWorker.UNIQUE_WORK_NAME)
+            .addTag(uniqueName)
             .build()
 
         WorkManager.getInstance(context).enqueueUniqueWork(
-            ModelDownloadWorker.UNIQUE_WORK_NAME,
+            uniqueName,
             ExistingWorkPolicy.KEEP,
             request,
         )

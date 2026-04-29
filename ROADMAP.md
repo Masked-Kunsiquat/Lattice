@@ -160,12 +160,20 @@ The deeper problem: for positive/neutral entries with no cognitive distortions, 
 
 ### Model-level fix (long-term)
 
-- [ ] **CBT LoRA fine-tune** — fine-tune a LoRA adapter on top of Gemma 3 1B specifically for CBT reframing. LoRA weights are ~10–50 MB and load on top of existing Gemma weights; LiteRT-LM supports adapter loading. This is the structural fix that eliminates prompt-engineering fragility entirely. Requires:
-  - Training data curation: generate `(entry, strategy, distortions) → reframe` pairs using Claude as the labeler with the exact CBT guidelines as the system prompt (appropriate use of a frontier model to label data for a smaller model's fine-tune)
-  - Offline fine-tuning script (Python, LoRA via HuggingFace PEFT)
-  - Adapter packaging and upload to HuggingFace (`masked-kunsiquat/` repo)
-  - `LocalFallbackProvider` adapter-loading support
-  - `ModelDownloadWorker` extended to optionally fetch and validate the adapter file alongside the base model
+- [ ] **CBT LoRA fine-tune** — fine-tune a LoRA adapter on top of Gemma 3 1B specifically for CBT reframing, then merge weights into a new standalone model file. This is the structural fix that eliminates prompt-engineering fragility entirely.
+
+  > **Architecture note:** LiteRT-LM 0.10.x has no adapter/LoRA loading API — `EngineConfig` accepts a single model path only. The practical path is: train LoRA offline → `peft.merge_and_unload()` → export merged model to LiteRT INT4 → distribute as `gemma3-1b-it-cbt-int4.litertlm`. No Android-side adapter hook is needed; the CBT model is a drop-in replacement for the base model file.
+
+  **Python pipeline** (`scripts/`):
+  - [x] `curate_cbt_training_data.py` — Gemini 2.5 Flash Lite labeler; 550 pairs across 4 strategies (150/150/150/100); outputs `cbt_training_data.jsonl` + `gemma_ft_data.jsonl`
+  - [x] `finetune_cbt_lora.py` — QLoRA (4-bit base, LoRA r=16 on Q/V projections); cosine LR schedule, paged AdamW; 95/5 train/eval split; saves adapter + merged model; HF_TOKEN auth via Colab secret
+  - [x] `export_cbt_model.py` — merges LoRA weights via `peft.merge_and_unload()`, exports to LiteRT INT4 via `ai-edge-torch`; outputs `gemma3-1b-it-cbt-int4.litertlm`
+
+  **Android integration**:
+  - [x] `ModelDownloadWorker` — `UNIQUE_WORK_NAME_CBT` added; CBT download runs independently of base model download
+  - [x] `LocalFallbackProvider` — `MODEL_FILE_CBT` constant + `downloadCbtModel()`; `selectModelAndBackends()` checks `filesDir` for CBT file first, falls back to board-tier selection
+  - [x] Run training to completion; review loss curve and sample outputs before uploading
+  - [x] Upload merged model to HuggingFace (`masked-kunsiquat/gemma-3-1b-it-litert`) and populate `MODEL_SHA256[MODEL_FILE_CBT]`
 
 ---
 

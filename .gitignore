@@ -27,6 +27,10 @@ app/src/main/assets/tokenizer_config.json
 app/src/main/assets/config.json
 app/src/main/assets/generation_config.json
 
+# Script output artifacts — generated, not source
+scripts/output/
+scripts/*-output/
+
 # Misc Agent Files
 .agent/
 .idea/
